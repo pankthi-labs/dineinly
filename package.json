@@ -1,0 +1,22 @@
+{
+	"name": "dineinly",
+	"version": "0.0.1",
+	"private": true,
+	"scripts": {
+		"build": "turbo build",
+		"dev": "turbo dev",
+		"lint": "turbo lint",
+		"format": "turbo format",
+		"typecheck": "turbo typecheck"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.4",
+		"@workspace/typescript-config": "workspace:*",
+		"turbo": "^2.10.5",
+		"typescript": "^6.0.2"
+	},
+	"packageManager": "pnpm@11.15.1",
+	"engines": {
+		"node": ">=24.18.0 <25"
+	}
+}

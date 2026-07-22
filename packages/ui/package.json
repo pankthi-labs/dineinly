@@ -1,0 +1,29 @@
+{
+	"name": "@workspace/ui",
+	"version": "0.0.0",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"@types/node": "^24.13.3",
+		"@types/react": "^19.2.3",
+		"@types/react-dom": "^19.2.3",
+		"@workspace/typescript-config": "workspace:*",
+		"tailwindcss": "^4.3.3",
+		"typescript": "^6.0.2",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0"
+	},
+	"peerDependencies": {
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0"
+	},
+	"exports": {
+		"./globals.css": "./src/styles/globals.css"
+	}
+}

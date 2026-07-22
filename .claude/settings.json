@@ -1,0 +1,9 @@
+{
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "ponytail@ponytail": true,
+    "code-review@claude-plugins-official": true,
+    "claude-mem@thedotmack": true,
+    "caveman@caveman": true
+  }
+}

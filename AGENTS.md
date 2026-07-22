@@ -1,0 +1,32 @@
+# Dineinly — Agent Instructions
+
+Dineinly is a premium, real-time, multi-tenant dine-in platform (QR ordering, kitchen workflow, billing, restaurant management). Modular monolith: Next.js + tRPC + PostgreSQL/Supabase. Full stack: `docs/tech-stack.md`.
+
+## Read Before You Work
+
+Do not guess business rules, permissions, tokens, or infra choices — read the governing doc first. Each is self-contained; read only the one(s) relevant to the task.
+
+| Doc | Read before... |
+|---|---|
+| `docs/product.md` | product/business rules, order flow, menu, billing, RBAC, roles |
+| `docs/architecture.md` | data layer, auth, RLS/tenancy, realtime, API design, idempotency |
+| `docs/tech-stack.md` | adding a dependency, choosing a library, infra/deploy/tooling |
+| `docs/design-system.md` | any UI, styling, layout, motion, or component work |
+
+## Always-True Guardrails
+
+Non-negotiable regardless of which doc you're reading:
+
+- **No payments processing** — Dineinly never handles payment transactions. Settlement = marking a bill paid externally.
+- **Tenant isolation is mandatory** — every tenant-facing table has RLS; every query is tenant-scoped. Only Dineinly Admin crosses tenants, and only with audit logging.
+- **Guests never have accounts** — scoped anonymous session tokens only, authorized via RLS.
+- **Staff auth is role-specific**: Owners/Managers use Email OTP; Kitchen/Floor use a shared station account + app-level PIN (PIN is not a DB auth factor). No NFC/passkeys.
+- **tRPC is the only data layer** — no CRUD via Server Actions, no GraphQL, no REST.
+- **No UI component library** — build with semantic HTML/CSS against `docs/design-system.md` tokens only. No values (color/spacing/radius/duration/easing) outside that doc.
+- **Dark-only, text-only MVP** — no light mode, no images.
+- **All permissions are server-enforced** — client-side checks are UX only, never security.
+- **Order mutations must be idempotent** — no duplicate orders from retries or repeated taps.
+
+## Unresolved — Stop and Ask
+
+Anything marked `TBD` in a doc (currently: **Core Data Model**, `docs/architecture.md`) is not yet decided. Do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.
