@@ -10,6 +10,8 @@ Do not guess business rules, permissions, tokens, or infra choices — read the 
 |---|---|
 | `docs/product.md` | product/business rules, order flow, menu, billing, RBAC, roles |
 | `docs/architecture.md` | data layer, auth, RLS/tenancy, realtime, API design, idempotency |
+| `docs/core-data-model.md` | entities, schema, relationships, tenancy boundaries — before any Drizzle/RLS/router work |
+| `docs/realtime.md` | realtime channels, broadcast triggers, `realtime.messages` RLS, client subscriptions |
 | `docs/tech-stack.md` | adding a dependency, choosing a library, infra/deploy/tooling |
 | `docs/design-system.md` | any UI, styling, layout, motion, or component work |
 
@@ -29,4 +31,4 @@ Non-negotiable regardless of which doc you're reading:
 
 ## Unresolved — Stop and Ask
 
-Anything marked `TBD` in a doc (currently: **Core Data Model**, `docs/architecture.md`) is not yet decided. Do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.
+Nothing currently marked `TBD`. If a doc introduces one, do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.

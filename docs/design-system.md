@@ -228,7 +228,7 @@ Deviations require explicit written sign-off — never implement speculatively.
 
 - **Dark-only** in the MVP; no light mode.
 - **No component library** — semantic HTML/CSS with these tokens only.
-- **No values beyond this document.** The four accents are final (never a fifth). Shadow, z-index, breakpoint, and icon tokens don't exist yet (upcoming iteration) — don't invent them; flag if needed.
+- **No values beyond this document.** The four accents are final (never a fifth). Shadow, z-index, breakpoint, and icon tokens don't exist yet (upcoming iteration) — never invent them. **Breakpoints especially: stop and ask before writing any responsive layout that needs one** — mobile + desktop UI is blocked on these being defined. Same stop-and-ask rule for shadow/z-index/icon tokens.
 - Gold (`--color-accent-primary`) stays under 12% of any screen.
 - Text tokens keep their documented WCAG AA contrast ratios.
 - Glass/glow tokens only as documented — no new glass surfaces.

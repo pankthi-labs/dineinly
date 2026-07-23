@@ -17,9 +17,9 @@
 | Authentication | Supabase Auth |
 | Multi-tenancy | PostgreSQL Row Level Security (RLS) — mandatory on every tenant-facing table |
 | Realtime | Supabase Realtime |
-| File Storage | Supabase Storage |
-| Background Jobs | Inngest |
-| Caching | Next.js `unstable_cache`/`React.cache()` + Upstash Redis |
+| File Storage | Supabase Storage — sanctioned choice; no MVP use yet (text-only, no images). Do not reach for another storage tech when a need arrives |
+| Background Jobs | Inngest — sanctioned choice; no MVP job yet. Do not reach for another queue/cron tech when a job arrives |
+| Caching | Next.js `unstable_cache`/`React.cache()` |
 
 ---
 
@@ -92,7 +92,7 @@
 | Validation | Zod |
 | Session Management | httpOnly cookies (via `@supabase/ssr`) |
 | Environment Validation | `@t3-oss/env-nextjs` |
-| Rate Limiting | Upstash Redis on auth endpoints |
+| Rate Limiting | Upstash Redis — sanctioned choice for when rate-limiting is implemented; not wired in the MVP baseline. Not used as a cache layer (see `architecture.md`) |
 
 ---
 

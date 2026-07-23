@@ -41,7 +41,7 @@ Restaurant identity is always server-derived. NFC badges and WebAuthn/passkeys a
 
 Rules:
 - Guests never get service-role credentials and never bypass RLS. Token scope is exactly one active table session.
-- Use Supabase-native anonymous auth with custom claims (or asymmetric JWT signing keys). Do not hand-roll tokens.
+- Guest tokens are **server-minted asymmetric-signed JWTs** (Supabase-trusted signing key) carrying only the session claims — no per-guest anonymous auth user is created. Supabase validates the signature; RLS + Realtime authorize from the claims. Never hand-roll or symmetric-sign tokens.
 - Tokens are long-lived (≥12h, longer for events) so a meal never expires; silent refresh gated on the session being active.
 - Revocation is not via expiry: RLS policies check live session state (`status = active`), so closing a session denies access immediately.
 - Abuse control: staff can see/remove participants; token issuance is rate-limited per QR.
@@ -50,24 +50,23 @@ Rules:
 
 - RBAC (matrix in `product.md`) is enforced server-side on every mutation; client-side checks are UX-only.
 - Dineinly Admin is the only cross-tenant path (audited). No other code crosses tenant boundaries.
-- All order mutations (submit, add/remove item, update quantity, cancel) must be idempotent via client-supplied idempotency keys — retries/repeated taps never duplicate or corrupt state.
+- **Submit Order** is the only money-affecting mutation guarded against duplicates: a client-supplied `idempotency_key` (unique on Order) makes retries/repeated taps safe. Cart edits are naturally idempotent (row-level, last-write-wins); cancel/modify are guarded by order state (only while `placed`), not by keys. See `core-data-model.md`.
 
 ## Real-Time
 
-Real-time is a core capability across guests, waiters, kitchen, and managers; the UI never requires refreshes. Transport (Supabase Broadcast vs Postgres Changes) is TBD — next iteration.
+Real-time is a core capability across guests, waiters, kitchen, and managers; the UI never requires refreshes. Locked — see `docs/realtime.md`. Transport is Broadcast from Database, on three topics: `session:{id}` (guests + staff), `restaurant:{id}` (staff), `menu:{restaurant_id}` (availability).
 
 ## Operational Standards
 
 - **APIs:** thin clients, predictable contracts, consistent validation, business logic in APIs.
 - **Performance:** optimize perceived speed; minimize requests and re-renders; lazy-load and cache responsibly.
+- **Caching:** `unstable_cache` + tag-based `revalidateTag` for menu items, categories, restaurant settings only — low-write, high-read, safe to cache. `React.cache()` for per-request dedup, no invalidation needed. Orders, bills, sessions, table state stay uncached — correctness-critical, served live via tRPC + Broadcast. No Redis cache layer for MVP; `"use cache"`/Cache Components deferred until stable in Next.js 16 (currently experimental).
 - **Errors:** recoverable, explain what happened, give the next action. Never fail silently.
 - **Observability:** structured logs, traceable errors, every production issue diagnosable.
 
-## Core Data Model — TBD (next iteration)
+## Core Data Model
 
-Not yet finalized. Do not invent core entities or relationships outside the forthcoming model. Everything downstream (Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts) derives from it once locked.
-
-Intended entities: Restaurant, Logical Table, QR Code, Table Session, Guest Session, Staff, Role, Menu Category, Menu Item, Item Preference (Spice/Salt/Ice), Cart, Order, Order Item, Bill, Bill Line Item, Restaurant Settings, Analytics Event.
+Locked — see `docs/core-data-model.md`. 10 tables: Restaurant, Staff, Logical Table, Table Session, Menu Category, Menu Item, Cart Item, Order, Order Item, Bill. Everything downstream (Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts) derives from it. Do not invent entities or relationships outside that doc.
 
 ## AI Guidance
 
