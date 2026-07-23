@@ -8,8 +8,10 @@ See [`AGENTS.md`](./AGENTS.md) for agent/contributor instructions and the govern
 
 - [`docs/product.md`](./docs/product.md) — business rules, order flow, menu, billing, RBAC
 - [`docs/architecture.md`](./docs/architecture.md) — data layer, auth, RLS/tenancy, realtime, API
+- [`docs/core-data-model.md`](./docs/core-data-model.md) — entities, schema, relationships, tenancy boundaries
+- [`docs/realtime.md`](./docs/realtime.md) — realtime channels, broadcast triggers, client subscriptions
 - [`docs/tech-stack.md`](./docs/tech-stack.md) — dependencies, infra, tooling
-- [`docs/design-system.md`](./docs/design-system.md) — UI tokens, styling, motion
+- [`docs/design-system.md`](./docs/design-system.md) — UI tokens: color, type, spacing, radius, motion, breakpoints, icons, shadow, z-index
 
 ## Prerequisites
 
@@ -74,7 +76,7 @@ Database (no named `db:*` scripts yet — invoke drizzle-kit directly):
 |---|---|
 | `pnpm --filter @workspace/db exec drizzle-kit generate` | generate a migration from schema changes |
 | `pnpm --filter @workspace/db exec drizzle-kit migrate` | apply committed migrations |
-| `pnpm --filter @workspace/db exec drizzle-kit push` | push schema straight to DB, no migration file (use for local dev now) |
+| `pnpm --filter @workspace/db exec drizzle-kit push` | push schema straight to DB, no migration file (local dev) |
 
 Schema lives at `packages/db/src/schema/index.ts`, migrations output to `packages/db/drizzle`.
 
@@ -96,7 +98,7 @@ Stop everything with `supabase stop`.
 ```
 apps/web                     # Next.js app (tRPC, Supabase client, Tailwind v4)
 packages/db                  # Drizzle ORM schema, migrations, drizzle-kit config
-packages/ui                  # shared UI package (Base UI + Tailwind, no component library)
+packages/ui                  # shared UI package (semantic HTML + Tailwind + design-system.md tokens, lucide-react icons, no component library)
 packages/typescript-config    # shared tsconfig presets
 supabase/                    # local Supabase config (config.toml, seed.sql)
 docs/                        # governing docs — read before making product/architecture/UI decisions
