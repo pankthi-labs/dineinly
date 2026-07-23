@@ -31,4 +31,9 @@ Non-negotiable regardless of which doc you're reading:
 
 ## Unresolved — Stop and Ask
 
-Nothing currently marked `TBD`. If a doc introduces one, do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.
+Marked `TBD` in the docs — do not guess these, flag and ask:
+
+- Tax/service/rounding formula (`docs/core-data-model.md`)
+- Force-terminate session: void vs. settle handling of an open bill (`docs/core-data-model.md`, `docs/product.md`)
+
+If a doc introduces another `TBD`, do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.

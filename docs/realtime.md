@@ -1,6 +1,6 @@
 # Realtime Transport
 
-Locked. Governs every Realtime channel, trigger, and client subscription. Do not use Postgres Changes or a custom transport outside this doc.
+Governs every Realtime channel, trigger, and client subscription. Do not use Postgres Changes or a custom transport outside this doc.
 
 ## Decision
 

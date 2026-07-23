@@ -32,7 +32,7 @@ Role-specific and passwordless.
 - **Kitchen displays & shared floor tablets:** per-restaurant station account with a persistent Supabase session — the auth/DB boundary, representing the trusted device. On floor tablets, individual staff identify via an application-level PIN used only for attribution/RBAC/audit/UI — it is not a Supabase auth factor and grants no DB access.
 - **Guests:** short-lived scoped token (see below); never create accounts.
 
-Restaurant identity is always server-derived. NFC badges and WebAuthn/passkeys are not planned — station-account + PIN is final.
+Restaurant identity is always server-derived. No NFC badges, no WebAuthn/passkeys — station account + PIN only.
 
 ## Guest Sessions & Anonymous Realtime
 
@@ -54,7 +54,7 @@ Rules:
 
 ## Real-Time
 
-Real-time is a core capability across guests, waiters, kitchen, and managers; the UI never requires refreshes. Locked — see `docs/realtime.md`. Transport is Broadcast from Database, on three topics: `session:{id}` (guests + staff), `restaurant:{id}` (staff), `menu:{restaurant_id}` (availability).
+Real-time is a core capability across guests, waiters, kitchen, and managers; the UI never requires refreshes. See `docs/realtime.md`. Transport is Broadcast from Database, on three topics: `session:{id}` (guests + staff), `restaurant:{id}` (staff), `menu:{restaurant_id}` (availability).
 
 ## Operational Standards
 
@@ -66,7 +66,7 @@ Real-time is a core capability across guests, waiters, kitchen, and managers; th
 
 ## Core Data Model
 
-Locked — see `docs/core-data-model.md`. 10 tables: Restaurant, Staff, Logical Table, Table Session, Menu Category, Menu Item, Cart Item, Order, Order Item, Bill. Everything downstream (Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts) derives from it. Do not invent entities or relationships outside that doc.
+See `docs/core-data-model.md`. 10 tables: Restaurant, Staff, Logical Table, Table Session, Menu Category, Menu Item, Cart Item, Order, Order Item, Bill. Everything downstream (Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts) derives from it. Do not invent entities or relationships outside that doc.
 
 ## AI Guidance
 

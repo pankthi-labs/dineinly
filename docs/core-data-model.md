@@ -1,6 +1,6 @@
 # Core Data Model (C5)
 
-Locked. Everything downstream — Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts — derives from this. Do not add entities outside this model without updating this doc first.
+Everything downstream — Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts — derives from this. Do not add entities outside this model without updating this doc first.
 
 ## Design principle
 
@@ -36,7 +36,7 @@ Every table below carries `restaurant_id` (tenant scope, RLS precondition). Soft
 - Menu Category 1—N Menu Item.
 - Bill total = SUM(Order Items in the session) + tax + service charge — **derived on read** for presentation (open/requested), **computed and stored** at settlement.
 
-**MVP pricing:** all prices are tax-**exclusive**; `tax_rate`, `tax_mode`, and `service_charge_rate` are static per-restaurant settings on Restaurant. The exact tax/service/rounding formula is finalized at implementation.
+**MVP pricing:** all prices are tax-**exclusive**; `tax_rate`, `tax_mode`, and `service_charge_rate` are static per-restaurant settings on Restaurant. The exact tax/service/rounding formula (`TBD`) is decided at implementation — flag before guessing a rounding rule.
 
 ## Folded, not modeled as tables
 
@@ -52,7 +52,7 @@ Every table below carries `restaurant_id` (tenant scope, RLS precondition). Soft
 
 | Deferred | Trigger to add | Note |
 |---|---|---|
-| `analytics_events` | Analytics/KPI requirements finalize | High-volume, append-only, short retention. |
+| `analytics_events` | Analytics/KPI requirements are defined | High-volume, append-only, short retention. |
 | `audit_logs` | Dineinly-Admin cross-tenant tooling ships | Low-volume, permanent. Separate table from analytics — different retention and immutability needs, don't merge them. |
 | Shared `idempotency_keys` table | A second mutation type (cancel/modify) needs a dedupe guarantee beyond Order's unique key | Submit Order is the only mutation that can create duplicate money-affecting state; a unique `idempotency_key` column on Order covers MVP. |
 | Session↔Table join table (merge history) | Table merges need an audit trail of which tables were merged when | `session_id` FK on Logical Table is sufficient while merges don't need history. |
@@ -68,5 +68,5 @@ Every table below carries `restaurant_id` (tenant scope, RLS precondition). Soft
 - **Request bill:** create/mark Bill `requested`, snapshot current tax/service rates onto it. Guests can request the bill anytime; displayed totals are derived on read from Order Items until settle.
 - **Settle bill:** compute and store subtotal/tax/service/total, `status = settled`.
 - **Close session:** requires no in-progress orders and bill settled → `status = closed`; free the table (`session_id` cleared on next scan); hard-delete any unfired Cart Items for that session.
-- **Force-terminate session:** staff (waiter/manager/owner) may force-close an abandoned session (walkout) — frees the tables. Void vs. settle handling of any open bill is TBD at implementation.
+- **Force-terminate session:** staff (waiter/manager/owner) may force-close an abandoned session (walkout) — frees the tables. Void vs. settle handling of any open bill is `TBD` — decided at implementation, flag before guessing.
 - **One bill per session** — no split bills in MVP.

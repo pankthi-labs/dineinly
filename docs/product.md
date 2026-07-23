@@ -75,7 +75,7 @@ Spice, Salt, Ice are the only guest-selectable option groups in the MVP; an item
 - **Cart:** any participant edits freely before confirming (concurrent edits are last-write-wins). Confirming sends the cart to the kitchen as an order (one round) and clears the cart. A session accumulates orders across the meal; the bill aggregates all of them.
 - **Merge:** Waiter/Manager/Owner merges logical tables into one session/cart/bill. Not reversible within the session. **MVP only merges a free (session-less) table into an existing session** — two already-active sessions are never merged.
 - **Close:** requires no orders in progress and the bill settled. Any Waiter/Manager/Owner may close — no override needed. Closing finalizes and settles the bill, archives the session, and frees the tables.
-- **Force-terminate:** Waiter/Manager/Owner may force-close an abandoned session (walkout), freeing the tables. Void vs. settle handling of any open bill is TBD at implementation.
+- **Force-terminate:** Waiter/Manager/Owner may force-close an abandoned session (walkout), freeing the tables. Void vs. settle handling of any open bill is `TBD` — decided at implementation, flag before guessing.
 - **MVP limitation:** one bill per session — no split bills.
 
 ---
@@ -133,9 +133,7 @@ Dineinly never facilitates, processes, or records payment transactions.
 
 ## Roadmap
 
-**Upcoming iteration** (alongside core development): structural design tokens still missing — breakpoints, shadow, z-index, icons (see `design-system.md`). Breakpoints block responsive layout; add before UI work. (Core data model, realtime transport, and caching are locked.)
-
-**Before go-live, not now:** analytics (event capture + KPI/dashboards). No analytics work — including event capture — until core flows ship. `analytics_events` table stays deferred (see `core-data-model.md`).
+**Before go-live:** analytics (event capture + KPI/dashboards). No analytics work — including event capture — until core flows ship. `analytics_events` table stays deferred (see `core-data-model.md`).
 
 **Post-MVP** (revisit after first restaurant): AI recommendations, advanced analytics, Python/FastAPI + Railway, image treatment / menu imagery, manager step-up, light mode.
 

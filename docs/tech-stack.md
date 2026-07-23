@@ -29,6 +29,8 @@
 |----------|------------|
 | Styling | Tailwind CSS v4 |
 | UI Components | None — no component library. Raw semantic HTML styled with `design-system.md` tokens only |
+| Icons | Lucide (`lucide-react`) — sanctioned choice, ISC license. See `design-system.md` §11 for stroke/size rules. Do not reach for another icon set |
+| Breakpoint mechanism | `postcss-custom-media` — sanctioned choice, MIT license, dev dependency. Defines the 4 breakpoint tokens once; see `design-system.md` §10. `var()` cannot be used in `@media`, this is the mechanism instead of raw duplicated values |
 | Client State | Zustand |
 | Server State | TanStack Query (via tRPC) |
 

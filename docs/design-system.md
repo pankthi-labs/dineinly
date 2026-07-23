@@ -1,6 +1,6 @@
 # Design System
 
-> Canonical design system for this repo — v1.2, Final Locked. All AI coding agents must use only the tokens and rules defined here.
+> Canonical design system for this repo. All AI coding agents must use only the tokens and rules defined here.
 >
 > **Hard rule: never introduce a color, font, spacing value, border radius, duration, or easing curve that is not listed in this document — even if it looks visually reasonable.** If a new value seems needed, stop and flag it instead of inventing one.
 
@@ -73,6 +73,27 @@ Copy-paste source of truth. Load into `globals.css`.
   --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-linear: linear;
+
+  /* Breakpoints — mobile-first, min-width. NOT usable in var(); see §10. */
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+
+  /* Icon sizes — see §11 */
+  --icon-xs: 14px; --icon-sm: 16px; --icon-md: 20px;
+  --icon-lg: 24px; --icon-xl: 32px;
+  --icon-stroke: 1.5;
+
+  /* Shadow — see §12 */
+  --shadow-none: none;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.24);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.32);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.40);
+
+  /* Z-Index — see §13 */
+  --z-base: 0; --z-sticky: 10; --z-dropdown: 20;
+  --z-overlay: 30; --z-modal: 40; --z-toast: 50; --z-tooltip: 60;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -110,7 +131,7 @@ Fonts: **Outfit** (display) + **Inter** (UI). Load both via `next/font`. Never f
 - ALL CAPS labels: `text-xs` (12px), **w600 minimum**, letter-spacing 0.08–0.10em. Never Outfit for all-caps.
 - Max line length: 60–72ch. Never full-bleed body text.
 - Minimum tap-target text size: `text-sm` (14px) for any interactive label.
-- Outfit + Inter is final — introduce no other fonts.
+- Outfit + Inter only — introduce no other fonts.
 
 ---
 
@@ -228,8 +249,98 @@ Deviations require explicit written sign-off — never implement speculatively.
 
 - **Dark-only** in the MVP; no light mode.
 - **No component library** — semantic HTML/CSS with these tokens only.
-- **No values beyond this document.** The four accents are final (never a fifth). Shadow, z-index, breakpoint, and icon tokens don't exist yet (upcoming iteration) — never invent them. **Breakpoints especially: stop and ask before writing any responsive layout that needs one** — mobile + desktop UI is blocked on these being defined. Same stop-and-ask rule for shadow/z-index/icon tokens.
+- **No values beyond this document.** The four accents are exhaustive — never a fifth. Breakpoints (§10), icons (§11), shadow (§12), and z-index (§13) define the only allowed values for those — never invent a value outside them.
 - Gold (`--color-accent-primary`) stays under 12% of any screen.
 - Text tokens keep their documented WCAG AA contrast ratios.
 - Glass/glow tokens only as documented — no new glass surfaces.
 - Stagger cap 3 items / 120ms total; motion exit always faster than entry.
+
+---
+
+# 10 — Breakpoints
+
+Mobile-first, **min-width only**. Base styles (no media query) are the phone layout — every query scales *up* from there. `max-width` queries are forbidden; they invert the cascade and cause override bugs.
+
+| Token | px | Primary audience |
+|---|---|---|
+| `--breakpoint-sm` | 480px | Large phone |
+| `--breakpoint-md` | 768px | Tablet portrait — floor & kitchen stations |
+| `--breakpoint-lg` | 1024px | Tablet landscape / laptop — manager |
+| `--breakpoint-xl` | 1280px | Desktop — owner / admin back office |
+
+**Mechanism.** CSS `var()` cannot be referenced inside an `@media` condition, so these are not consumed directly. Use PostCSS `@custom-media` (see `tech-stack.md`), defined once in `globals.css`:
+
+```css
+@custom-media --bp-sm (min-width: 480px);
+@custom-media --bp-md (min-width: 768px);
+@custom-media --bp-lg (min-width: 1024px);
+@custom-media --bp-xl (min-width: 1280px);
+```
+
+Usage in components:
+
+```css
+@media (--bp-md) {
+  .grid { grid-template-columns: 1fr 1fr; }
+}
+```
+
+**Rules:**
+- These 4 values are the only allowed viewport breakpoints. No arbitrary media-query numbers.
+- Mobile-first always: write the phone layout first, add `min-width` overrides after.
+- For component-internal responsiveness (a card that reflows regardless of viewport), use native `@container` — zero token, no dependency, not a viewport breakpoint.
+- Guest-facing ordering flows are phone-first and may never assume anything above `--breakpoint-sm`. Staff/back-office surfaces are the ones that climb to `md`/`lg`/`xl`.
+
+---
+
+# 11 — Icons
+
+**Set: Lucide** (`lucide-react`) — ISC license, free and open-source. Tree-shakeable, SVG, no runtime dependency. Sanctioned choice — do not introduce a second icon set.
+
+**Rules:**
+- **Stroke:** `--icon-stroke` (1.5) — not Lucide's 2px default. Thinner stroke reads elegant and restrained rather than bold/decorative.
+- **Size:** use `--icon-*` tokens only, never a raw px value. Default inline icon is `--icon-md` (20px); nav/status icons use `--icon-lg` (24px).
+- **Color:** `currentColor`, inheriting the surrounding text token. Gold (`--color-accent-primary`) only on active/selected state, per §06 — never a standalone icon-only accent.
+- **Weight/variant:** outline stroke only. No filled, duotone, or multicolor variants in the MVP — those read as decorative, not premium.
+- **Tap target:** any interactive icon sits inside a minimum 44px wrapper regardless of glyph size.
+- **Restraint:** one icon per action or status, never doubled up. An icon clarifies meaning already conveyed by text — it does not replace text, and it does not decorate.
+
+---
+
+# 12 — Shadow
+
+Four levels, black-only, dark-calibrated. Surface tone (`--color-surface-1/2/3`) is the primary elevation cue — shadow is a secondary lift, used only where a surface floats above the layout rather than sitting flush in it.
+
+| Token | Value | Usage |
+|---|---|---|
+| `--shadow-none` | `none` | Flush surfaces: menu/dish cards, list rows. Surface-2/3 background alone signals elevation — never add shadow here, it reads decorative. |
+| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.24)` | Tooltip, dropdown/select menu — the smallest float. |
+| `--shadow-md` | `0 4px 12px rgba(0,0,0,0.32)` | Toast, popover. |
+| `--shadow-lg` | `0 12px 32px rgba(0,0,0,0.40)` | Modal, bottom sheet — the highest float in the MVP. |
+
+**Rules:**
+- Black only, opacity-based — no colored shadows, no glow-as-shadow. Glow tokens (`--glow-gold`/`--glow-copper`/`--glow-blue`, §01) are a separate accent-illumination effect, never a substitute for elevation.
+- Pair every non-`none` shadow with `--color-glass-border` on the element's edge — on a near-black background, shadow alone under-defines the boundary; the hairline border does the rest.
+- No arbitrary blur/spread/opacity values in component code — only these four tokens.
+- Cards stay flat (`--shadow-none`) by default. Reach for a shadow only when the element visually floats above the page (menus, sheets, toasts, modals) — never as card decoration.
+
+---
+
+# 13 — Z-Index
+
+Seven semantic layers, lowest to highest. Components reference the token, never a raw number.
+
+| Token | Value | Layer |
+|---|---|---|
+| `--z-base` | 0 | Default document flow. |
+| `--z-sticky` | 10 | Sticky nav/header, sticky filter bars. |
+| `--z-dropdown` | 20 | Dropdown/select menus. |
+| `--z-overlay` | 30 | Modal/bottom-sheet backdrop scrim. |
+| `--z-modal` | 40 | Modal and bottom sheet content. |
+| `--z-toast` | 50 | Toast/snackbar — above modal, so a confirmation or error is never hidden behind one. |
+| `--z-tooltip` | 60 | Tooltip — always topmost; must never be obscured by anything else on screen. |
+
+**Rules:**
+- No raw `z-index` numbers in component code — only these tokens.
+- Gaps of 10 between layers exist so a future layer can slot in without renumbering the rest; never invent an intermediate value yourself — stop and ask if one seems needed.
+- Each stacking context starts fresh at `--z-base`; these tokens order layers *within* a context, not across unrelated ones.
