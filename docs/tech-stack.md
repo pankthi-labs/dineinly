@@ -45,6 +45,7 @@
 | Build Tool | Turbopack |
 | Package Bundler | tsup |
 | Linting & Formatting | Biome |
+| Database Migrations | Supabase CLI — pinned devDependency, applies Drizzle-generated SQL from `supabase/migrations/`. See `architecture.md` § Data |
 
 ---
 
@@ -126,6 +127,8 @@
 | Component library (shadcn/ui, MUI…) | Semantic HTML + `design-system.md` tokens |
 | MongoDB / NoSQL | PostgreSQL (use JSONB columns for flexibility) |
 | Kubernetes / microservices | Modular monolith on Vercel (Railway post-MVP) |
+| `drizzle-kit push` / `drizzle-kit migrate` | `drizzle-kit generate` (author) + `supabase db reset` / `db push` (apply) |
+| `supabase db diff` | Drizzle schema as the migration author |
 
 ---
 

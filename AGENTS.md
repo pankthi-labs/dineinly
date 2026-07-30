@@ -28,6 +28,7 @@ Non-negotiable regardless of which doc you're reading:
 - **Dark-only, text-only MVP** — no light mode, no images.
 - **All permissions are server-enforced** — client-side checks are UX only, never security.
 - **Order mutations must be idempotent** — no duplicate orders from retries or repeated taps.
+- **Migrations: Drizzle authors, Supabase CLI applies.** `drizzle-kit generate` writes to `supabase/migrations/`; `supabase db reset` / `db push` apply. Never run `drizzle-kit migrate`, `drizzle-kit push`, or `supabase db diff`, and never edit tables in Studio — each starts a second, divergent migration history. See `docs/architecture.md`.
 
 ## Unresolved — Stop and Ask
 

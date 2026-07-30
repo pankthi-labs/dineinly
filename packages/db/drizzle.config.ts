@@ -14,8 +14,13 @@ if (!process.env.DATABASE_URL) {
 
 export default defineConfig({
 	schema: "./src/schema/index.ts",
-	out: "./drizzle",
+	// Drizzle authors migrations, Supabase CLI applies them — one history,
+	// one folder. See AGENTS.md guardrails: never run drizzle-kit migrate/push.
+	out: "../../supabase/migrations",
 	dialect: "postgresql",
+	migrations: {
+		prefix: "supabase",
+	},
 	dbCredentials: {
 		url: process.env.DATABASE_URL,
 	},

@@ -1,0 +1,179 @@
+CREATE TYPE "public"."actor_type" AS ENUM('staff', 'guest');--> statement-breakpoint
+CREATE TYPE "public"."availability" AS ENUM('available', 'sold_out');--> statement-breakpoint
+CREATE TYPE "public"."bill_status" AS ENUM('open', 'requested', 'settled');--> statement-breakpoint
+CREATE TYPE "public"."diet" AS ENUM('veg', 'non_veg');--> statement-breakpoint
+CREATE TYPE "public"."ice" AS ENUM('none', 'less', 'regular');--> statement-breakpoint
+CREATE TYPE "public"."menu_category_status" AS ENUM('active', 'archived');--> statement-breakpoint
+CREATE TYPE "public"."menu_item_status" AS ENUM('active', 'archived');--> statement-breakpoint
+CREATE TYPE "public"."order_item_status" AS ENUM('placed', 'preparing', 'ready', 'served', 'cancelled');--> statement-breakpoint
+CREATE TYPE "public"."restaurant_status" AS ENUM('active', 'archived');--> statement-breakpoint
+CREATE TYPE "public"."salt" AS ENUM('less salt', 'regular');--> statement-breakpoint
+CREATE TYPE "public"."session_status" AS ENUM('active', 'closed');--> statement-breakpoint
+CREATE TYPE "public"."spice" AS ENUM('mild', 'regular', 'extra spicy');--> statement-breakpoint
+CREATE TYPE "public"."staff_role" AS ENUM('waiter', 'kitchen', 'manager', 'owner');--> statement-breakpoint
+CREATE TYPE "public"."staff_status" AS ENUM('invited', 'active', 'removed');--> statement-breakpoint
+CREATE TABLE "bills" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"session_id" uuid NOT NULL,
+	"status" "bill_status" DEFAULT 'open' NOT NULL,
+	"service_charge_rate" numeric(5, 4),
+	"subtotal" numeric(12, 2),
+	"tax_amount" numeric(12, 2),
+	"service_charge_amount" numeric(12, 2),
+	"total" numeric(12, 2),
+	"settled_at" timestamp with time zone,
+	"settled_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "bills_session_id_unique" UNIQUE("session_id")
+);
+--> statement-breakpoint
+CREATE TABLE "cart_items" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"session_id" uuid NOT NULL,
+	"menu_item_id" uuid NOT NULL,
+	"quantity" integer NOT NULL,
+	"spice" "spice",
+	"salt" "salt",
+	"ice" "ice",
+	"added_by_type" "actor_type" NOT NULL,
+	"added_by_staff_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "cart_items_added_by_staff_id_check" CHECK (("cart_items"."added_by_type" = 'staff' AND "cart_items"."added_by_staff_id" IS NOT NULL) OR ("cart_items"."added_by_type" = 'guest' AND "cart_items"."added_by_staff_id" IS NULL))
+);
+--> statement-breakpoint
+CREATE TABLE "menu_categories" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"sort" integer DEFAULT 0 NOT NULL,
+	"tax_rate" numeric(5, 4) NOT NULL,
+	"status" "menu_category_status" DEFAULT 'active' NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "menu_items" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"category_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"description" text NOT NULL,
+	"price" numeric(12, 2) NOT NULL,
+	"prep_time" integer NOT NULL,
+	"serving_size" text NOT NULL,
+	"diet" "diet" NOT NULL,
+	"availability" "availability" DEFAULT 'available' NOT NULL,
+	"labels" text[] DEFAULT '{}' NOT NULL,
+	"spice" "spice",
+	"salt" "salt",
+	"ice" "ice",
+	"status" "menu_item_status" DEFAULT 'active' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "orders" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"session_id" uuid NOT NULL,
+	"placed_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"placed_by_type" "actor_type" NOT NULL,
+	"placed_by_staff_id" uuid,
+	"idempotency_key" text NOT NULL,
+	CONSTRAINT "orders_idempotency_key_unique" UNIQUE("idempotency_key"),
+	CONSTRAINT "orders_placed_by_staff_id_check" CHECK (("orders"."placed_by_type" = 'staff' AND "orders"."placed_by_staff_id" IS NOT NULL) OR ("orders"."placed_by_type" = 'guest' AND "orders"."placed_by_staff_id" IS NULL))
+);
+--> statement-breakpoint
+CREATE TABLE "order_items" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"order_id" uuid NOT NULL,
+	"item_name" text NOT NULL,
+	"unit_price" numeric(12, 2) NOT NULL,
+	"tax_rate" numeric(5, 4) NOT NULL,
+	"diet" "diet" NOT NULL,
+	"quantity" integer NOT NULL,
+	"spice" "spice",
+	"salt" "salt",
+	"ice" "ice",
+	"status" "order_item_status" DEFAULT 'placed' NOT NULL,
+	"menu_item_id" uuid
+);
+--> statement-breakpoint
+CREATE TABLE "restaurants" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"address" text NOT NULL,
+	"gst_number" text NOT NULL,
+	"state" text NOT NULL,
+	"pincode" text NOT NULL,
+	"service_charge_rate" numeric(5, 4),
+	"status" "restaurant_status" DEFAULT 'active' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "restaurant_tables" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"label" text NOT NULL,
+	"qr_token" text NOT NULL,
+	"session_id" uuid,
+	CONSTRAINT "restaurant_tables_qr_token_unique" UNIQUE("qr_token")
+);
+--> statement-breakpoint
+CREATE TABLE "staff" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"email" text NOT NULL,
+	"role" "staff_role" NOT NULL,
+	"pin_hash" text,
+	"status" "staff_status" DEFAULT 'invited' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "table_sessions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"status" "session_status" DEFAULT 'active' NOT NULL,
+	"opened_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"closed_at" timestamp with time zone
+);
+--> statement-breakpoint
+ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bills" ADD CONSTRAINT "bills_session_id_table_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."table_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bills" ADD CONSTRAINT "bills_settled_by_staff_id_fk" FOREIGN KEY ("settled_by") REFERENCES "public"."staff"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_session_id_table_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."table_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_menu_item_id_menu_items_id_fk" FOREIGN KEY ("menu_item_id") REFERENCES "public"."menu_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_added_by_staff_id_staff_id_fk" FOREIGN KEY ("added_by_staff_id") REFERENCES "public"."staff"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "menu_categories" ADD CONSTRAINT "menu_categories_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_category_id_menu_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."menu_categories"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_session_id_table_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."table_sessions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_placed_by_staff_id_staff_id_fk" FOREIGN KEY ("placed_by_staff_id") REFERENCES "public"."staff"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_menu_item_id_menu_items_id_fk" FOREIGN KEY ("menu_item_id") REFERENCES "public"."menu_items"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "restaurant_tables" ADD CONSTRAINT "restaurant_tables_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "restaurant_tables" ADD CONSTRAINT "restaurant_tables_session_id_table_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."table_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "staff" ADD CONSTRAINT "staff_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "table_sessions" ADD CONSTRAINT "table_sessions_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "bills_restaurant_id_idx" ON "bills" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE INDEX "cart_items_restaurant_id_idx" ON "cart_items" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE INDEX "cart_items_session_id_idx" ON "cart_items" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "menu_categories_restaurant_id_idx" ON "menu_categories" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE INDEX "menu_items_restaurant_id_idx" ON "menu_items" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE INDEX "menu_items_category_id_idx" ON "menu_items" USING btree ("category_id");--> statement-breakpoint
+CREATE INDEX "orders_restaurant_id_idx" ON "orders" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE INDEX "orders_session_id_idx" ON "orders" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "order_items_order_id_idx" ON "order_items" USING btree ("order_id");--> statement-breakpoint
+CREATE INDEX "order_items_restaurant_id_status_idx" ON "order_items" USING btree ("restaurant_id","status");--> statement-breakpoint
+CREATE INDEX "restaurant_tables_restaurant_id_idx" ON "restaurant_tables" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE INDEX "restaurant_tables_session_id_idx" ON "restaurant_tables" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "staff_restaurant_id_idx" ON "staff" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "staff_restaurant_id_email_idx" ON "staff" USING btree ("restaurant_id","email") WHERE "staff"."status" <> 'removed';--> statement-breakpoint
+CREATE INDEX "table_sessions_restaurant_id_idx" ON "table_sessions" USING btree ("restaurant_id");

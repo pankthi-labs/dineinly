@@ -23,6 +23,7 @@ FastAPI/Python is post-MVP (see `tech-stack.md`). When introduced it must preser
 - Server state lives on the server; client state is UI-only. Never trust client input.
 - Soft-delete where recovery matters. Schema changes only via migrations — never bypass them.
 - Drizzle schema (`packages/db/schema`) is the DB source of truth.
+- **Migration ownership is split and must stay split: Drizzle authors, Supabase CLI applies.** `drizzle-kit generate` diffs the Drizzle schema and writes timestamped SQL into `supabase/migrations/` — one folder, one history. The Supabase CLI (`db reset` locally, `db push` against a linked remote) is the only thing that ever applies that SQL. This exists because the project also needs hand-written SQL — RLS policies, `realtime.messages` policies, broadcast triggers (`docs/realtime.md`) — applied in the same order as the table DDL, and because `supabase db reset` runs `supabase/seed.sql` immediately after migrations; a second, Drizzle-applied migration history would leave that reset with no tables to seed. Never run `drizzle-kit migrate`, `drizzle-kit push`, or `supabase db diff` — each starts a second, divergent history in `__drizzle_migrations` or bypasses the committed migrations entirely. Never hand-edit tables in Studio.
 
 ## Authentication
 
