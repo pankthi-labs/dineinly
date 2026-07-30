@@ -78,17 +78,24 @@ Root scripts run across the workspace via Turborepo; scope to one package with
 |---|---|
 | `pnpm db:start` | boots local Postgres/Auth/Storage/Realtime via Docker |
 | `pnpm db:stop` | stops the local stack |
-| `pnpm db:generate` | `drizzle-kit generate` — diffs `packages/db/src/schema/` and writes a new file to `supabase/migrations/`. Auto-names it with a random two-word slug; use the named form below to avoid that |
+| `pnpm db:generate --name=<name>` | `drizzle-kit generate` — diffs `packages/db/src/schema/` against the last snapshot and writes the delta to `supabase/migrations/<timestamp>_<name>.sql`. Omit `--name` and it picks a random two-word slug instead |
 | `pnpm db:migrate` | `supabase migration up` — applies pending migrations to a running DB, no data loss |
 | `pnpm db:reset` | drops the local DB, replays every migration, then runs `supabase/seed.sql` — the everyday local command |
 
-Workflow for a schema change: edit `packages/db/src/schema/*.ts` → generate a named migration → review and commit the generated `.sql` → `pnpm db:reset` to apply it locally.
+Workflow for a schema change: edit `packages/db/src/schema/*.ts` → `pnpm db:generate --name=<name>` → review and commit the generated `.sql` → `pnpm db:reset` to apply it locally.
 
-```bash
-pnpm --filter @workspace/db exec drizzle-kit generate --name=<snake_case_name>
-```
+**Naming `<name>`** — `<verb>_<subject>`, snake_case, table before column:
 
-Use this form, not plain `pnpm db:generate` — the root script can't forward `--name` through the workspace filter (pnpm inserts an extra `--` that drizzle-kit rejects), so it always falls back to a random slug like `steady_whistler`.
+| Verb | Use for | Example |
+|---|---|---|
+| `create` | new table | `create_bills` |
+| `add` | new column or index | `add_bill_settled_by` |
+| `drop` | remove column or index | `drop_menu_item_legacy_price` |
+| `rename` | rename column or table | `rename_logical_table_to_restaurant_table` |
+| `alter` | type/constraint change on an existing column | `alter_order_items_quantity_type` |
+| `enable_rls` | RLS toggle, no policies | `enable_rls` |
+
+No ticket numbers, no dates — the migration's timestamp prefix already carries that.
 
 **Never run** `drizzle-kit migrate`, `drizzle-kit push`, or `supabase db diff` — each starts a second, divergent migration history. Never edit tables by hand in Studio. See `AGENTS.md` guardrails and `docs/architecture.md` for why.
 
