@@ -5,15 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1785397453917,
-      "tag": "20260730074413_init_schema",
+      "when": 1785423988855,
+      "tag": "20260730150628_init_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1785397470728,
-      "tag": "20260730074430_enable_rls",
+      "when": 1785423994558,
+      "tag": "20260730150634_add_auth_fk_and_rls_policies",
       "breakpoints": true
     }
   ]

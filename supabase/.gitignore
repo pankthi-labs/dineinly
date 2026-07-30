@@ -2,6 +2,10 @@
 .branches
 .temp
 
+# JWT signing keys — private key material, local dev only. See
+# `pnpm db:start` / README for how to (re)generate.
+signing_keys.json
+
 # dotenvx
 .env.keys
 .env.local

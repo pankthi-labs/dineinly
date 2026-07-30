@@ -9,6 +9,10 @@
 		},
 		"lint": {},
 		"format": {},
+		"//#test": {
+			"inputs": ["$TURBO_DEFAULT$", ".env*"],
+			"cache": false
+		},
 		"typecheck": {
 			"dependsOn": ["^typecheck"]
 		},

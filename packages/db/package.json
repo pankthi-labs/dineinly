@@ -4,6 +4,11 @@
 	"type": "module",
 	"private": true,
 	"license": "PROPRIETARY",
+	"exports": {
+		".": "./src/index.ts",
+		"./schema": "./src/schema/index.ts",
+		"./client": "./src/client.ts"
+	},
 	"scripts": {
 		"lint": "biome check .",
 		"format": "biome format --write .",

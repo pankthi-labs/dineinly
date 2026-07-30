@@ -56,7 +56,8 @@
 | Web Hosting | Vercel |
 | Python Service Hosting | Railway — **deferred — post-MVP** |
 | CDN & DNS | Cloudflare |
-| CI/CD | GitHub Actions |
+| CI/CD | GitHub Actions — reporting only. Branch protection needs a paid plan on a private repo, so it can't block a merge; a local `simple-git-hooks` pre-push hook (below) is the actual enforcement layer |
+| Git Hooks | `simple-git-hooks` — pre-push runs `turbo typecheck lint test build`, registered via the root `prepare` script |
 
 ---
 
@@ -95,6 +96,7 @@
 | Validation | Zod |
 | Session Management | httpOnly cookies (via `@supabase/ssr`) |
 | Environment Validation | `@t3-oss/env-nextjs` |
+| Guest JWT Signing & Verification | `jose` (RS256, asymmetric) — never hand-rolled, never symmetric. See `architecture.md` § Guest Sessions |
 | Rate Limiting | Upstash Redis — sanctioned choice for when rate-limiting is implemented; not wired in the MVP baseline. Not used as a cache layer (see `architecture.md`) |
 
 ---

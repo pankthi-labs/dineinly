@@ -1,6 +1,6 @@
 {
-  "id": "45e8639a-578b-4001-bdcd-3f75574b68ac",
-  "prevId": "5ce846c0-f011-4501-ac25-4c4fdbd5cb59",
+  "id": "9dcd5ce7-0dec-442e-ad98-f3d9dae71161",
+  "prevId": "5ff0f7db-3636-49a5-b461-bedeb9d5fbe9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1128,6 +1128,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "email": {
           "name": "email",
           "type": "text",
@@ -1206,6 +1212,28 @@
           "with": {},
           "method": "btree",
           "where": "\"staff\".\"status\" <> 'removed'",
+          "concurrently": false
+        },
+        "staff_restaurant_id_user_id_idx": {
+          "name": "staff_restaurant_id_user_id_idx",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"staff\".\"user_id\" is not null and \"staff\".\"status\" <> 'removed'",
           "concurrently": false
         }
       },

@@ -24,6 +24,7 @@ FastAPI/Python is post-MVP (see `tech-stack.md`). When introduced it must preser
 - Soft-delete where recovery matters. Schema changes only via migrations — never bypass them.
 - Drizzle schema (`packages/db/schema`) is the DB source of truth.
 - **Migration ownership is split and must stay split: Drizzle authors, Supabase CLI applies.** `drizzle-kit generate` diffs the Drizzle schema and writes timestamped SQL into `supabase/migrations/` — one folder, one history. The Supabase CLI (`db reset` locally, `db push` against a linked remote) is the only thing that ever applies that SQL. This exists because the project also needs hand-written SQL — RLS policies, `realtime.messages` policies, broadcast triggers (`docs/realtime.md`) — applied in the same order as the table DDL, and because `supabase db reset` runs `supabase/seed.sql` immediately after migrations; a second, Drizzle-applied migration history would leave that reset with no tables to seed. Never run `drizzle-kit migrate`, `drizzle-kit push`, or `supabase db diff` — each starts a second, divergent history in `__drizzle_migrations` or bypasses the committed migrations entirely. Never hand-edit tables in Studio.
+- **External Supabase schemas (`auth`, `storage`, `realtime`, ...) are never Drizzle-managed tables.** A typed `.references()` stub for e.g. `auth.users` makes `drizzle-kit generate` treat that table as ours to own — it diffs the TS schema graph, not the live DB, so it will emit `CREATE SCHEMA auth; CREATE TABLE auth.users` for a table that already exists, or a `DROP TABLE ... CASCADE` for it on a later regenerate where the stub was removed. Both collide with or destroy infrastructure Supabase owns. Instead: declare the column as a plain, untyped `uuid(...)` in the Drizzle schema, and add the actual FK via hand-written SQL — `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY (...) REFERENCES <schema>.<table>(...)` — in a custom migration (`drizzle-kit generate --custom`), never folded into a Drizzle-generated schema migration.
 
 ## Authentication
 
@@ -37,15 +38,19 @@ Restaurant identity is always server-derived. No NFC badges, no WebAuthn/passkey
 
 ## Guest Sessions & Anonymous Realtime
 
-1. Guest scans QR → server validates and resolves it to a restaurant table → finds/creates the active table session → issues a signed token with only that session's claims (`restaurant_id`, `table_session_id`, guest role, expiry).
+1. Guest scans QR → server validates and resolves it to a restaurant table → finds/creates the active table session → issues a signed token with only that session's claims (`restaurant_id`, `table_session_id`, `app_role: "guest"`, expiry).
 2. Guest talks to Supabase directly; RLS authorizes every query and Realtime subscription from that token.
 
 Rules:
 - Guests never get service-role credentials and never bypass RLS. Token scope is exactly one active table session.
-- Guest tokens are **server-minted asymmetric-signed JWTs** (Supabase-trusted signing key) carrying only the session claims — no per-guest anonymous auth user is created. Supabase validates the signature; RLS + Realtime authorize from the claims. Never hand-roll or symmetric-sign tokens.
+- Guest tokens are **server-minted asymmetric-signed JWTs** (Supabase-trusted signing key, RS256, `jose`) carrying only the session claims — no per-guest anonymous auth user is created. Supabase validates the signature; RLS + Realtime authorize from the claims. Never hand-roll or symmetric-sign tokens. See `apps/web/lib/guest-token.ts`.
 - Tokens are long-lived (≥12h, longer for events) so a meal never expires; silent refresh gated on the session being active.
 - Revocation is not via expiry: RLS policies check live session state (`status = active`), so closing a session denies access immediately.
 - Abuse control: staff can see/remove participants; token issuance is rate-limited per QR.
+
+**Claim contract** — two mechanics that are easy to get wrong, found empirically against local PostgREST:
+- Top-level `role` claim is not an app concept — PostgREST reads it to literally `SET LOCAL ROLE <value>` in Postgres, so it must name a real, pre-granted Postgres role. Guest tokens therefore carry `role: "authenticated"` like any other authenticated session; our own `app_role: "guest"` claim is what RLS policies branch on to tell a guest session apart from a future staff one.
+- The JWT header must carry `kid`, matching the signing key registered at `supabase/config.toml`'s `signing_keys_path` (gitignored `supabase/signing_keys.json`, generated via `supabase gen signing-key --algorithm RS256`) — without it PostgREST can't select a key out of the JWKS and rejects the token. The same private key, as JSON, is `GUEST_JWT_SIGNING_KEY` in `.env`.
 
 ## Authorization & Idempotency
 

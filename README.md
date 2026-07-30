@@ -30,12 +30,20 @@ Install these before anything else:
 git clone <repo-url>
 cd dineinly
 
-cp .env.example .env       # DATABASE_URL already points at local Supabase
+cp .env.example .env       # DATABASE_URL already points at local Supabase; other vars below
 
 pnpm install                # installs all workspaces (apps/web, packages/*) + pinned Supabase CLI
+                             # also registers the pre-push git hook (see "Common commands")
+
+# Generate the guest-JWT signing key (gitignored, local dev only):
+supabase gen signing-key --algorithm RS256 > /tmp/key.json
+echo "[$(cat /tmp/key.json)]" > supabase/signing_keys.json     # config.toml expects a JSON array
+# Paste the same key (unwrapped, not the array) as GUEST_JWT_SIGNING_KEY in .env
 
 pnpm db:start                # boots local Postgres/Auth/Storage/Realtime via Docker
                              # first run pulls Docker images, takes a few minutes
+
+supabase status -o env       # fill NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY / SUPABASE_SERVICE_ROLE_KEY in .env
 
 pnpm db:reset                # applies every committed migration, then seeds the DB
                              # (see "Database migrations" below — never drizzle-kit push/migrate)
@@ -47,15 +55,21 @@ App runs at **http://127.0.0.1:3000**.
 
 ## Environment
 
-Only one env var is required, read from the **monorepo root** `.env` by
-`packages/db/drizzle.config.ts`:
+Five env vars, validated at startup by `apps/web/lib/env.ts` (invalid or missing fails fast, not
+mid-request) and read from the **monorepo root** `.env`:
 
 ```
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres  # trusted, RLS-bypassing — packages/db/src/client.ts only
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=            # from `supabase status -o env`
+SUPABASE_SERVICE_ROLE_KEY=                # from `supabase status -o env` — server-only, never in the client bundle
+GUEST_JWT_SIGNING_KEY=                    # private JWK (RS256) — see "Setup from scratch" above
 ```
 
-This points at the local Supabase Postgres instance started by `pnpm db:start` (port `54322`).
-`.env` is gitignored; `.env.example` is committed and safe to copy as-is for local dev.
+`DATABASE_URL` points at the local Supabase Postgres instance started by `pnpm db:start` (port
+`54322`). `.env` is gitignored; `.env.example` documents the shape but has no real values — fill
+it in per "Setup from scratch". Next.js doesn't look outside `apps/web` by default, so
+`apps/web/next.config.ts` loads the root `.env` explicitly.
 
 ## Common commands
 
@@ -69,6 +83,10 @@ Root scripts run across the workspace via Turborepo; scope to one package with
 | `pnpm lint` | `biome check .` per package |
 | `pnpm format` | `biome format --write .` per package |
 | `pnpm typecheck` | `next typegen && tsc --noEmit` (web), `tsc --noEmit` (packages) |
+| `pnpm test` | `vitest run` at the repo root |
+
+`pnpm install` also registers a `pre-push` git hook (`simple-git-hooks`) that runs
+`typecheck lint test build` before every push — see `docs/tech-stack.md`.
 
 ### Database migrations
 

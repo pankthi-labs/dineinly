@@ -126,6 +126,7 @@ CREATE TABLE "restaurant_tables" (
 CREATE TABLE "staff" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"restaurant_id" uuid NOT NULL,
+	"user_id" uuid,
 	"email" text NOT NULL,
 	"role" "staff_role" NOT NULL,
 	"pin_hash" text,
@@ -176,4 +177,5 @@ CREATE INDEX "restaurant_tables_restaurant_id_idx" ON "restaurant_tables" USING 
 CREATE INDEX "restaurant_tables_session_id_idx" ON "restaurant_tables" USING btree ("session_id");--> statement-breakpoint
 CREATE INDEX "staff_restaurant_id_idx" ON "staff" USING btree ("restaurant_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "staff_restaurant_id_email_idx" ON "staff" USING btree ("restaurant_id","email") WHERE "staff"."status" <> 'removed';--> statement-breakpoint
+CREATE UNIQUE INDEX "staff_restaurant_id_user_id_idx" ON "staff" USING btree ("restaurant_id","user_id") WHERE "staff"."user_id" is not null and "staff"."status" <> 'removed';--> statement-breakpoint
 CREATE INDEX "table_sessions_restaurant_id_idx" ON "table_sessions" USING btree ("restaurant_id");

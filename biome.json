@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!.claude"]
+		"includes": ["**", "!.claude", "!supabase/migrations/meta"]
 	},
 	"formatter": {
 		"enabled": true,

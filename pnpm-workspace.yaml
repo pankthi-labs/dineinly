@@ -5,6 +5,9 @@ packages:
 allowBuilds:
   sharp: true
   esbuild: true
+  # Its own postinstall is unneeded — registration happens via the root
+  # package.json `prepare` script instead (explicit, auditable).
+  simple-git-hooks: false
 
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:

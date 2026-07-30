@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Dummy values so @t3-oss/env-nextjs schema validation passes — CI never
+  # talks to a real Supabase instance. Never put real secrets here.
+  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+  SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+  # `next build` only needs this to satisfy env.ts's z.string().min(1) — it
+  # never signs anything. The unit test that actually exercises jose's
+  # sign/verify path generates its own throwaway key (vitest.setup.ts) so
+  # no key material, real or fake-shaped, has to live in this file.
+  GUEST_JWT_SIGNING_KEY: ci-placeholder-guest-jwt-signing-key
+  NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm turbo typecheck lint test build
