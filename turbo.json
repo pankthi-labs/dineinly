@@ -4,12 +4,14 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
+			"env": ["DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GUEST_JWT_SIGNING_KEY"],
 			"inputs": ["$TURBO_DEFAULT$", ".env*"],
 			"outputs": [".next/**", "!.next/cache/**"]
 		},
 		"lint": {},
 		"format": {},
 		"//#test": {
+			"env": ["DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GUEST_JWT_SIGNING_KEY"],
 			"inputs": ["$TURBO_DEFAULT$", ".env*"],
 			"cache": false
 		},
