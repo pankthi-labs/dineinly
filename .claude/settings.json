@@ -4,6 +4,11 @@
     "ponytail@ponytail": true,
     "code-review@claude-plugins-official": true,
     "claude-mem@thedotmack": true,
-    "caveman@caveman": true
+    "caveman@caveman": true,
+    "impeccable@impeccable": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "taste-skill@taste-skill": true,
+    "frontend-design@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true
   }
 }
