@@ -44,7 +44,7 @@ Permissions are defined precisely in RBAC below; this is persona context only.
 
 ## Onboarding & Setup
 
-- **QR codes:** Owner/Manager generates and downloads one QR per logical table.
+- **QR codes:** Owner/Manager generates and downloads one QR per restaurant table.
 - **Staff invites:** Owner/Manager invites by email; invitee verifies via Email OTP. Managers may invite Managers, Waiters, Kitchen — never Owners.
 - **Daily auth** follows the role model (see `architecture.md` → Authentication).
 - **Menu** is created manually via Manage Menu — no import in MVP.
@@ -67,13 +67,13 @@ Spice, Salt, Ice are the only guest-selectable option groups in the MVP; an item
 
 ## Shared Table Session
 
-- Restaurant → logical tables → QR codes. A QR code is access-only, never business state.
-- A logical table has zero or one active session. An active session may span multiple logical tables (via merge).
+- Restaurant → restaurant tables → QR codes. A QR code is access-only, never business state.
+- A restaurant table has zero or one active session. An active session may span multiple restaurant tables (via merge).
 - One active session = exactly one shared cart, one bill, one or more participants, one or more orders.
-- Scanning a QR resolves to its logical table, then joins the table's active session or creates one.
+- Scanning a QR resolves to its restaurant table, then joins the table's active session or creates one.
 - Guests are anonymous — no name collected, no per-guest attribution.
 - **Cart:** any participant edits freely before confirming (concurrent edits are last-write-wins). Confirming sends the cart to the kitchen as an order (one round) and clears the cart. A session accumulates orders across the meal; the bill aggregates all of them.
-- **Merge:** Waiter/Manager/Owner merges logical tables into one session/cart/bill. Not reversible within the session. **MVP only merges a free (session-less) table into an existing session** — two already-active sessions are never merged.
+- **Merge:** Waiter/Manager/Owner merges restaurant tables into one session/cart/bill. Not reversible within the session. **MVP only merges a free (session-less) table into an existing session** — two already-active sessions are never merged.
 - **Close:** requires no orders in progress and the bill settled. Any Waiter/Manager/Owner may close — no override needed. Closing finalizes and settles the bill, archives the session, and frees the tables.
 - **Force-terminate:** Waiter/Manager/Owner may force-close an abandoned session (walkout), freeing the tables. Void vs. settle handling of any open bill is `TBD` — decided at implementation, flag before guessing.
 - **MVP limitation:** one bill per session — no split bills.
@@ -125,7 +125,7 @@ All permissions are enforced server-side. Client-side checks are UX-only, never 
 
 Dineinly never facilitates, processes, or records payment transactions.
 
-**In scope:** bill generation, tax (per-restaurant rate + inclusive/exclusive mode), service charge (per-restaurant), currency (per-restaurant), bill presentation, settlement workflow, session closure.
+**In scope:** bill generation, tax (per-category rate, always exclusive), service charge (per-restaurant), bill presentation (incl. restaurant address/GST number/state/pincode header), settlement workflow, session closure.
 
 **Settlement** = the restaurant confirms payment via an external method (cash, card terminal, UPI, bank transfer, etc.) → Dineinly marks the bill settled → the session closes. No payment gateway, processing, or status sync.
 

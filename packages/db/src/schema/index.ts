@@ -1,2 +1,12 @@
-// Real table definitions land here during the schema + RLS design work.
-export {};
+export * from "./bill.js";
+export * from "./cart-item.js";
+export * from "./enums.js";
+export * from "./menu-category.js";
+export * from "./menu-item.js";
+export * from "./order.js";
+export * from "./order-item.js";
+export * from "./relations.js";
+export * from "./restaurant.js";
+export * from "./restaurant-table.js";
+export * from "./staff.js";
+export * from "./table-session.js";

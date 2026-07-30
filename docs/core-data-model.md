@@ -14,36 +14,36 @@ Every table below carries `restaurant_id` (tenant scope, RLS precondition). Soft
 
 | Table | Key columns | Purpose |
 |---|---|---|
-| **Restaurant** | name, currency, tax_rate, tax_mode (inclusive/exclusive), service_charge_rate | Tenant root. Settings folded in — read on nearly every request, no join. |
-| **Staff** | restaurant_id, email, role (enum: guest/waiter/kitchen/manager/owner/dineinly_admin), pin_hash (nullable), status | Identity + RBAC. `pin_hash` is floor/kitchen attribution only — never a DB auth factor. |
-| **Logical Table** | restaurant_id, label, qr_token, session_id (nullable FK) | Physical floor plan. QR is 1:1 static, folded as a column. `session_id` = the table's current active session; merge = multiple tables pointing at the same session. |
+| **Restaurant** | name, address, gst_number, state, pincode, service_charge_rate (nullable) | Tenant root. Settings folded in — read on nearly every request, no join. Tax is per-category, not per-restaurant (see Menu Category). address/gst_number/state/pincode are the bill header fields. `service_charge_rate` null = restaurant levies no service charge. |
+| **Staff** | restaurant_id, email, role (enum: waiter/kitchen/manager/owner), pin_hash (nullable), status | Identity + RBAC — tenant employees only. Guest is not a Staff role — guests never have accounts (see AGENTS.md). Dineinly Admin is not a Staff row either — it's a platform-level Supabase Auth identity carrying a privileged claim, authorized by RLS from that claim; keeping it out of Staff avoids a nullable `restaurant_id` and RLS special-casing. `pin_hash` is floor/kitchen attribution only — never a DB auth factor. |
+| **Restaurant Table** | restaurant_id, label, qr_token, session_id (nullable FK) | Physical floor plan — a table guests sit at. QR is 1:1 static, folded as a column. `session_id` = the table's current active session; merge = multiple tables pointing at the same session. |
 | **Table Session** | restaurant_id, status (active/closed), opened_at, closed_at | One dining visit. Groups the shared cart, all orders, and the bill for that visit. |
-| **Menu Category** | restaurant_id, name, sort | Menu grouping and display order. Own table for stable IDs and reordering. |
+| **Menu Category** | restaurant_id, name, sort, tax_rate | Menu grouping and display order. Own table for stable IDs and reordering. `tax_rate` lives here, not on Restaurant — food and drinks are taxed at different rates. |
 | **Menu Item** | restaurant_id, category_id, name, description, price, prep_time, serving_size, diet (enum), availability, labels (text[]), spice/salt/ice (nullable enums) | Sellable catalog item. Labels and option groups folded as arrays/columns — no child tables. Option fields only apply when set; never affect price. |
-| **Cart Item** | restaurant_id, session_id, menu_item_id (live FK), quantity, spice/salt/ice, added_by_staff_id (nullable) | Live shared cart, pre-confirm. Rows, not a JSON blob — row-level writes so two guests adding different items never clobber each other. Concurrent edits to the *same* line are last-write-wins. |
-| **Order** | restaurant_id, session_id, placed_at, placed_by (nullable), idempotency_key (unique) | One confirmed round, sent to the kitchen. `placed_by` = Staff id when a waiter/manager/owner places it, **null for a guest**. `idempotency_key` blocks duplicate orders from retries or repeated taps. |
-| **Order Item** | order_id, item_name, unit_price, diet, quantity, spice/salt/ice, status (placed/preparing/ready/served/cancelled), menu_item_id (nullable soft ref) | Kitchen fulfillment line. **Snapshots** name/price/diet at order time — later menu edits or deletions never alter past orders or bills. Also serves as the bill line item. |
-| **Bill** | restaurant_id, session_id (1:1), status (open/requested/settled), tax_rate/tax_mode/service_charge_rate/currency (snapshot), subtotal, tax_amount, service_charge_amount, total (all nullable until settle), settled_at, settled_by, settlement_method | Financial record for the session. Own table: a bill has its own lifecycle (open → requested → settled) distinct from the session's, and is the highest-value table to keep clean for future settlement/reprint features. Amounts are **derived on read** for presentation (open/requested) and **frozen** only at settle — see lifecycle. |
+| **Cart Item** | restaurant_id, session_id, menu_item_id (live FK), quantity, spice/salt/ice, added_by_type (enum: staff/guest), added_by_staff_id (nullable) | Live shared cart, pre-confirm. Rows, not a JSON blob — row-level writes so two guests adding different items never clobber each other. Concurrent edits to the *same* line are last-write-wins. Attribution is explicit (type + nullable staff FK), not inferred from nullability alone. |
+| **Order** | restaurant_id, session_id, placed_at, placed_by_type (enum: staff/guest), placed_by_staff_id (nullable), idempotency_key (unique) | One confirmed round, sent to the kitchen. `placed_by_staff_id` is set to the Staff id when a waiter/manager/owner places it, null for a guest — `placed_by_type` states which explicitly. `idempotency_key` blocks duplicate orders from retries or repeated taps. |
+| **Order Item** | order_id, item_name, unit_price, tax_rate, diet, quantity, spice/salt/ice, status (placed/preparing/ready/served/cancelled), menu_item_id (nullable soft ref) | Kitchen fulfillment line. **Snapshots** name/price/diet/tax_rate at order time — later menu, category, or tax-rate edits never alter past orders or bills. Also serves as the bill line item. |
+| **Bill** | restaurant_id, session_id (1:1), status (open/requested/settled), service_charge_rate (snapshot), subtotal, tax_amount, service_charge_amount, total (all nullable until settle), settled_at, settled_by | Financial record for the session. Own table: a bill has its own lifecycle (open → requested → settled) distinct from the session's, and is the highest-value table to keep clean for future settlement/reprint features. Amounts are **derived on read** for presentation (open/requested) and **frozen** only at settle — see lifecycle. Dineinly never processes payment, so no settlement-method column — only *that* it settled. |
 
 10 tables total.
 
 ## Relationships
 
 - Restaurant 1—N everything tenant-scoped.
-- Logical Table N—1 Table Session (via `session_id`). A table has zero or one active session. Merge = multiple tables share one `session_id`. **MVP:** merge only joins a **session-less (free) table** into an existing session — two already-active sessions are never merged.
+- Restaurant Table N—1 Table Session (via `session_id`). A table has zero or one active session. Merge = multiple tables share one `session_id`. **MVP:** merge only joins a **session-less (free) table** into an existing session — two already-active sessions are never merged.
 - Table Session 1—N Cart Item, 1—N Order, 1—1 Bill.
 - Order 1—N Order Item.
 - Menu Category 1—N Menu Item.
 - Bill total = SUM(Order Items in the session) + tax + service charge — **derived on read** for presentation (open/requested), **computed and stored** at settlement.
 
-**MVP pricing:** all prices are tax-**exclusive**; `tax_rate`, `tax_mode`, and `service_charge_rate` are static per-restaurant settings on Restaurant. The exact tax/service/rounding formula (`TBD`) is decided at implementation — flag before guessing a rounding rule.
+**MVP pricing:** all prices are tax-**exclusive** — no inclusive mode, no `tax_mode` column. `tax_rate` is set per Menu Category (food and drinks can carry different rates, e.g. 5% vs 18%) and snapshotted onto Order Item at order time; `service_charge_rate` stays a static per-restaurant setting. Bill's tax breakdown (e.g. CGST/SGST) is derived by grouping the session's Order Items by `tax_rate` and splitting each slab in display; nothing beyond the flat total is stored. The exact tax/service/rounding formula (`TBD`) is decided at implementation — flag before guessing a rounding rule.
 
 ## Folded, not modeled as tables
 
 | Would-be table | Folded into | Why |
 |---|---|---|
 | Restaurant Settings | Restaurant (columns) | 1:1, read every request — no benefit joining. |
-| QR Code | Logical Table (`qr_token` column) | Static 1:1, never queried on its own. |
+| QR Code | Restaurant Table (`qr_token` column) | Static 1:1, never queried on its own. |
 | Cart | Cart Item (`session_id` FK directly) | 1:1 with session, no fields of its own. |
 | Bill Line Item | Order Item (already a snapshot) | Duplicate data — Order Item already has name/qty/price frozen. |
 | Guest Session | JWT claims only, no row | Guest identity is the signed token itself (`restaurant_id`, `table_session_id`); RLS checks `session.status = active`. No DB row needed. |
@@ -55,7 +55,7 @@ Every table below carries `restaurant_id` (tenant scope, RLS precondition). Soft
 | `analytics_events` | Analytics/KPI requirements are defined | High-volume, append-only, short retention. |
 | `audit_logs` | Dineinly-Admin cross-tenant tooling ships | Low-volume, permanent. Separate table from analytics — different retention and immutability needs, don't merge them. |
 | Shared `idempotency_keys` table | A second mutation type (cancel/modify) needs a dedupe guarantee beyond Order's unique key | Submit Order is the only mutation that can create duplicate money-affecting state; a unique `idempotency_key` column on Order covers MVP. |
-| Session↔Table join table (merge history) | Table merges need an audit trail of which tables were merged when | `session_id` FK on Logical Table is sufficient while merges don't need history. |
+| Session↔Table join table (merge history) | Table merges need an audit trail of which tables were merged when | `session_id` FK on Restaurant Table is sufficient while merges don't need history. |
 | Guest Session table | Per-participant removal / attribution needed | Currently out of MVP scope per `product.md`. |
 | Split Bill | Split-bill feature ships | Bill is already its own table — no extraction needed, only a cardinality change (session 1—N bills). |
 

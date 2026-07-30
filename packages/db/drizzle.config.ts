@@ -4,7 +4,7 @@ import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-config({ path: path.resolve(__dirname, "../../.env") });
+config({ path: path.resolve(__dirname, "../../.env"), quiet: true });
 
 if (!process.env.DATABASE_URL) {
 	throw new Error(

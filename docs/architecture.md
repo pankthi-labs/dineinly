@@ -36,7 +36,7 @@ Restaurant identity is always server-derived. No NFC badges, no WebAuthn/passkey
 
 ## Guest Sessions & Anonymous Realtime
 
-1. Guest scans QR → server validates and resolves it to a logical table → finds/creates the active table session → issues a signed token with only that session's claims (`restaurant_id`, `table_session_id`, guest role, expiry).
+1. Guest scans QR → server validates and resolves it to a restaurant table → finds/creates the active table session → issues a signed token with only that session's claims (`restaurant_id`, `table_session_id`, guest role, expiry).
 2. Guest talks to Supabase directly; RLS authorizes every query and Realtime subscription from that token.
 
 Rules:
@@ -66,7 +66,7 @@ Real-time is a core capability across guests, waiters, kitchen, and managers; th
 
 ## Core Data Model
 
-See `docs/core-data-model.md`. 10 tables: Restaurant, Staff, Logical Table, Table Session, Menu Category, Menu Item, Cart Item, Order, Order Item, Bill. Everything downstream (Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts) derives from it. Do not invent entities or relationships outside that doc.
+See `docs/core-data-model.md`. 10 tables: Restaurant, Staff, Restaurant Table, Table Session, Menu Category, Menu Item, Cart Item, Order, Order Item, Bill. Everything downstream (Drizzle schema, RLS policies, tRPC routers, Realtime channels, API contracts) derives from it. Do not invent entities or relationships outside that doc.
 
 ## AI Guidance
 
