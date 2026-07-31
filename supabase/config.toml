@@ -180,7 +180,11 @@ refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
 enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
-enable_anonymous_sign_ins = true
+# Off: guests never get a Supabase auth.users identity — Dineinly mints its
+# own scoped JWTs (see apps/web/lib/guest-token.ts, docs/architecture.md
+# § Guest Sessions). Leaving this on is unused attack surface: anyone
+# holding the public anon key could otherwise mint real auth.users rows.
+enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
@@ -236,7 +240,9 @@ max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+# Owner/Manager login is Email OTP only (docs/architecture.md § Auth) —
+# 10 minutes, to shrink the brute-force window.
+otp_expiry = 600
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]

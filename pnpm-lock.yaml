@@ -111,9 +111,6 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
     devDependencies:
       '@types/node':
         specifier: ^24.13.3
@@ -3286,7 +3283,8 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postgres@3.4.9: {}
+  postgres@3.4.9:
+    optional: true
 
   react-dom@19.2.7(react@19.2.7):
     dependencies:

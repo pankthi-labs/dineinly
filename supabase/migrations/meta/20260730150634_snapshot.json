@@ -1,6 +1,6 @@
 {
-  "id": "9dcd5ce7-0dec-442e-ad98-f3d9dae71161",
-  "prevId": "5ff0f7db-3636-49a5-b461-bedeb9d5fbe9",
+  "id": "b3635316-3599-4d12-9250-e8b8815bbd98",
+  "prevId": "1ea18cf7-199c-492a-ae64-ee603b9f16d9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -123,27 +123,31 @@
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "bills_session_id_table_sessions_id_fk": {
-          "name": "bills_session_id_table_sessions_id_fk",
+        "bills_restaurant_id_session_id_fkey": {
+          "name": "bills_restaurant_id_session_id_fkey",
           "tableFrom": "bills",
           "columnsFrom": [
+            "restaurant_id",
             "session_id"
           ],
           "tableTo": "table_sessions",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "no action"
         },
-        "bills_settled_by_staff_id_fk": {
-          "name": "bills_settled_by_staff_id_fk",
+        "bills_restaurant_id_settled_by_fkey": {
+          "name": "bills_restaurant_id_settled_by_fkey",
           "tableFrom": "bills",
           "columnsFrom": [
+            "restaurant_id",
             "settled_by"
           ],
           "tableTo": "staff",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -161,7 +165,32 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "bills_service_charge_rate_check": {
+          "name": "bills_service_charge_rate_check",
+          "value": "\"bills\".\"service_charge_rate\" between 0 and 1"
+        },
+        "bills_subtotal_check": {
+          "name": "bills_subtotal_check",
+          "value": "\"bills\".\"subtotal\" >= 0"
+        },
+        "bills_tax_amount_check": {
+          "name": "bills_tax_amount_check",
+          "value": "\"bills\".\"tax_amount\" >= 0"
+        },
+        "bills_service_charge_amount_check": {
+          "name": "bills_service_charge_amount_check",
+          "value": "\"bills\".\"service_charge_amount\" >= 0"
+        },
+        "bills_total_check": {
+          "name": "bills_total_check",
+          "value": "\"bills\".\"total\" >= 0"
+        },
+        "bills_settled_check": {
+          "name": "bills_settled_check",
+          "value": "(\"bills\".\"status\" = 'settled' AND \"bills\".\"settled_at\" IS NOT NULL AND \"bills\".\"subtotal\" IS NOT NULL AND \"bills\".\"tax_amount\" IS NOT NULL AND \"bills\".\"total\" IS NOT NULL) OR (\"bills\".\"status\" <> 'settled' AND \"bills\".\"settled_at\" IS NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.cart_items": {
@@ -242,11 +271,17 @@
         }
       },
       "indexes": {
-        "cart_items_restaurant_id_idx": {
-          "name": "cart_items_restaurant_id_idx",
+        "cart_items_restaurant_id_session_id_idx": {
+          "name": "cart_items_restaurant_id_session_id_idx",
           "columns": [
             {
               "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -257,11 +292,17 @@
           "method": "btree",
           "concurrently": false
         },
-        "cart_items_session_id_idx": {
-          "name": "cart_items_session_id_idx",
+        "cart_items_restaurant_id_menu_item_id_idx": {
+          "name": "cart_items_restaurant_id_menu_item_id_idx",
           "columns": [
             {
-              "expression": "session_id",
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "menu_item_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -287,40 +328,46 @@
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "cart_items_session_id_table_sessions_id_fk": {
-          "name": "cart_items_session_id_table_sessions_id_fk",
+        "cart_items_restaurant_id_session_id_fkey": {
+          "name": "cart_items_restaurant_id_session_id_fkey",
           "tableFrom": "cart_items",
           "columnsFrom": [
+            "restaurant_id",
             "session_id"
           ],
           "tableTo": "table_sessions",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "cart_items_menu_item_id_menu_items_id_fk": {
-          "name": "cart_items_menu_item_id_menu_items_id_fk",
+        "cart_items_restaurant_id_menu_item_id_fkey": {
+          "name": "cart_items_restaurant_id_menu_item_id_fkey",
           "tableFrom": "cart_items",
           "columnsFrom": [
+            "restaurant_id",
             "menu_item_id"
           ],
           "tableTo": "menu_items",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "no action"
         },
-        "cart_items_added_by_staff_id_staff_id_fk": {
-          "name": "cart_items_added_by_staff_id_staff_id_fk",
+        "cart_items_restaurant_id_added_by_staff_id_fkey": {
+          "name": "cart_items_restaurant_id_added_by_staff_id_fkey",
           "tableFrom": "cart_items",
           "columnsFrom": [
+            "restaurant_id",
             "added_by_staff_id"
           ],
           "tableTo": "staff",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -334,6 +381,10 @@
         "cart_items_added_by_staff_id_check": {
           "name": "cart_items_added_by_staff_id_check",
           "value": "(\"cart_items\".\"added_by_type\" = 'staff' AND \"cart_items\".\"added_by_staff_id\" IS NOT NULL) OR (\"cart_items\".\"added_by_type\" = 'guest' AND \"cart_items\".\"added_by_staff_id\" IS NULL)"
+        },
+        "cart_items_quantity_check": {
+          "name": "cart_items_quantity_check",
+          "value": "\"cart_items\".\"quantity\" > 0 AND \"cart_items\".\"quantity\" <= 99"
         }
       },
       "isRLSEnabled": false
@@ -383,23 +434,7 @@
           "default": "'active'"
         }
       },
-      "indexes": {
-        "menu_categories_restaurant_id_idx": {
-          "name": "menu_categories_restaurant_id_idx",
-          "columns": [
-            {
-              "expression": "restaurant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "menu_categories_restaurant_id_restaurants_id_fk": {
           "name": "menu_categories_restaurant_id_restaurants_id_fk",
@@ -416,9 +451,23 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "menu_categories_restaurant_id_id_key": {
+          "name": "menu_categories_restaurant_id_id_key",
+          "columns": [
+            "restaurant_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "menu_categories_tax_rate_check": {
+          "name": "menu_categories_tax_rate_check",
+          "value": "\"menu_categories\".\"tax_rate\" between 0 and 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.menu_items": {
@@ -541,24 +590,15 @@
         }
       },
       "indexes": {
-        "menu_items_restaurant_id_idx": {
-          "name": "menu_items_restaurant_id_idx",
+        "menu_items_restaurant_id_category_id_idx": {
+          "name": "menu_items_restaurant_id_category_id_idx",
           "columns": [
             {
               "expression": "restaurant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
-        "menu_items_category_id_idx": {
-          "name": "menu_items_category_id_idx",
-          "columns": [
+            },
             {
               "expression": "category_id",
               "isExpression": false,
@@ -586,14 +626,16 @@
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "menu_items_category_id_menu_categories_id_fk": {
-          "name": "menu_items_category_id_menu_categories_id_fk",
+        "menu_items_restaurant_id_category_id_fkey": {
+          "name": "menu_items_restaurant_id_category_id_fkey",
           "tableFrom": "menu_items",
           "columnsFrom": [
+            "restaurant_id",
             "category_id"
           ],
           "tableTo": "menu_categories",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -601,9 +643,27 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "menu_items_restaurant_id_id_key": {
+          "name": "menu_items_restaurant_id_id_key",
+          "columns": [
+            "restaurant_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "menu_items_price_check": {
+          "name": "menu_items_price_check",
+          "value": "\"menu_items\".\"price\" >= 0"
+        },
+        "menu_items_prep_time_check": {
+          "name": "menu_items_prep_time_check",
+          "value": "\"menu_items\".\"prep_time\" > 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.orders": {
@@ -657,24 +717,15 @@
         }
       },
       "indexes": {
-        "orders_restaurant_id_idx": {
-          "name": "orders_restaurant_id_idx",
+        "orders_restaurant_id_session_id_idx": {
+          "name": "orders_restaurant_id_session_id_idx",
           "columns": [
             {
               "expression": "restaurant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
-        "orders_session_id_idx": {
-          "name": "orders_session_id_idx",
-          "columns": [
+            },
             {
               "expression": "session_id",
               "isExpression": false,
@@ -702,27 +753,31 @@
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "orders_session_id_table_sessions_id_fk": {
-          "name": "orders_session_id_table_sessions_id_fk",
+        "orders_restaurant_id_session_id_fkey": {
+          "name": "orders_restaurant_id_session_id_fkey",
           "tableFrom": "orders",
           "columnsFrom": [
+            "restaurant_id",
             "session_id"
           ],
           "tableTo": "table_sessions",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "no action"
         },
-        "orders_placed_by_staff_id_staff_id_fk": {
-          "name": "orders_placed_by_staff_id_staff_id_fk",
+        "orders_restaurant_id_placed_by_staff_id_fkey": {
+          "name": "orders_restaurant_id_placed_by_staff_id_fkey",
           "tableFrom": "orders",
           "columnsFrom": [
+            "restaurant_id",
             "placed_by_staff_id"
           ],
           "tableTo": "staff",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -735,6 +790,14 @@
           "name": "orders_idempotency_key_unique",
           "columns": [
             "idempotency_key"
+          ],
+          "nullsNotDistinct": false
+        },
+        "orders_restaurant_id_id_key": {
+          "name": "orders_restaurant_id_id_key",
+          "columns": [
+            "restaurant_id",
+            "id"
           ],
           "nullsNotDistinct": false
         }
@@ -854,6 +917,27 @@
           "method": "btree",
           "concurrently": false
         },
+        "order_items_restaurant_id_order_id_idx": {
+          "name": "order_items_restaurant_id_order_id_idx",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
         "order_items_restaurant_id_status_idx": {
           "name": "order_items_restaurant_id_status_idx",
           "columns": [
@@ -890,27 +974,31 @@
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "order_items_order_id_orders_id_fk": {
-          "name": "order_items_order_id_orders_id_fk",
+        "order_items_restaurant_id_order_id_fkey": {
+          "name": "order_items_restaurant_id_order_id_fkey",
           "tableFrom": "order_items",
           "columnsFrom": [
+            "restaurant_id",
             "order_id"
           ],
           "tableTo": "orders",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "order_items_menu_item_id_menu_items_id_fk": {
-          "name": "order_items_menu_item_id_menu_items_id_fk",
+        "order_items_restaurant_id_menu_item_id_fkey": {
+          "name": "order_items_restaurant_id_menu_item_id_fkey",
           "tableFrom": "order_items",
           "columnsFrom": [
+            "restaurant_id",
             "menu_item_id"
           ],
           "tableTo": "menu_items",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -920,7 +1008,20 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "order_items_quantity_check": {
+          "name": "order_items_quantity_check",
+          "value": "\"order_items\".\"quantity\" > 0 AND \"order_items\".\"quantity\" <= 99"
+        },
+        "order_items_unit_price_check": {
+          "name": "order_items_unit_price_check",
+          "value": "\"order_items\".\"unit_price\" >= 0"
+        },
+        "order_items_tax_rate_check": {
+          "name": "order_items_tax_rate_check",
+          "value": "\"order_items\".\"tax_rate\" between 0 and 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.restaurants": {
@@ -998,7 +1099,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "restaurants_service_charge_rate_check": {
+          "name": "restaurants_service_charge_rate_check",
+          "value": "\"restaurants\".\"service_charge_rate\" between 0 and 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.restaurant_tables": {
@@ -1038,24 +1144,15 @@
         }
       },
       "indexes": {
-        "restaurant_tables_restaurant_id_idx": {
-          "name": "restaurant_tables_restaurant_id_idx",
+        "restaurant_tables_restaurant_id_session_id_idx": {
+          "name": "restaurant_tables_restaurant_id_session_id_idx",
           "columns": [
             {
               "expression": "restaurant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
-        "restaurant_tables_session_id_idx": {
-          "name": "restaurant_tables_session_id_idx",
-          "columns": [
+            },
             {
               "expression": "session_id",
               "isExpression": false,
@@ -1083,14 +1180,16 @@
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "restaurant_tables_session_id_table_sessions_id_fk": {
-          "name": "restaurant_tables_session_id_table_sessions_id_fk",
+        "restaurant_tables_restaurant_id_session_id_fkey": {
+          "name": "restaurant_tables_restaurant_id_session_id_fkey",
           "tableFrom": "restaurant_tables",
           "columnsFrom": [
+            "restaurant_id",
             "session_id"
           ],
           "tableTo": "table_sessions",
           "columnsTo": [
+            "restaurant_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -1253,7 +1352,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "staff_restaurant_id_id_key": {
+          "name": "staff_restaurant_id_id_key",
+          "columns": [
+            "restaurant_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1297,23 +1405,7 @@
           "notNull": false
         }
       },
-      "indexes": {
-        "table_sessions_restaurant_id_idx": {
-          "name": "table_sessions_restaurant_id_idx",
-          "columns": [
-            {
-              "expression": "restaurant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "table_sessions_restaurant_id_restaurants_id_fk": {
           "name": "table_sessions_restaurant_id_restaurants_id_fk",
@@ -1330,9 +1422,23 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "table_sessions_restaurant_id_id_key": {
+          "name": "table_sessions_restaurant_id_id_key",
+          "columns": [
+            "restaurant_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "table_sessions_closed_at_check": {
+          "name": "table_sessions_closed_at_check",
+          "value": "(\"table_sessions\".\"status\" = 'active' AND \"table_sessions\".\"closed_at\" IS NULL) OR (\"table_sessions\".\"status\" = 'closed' AND \"table_sessions\".\"closed_at\" IS NOT NULL)"
+        }
+      },
       "isRLSEnabled": false
     }
   },

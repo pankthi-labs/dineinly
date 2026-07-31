@@ -5,8 +5,7 @@
 			"@/*": ["./*"],
 			"@workspace/ui/*": ["../../packages/ui/src/*"],
 			"@workspace/db": ["../../packages/db/src/index.ts"],
-			"@workspace/db/schema": ["../../packages/db/src/schema/index.ts"],
-			"@workspace/db/client": ["../../packages/db/src/client.ts"]
+			"@workspace/db/schema": ["../../packages/db/src/schema/index.ts"]
 		}
 	},
 	"include": [

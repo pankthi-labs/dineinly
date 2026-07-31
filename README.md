@@ -19,7 +19,7 @@ Install these before anything else:
 
 | Tool | Version | Install |
 |---|---|---|
-| Node.js | `>=24.18.0 <25` | [nvm](https://github.com/nvm-sh/nvm) / [fnm](https://github.com/Schniz/fnm) recommended |
+| Node.js | pinned in `.nvmrc` | [nvm](https://github.com/nvm-sh/nvm) / [fnm](https://github.com/Schniz/fnm) recommended — both auto-switch on `.nvmrc` |
 | pnpm | `11.15.1` | `corepack enable` (reads `packageManager` in `package.json`) |
 | Docker | any recent | required by Supabase CLI to run local Postgres/Auth/Storage |
 | Supabase CLI | pinned in `package.json` | installed by `pnpm install` — no separate install step |
@@ -43,7 +43,7 @@ echo "[$(cat /tmp/key.json)]" > supabase/signing_keys.json     # config.toml exp
 pnpm db:start                # boots local Postgres/Auth/Storage/Realtime via Docker
                              # first run pulls Docker images, takes a few minutes
 
-supabase status -o env       # fill NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY / SUPABASE_SERVICE_ROLE_KEY in .env
+supabase status -o env       # fill NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY in .env
 
 pnpm db:reset                # applies every committed migration, then seeds the DB
                              # (see "Database migrations" below — never drizzle-kit push/migrate)
@@ -55,20 +55,24 @@ App runs at **http://127.0.0.1:3000**.
 
 ## Environment
 
-Five env vars, validated at startup by `apps/web/lib/env.ts` (invalid or missing fails fast, not
-mid-request) and read from the **monorepo root** `.env`:
+The app (`apps/web`) validates three env vars at startup via `apps/web/lib/env.ts` (invalid or
+missing fails fast, not mid-request), read from the **monorepo root** `.env`:
 
 ```
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres  # trusted, RLS-bypassing — packages/db/src/client.ts only
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=            # from `supabase status -o env`
-SUPABASE_SERVICE_ROLE_KEY=                # from `supabase status -o env` — server-only, never in the client bundle
 GUEST_JWT_SIGNING_KEY=                    # private JWK (RS256) — see "Setup from scratch" above
 ```
 
-`DATABASE_URL` points at the local Supabase Postgres instance started by `pnpm db:start` (port
-`54322`). `.env` is gitignored; `.env.example` documents the shape but has no real values — fill
-it in per "Setup from scratch". Next.js doesn't look outside `apps/web` by default, so
+`DATABASE_URL` is also in `.env` but is a **CLI-only** var — `packages/db/drizzle.config.ts` and
+the Supabase CLI (`db:generate`, `db:reset`, `db:migrate`) read it directly; no app code declares
+or reads it, since the app never holds an RLS-bypassing DB connection (guests and staff always go
+through Supabase's anon-key client, which is what makes RLS apply — see
+`docs/architecture.md` § Data). It points at the local Supabase Postgres instance started by
+`pnpm db:start` (port `54322`).
+
+`.env` is gitignored; `.env.example` documents the shape but has no real values — fill it in per
+"Setup from scratch". Next.js doesn't look outside `apps/web` by default, so
 `apps/web/next.config.ts` loads the root `.env` explicitly.
 
 ## Common commands
@@ -99,8 +103,9 @@ Root scripts run across the workspace via Turborepo; scope to one package with
 | `pnpm db:generate --name=<name>` | `drizzle-kit generate` — diffs `packages/db/src/schema/` against the last snapshot and writes the delta to `supabase/migrations/<timestamp>_<name>.sql`. Omit `--name` and it picks a random two-word slug instead |
 | `pnpm db:migrate` | `supabase migration up` — applies pending migrations to a running DB, no data loss |
 | `pnpm db:reset` | drops the local DB, replays every migration, then runs `supabase/seed.sql` — the everyday local command |
+| `pnpm db:types` | `supabase gen types typescript --local` — writes `packages/db/src/database.types.ts`, the `Database` type every Supabase client is parameterized with |
 
-Workflow for a schema change: edit `packages/db/src/schema/*.ts` → `pnpm db:generate --name=<name>` → review and commit the generated `.sql` → `pnpm db:reset` to apply it locally.
+Workflow for a schema change: edit `packages/db/src/schema/*.ts` → `pnpm db:generate --name=<name>` → review and commit the generated `.sql` → `pnpm db:reset` to apply it locally → `pnpm db:types` to refresh the generated types, and commit those too.
 
 **Naming `<name>`** — `<verb>_<subject>`, snake_case, table before column:
 

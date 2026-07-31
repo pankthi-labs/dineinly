@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mintGuestToken, verifyGuestToken } from "./guest-token";
+import { mintGuestToken, verifyGuestToken } from "@/lib/guest-token";
 
 // Real DB rows use gen_random_uuid() (v4). Seed fixture placeholders
 // (docs: "10000000-...-000000000001" scheme) are deliberately not

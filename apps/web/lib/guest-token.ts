@@ -15,9 +15,7 @@ import { env } from "./env";
 // supabase/signing_keys.json (config.toml `signing_keys_path`) — that's
 // what makes Supabase (PostgREST/Realtime) trust a token this server mints.
 //
-// Two PostgREST/Supabase mechanics that are easy to get wrong here, both
-// verified empirically against local PostgREST (a naive first version
-// failed on both):
+// Two PostgREST mechanics that are easy to get wrong:
 //
 // 1. The header MUST carry `kid` matching the signing key's `kid` in
 //    signing_keys.json. Without it PostgREST can't pick a key out of the
@@ -41,52 +39,70 @@ export const guestClaimsSchema = z.object({
 
 export type GuestClaims = z.infer<typeof guestClaimsSchema>;
 
-function signingJwk() {
-	return JSON.parse(env.GUEST_JWT_SIGNING_KEY) as {
-		kty: string;
-		kid: string;
-		n: string;
-		e: string;
-		alg: string;
-	};
-}
+// RFC 7517 JWK member names — fixed by the format `supabase gen signing-key`
+// emits and by what jose.importJWK reads, so they can't be renamed here.
+// .passthrough(): privateKey() below spreads the full parsed object into
+// jose.importJWK, so the RSA private components (d, p, q, ...) this schema
+// doesn't name must survive .parse() rather than being stripped.
+const signingJwkSchema = z
+	.object({
+		/** Key type. "RSA" for our RS256 signing key. */
+		kty: z.string(),
+		/** Key ID. Must match the entry in supabase/signing_keys.json, or
+		 *  PostgREST can't pick a key out of the JWKS ("No suitable key"). */
+		kid: z.string(),
+		/** RSA modulus (base64url). Public half. */
+		n: z.string(),
+		/** RSA public exponent (base64url). Public half. */
+		e: z.string(),
+		/** Signing algorithm. "RS256". */
+		alg: z.string(),
+	})
+	.passthrough();
 
+// Parsed once, at module load, not per mint/verify call. `.parse` (not
+// `.safeParse`) is deliberate: a malformed GUEST_JWT_SIGNING_KEY is a
+// deploy configuration fault, so it must fail loudly at startup
+// (architecture.md: "never fail silently") rather than surface as a
+// mysteriously-invalid token on the first request. This is distinct from
+// an invalid *token*, which is an expected runtime condition — see
+// verifyGuestToken below, which handles that by returning null.
+const signingJwk = signingJwkSchema.parse(
+	JSON.parse(env.GUEST_JWT_SIGNING_KEY),
+);
+
+// Imported once per process, on first use. WebCrypto requires key_ops to be
+// exactly ["sign"] for a private-key import — `supabase gen signing-key` emits
+// ["sign","verify"] on the combined JWK, which importKey rejects here.
 let cachedPrivateKey: Promise<jose.CryptoKey> | undefined;
 
-function privateKey() {
-	cachedPrivateKey ??= (async () => {
-		// WebCrypto requires key_ops to be exactly ["sign"] for a private-key
-		// import — `supabase gen signing-key` emits ["sign","verify"] on the
-		// combined JWK, which importKey rejects for a private key.
-		return jose.importJWK(
-			{ ...signingJwk(), key_ops: ["sign"] },
-			GUEST_TOKEN_ALG,
-		) as Promise<jose.CryptoKey>;
-	})();
+function privateKey(): Promise<jose.CryptoKey> {
+	cachedPrivateKey ??= jose.importJWK(
+		{ ...signingJwk, key_ops: ["sign"] },
+		GUEST_TOKEN_ALG,
+	) as Promise<jose.CryptoKey>;
 	return cachedPrivateKey;
 }
 
+// Memoized likewise, and built from only the public modulus and exponent
+// (n, e) — signing-only fields (d, p, q, ...) are never handed to the
+// verifier, even though it's the same process.
 let cachedPublicKey: Promise<jose.CryptoKey> | undefined;
 
-function publicKey() {
-	cachedPublicKey ??= (async () => {
-		// Only the public members (n, e) — signing-only fields (d, p, q, ...)
-		// are never handed to the verifier, even though it's the same process.
-		const { kty, n, e, alg, kid } = signingJwk();
-		return jose.importJWK(
-			{ kty, n, e, alg, kid, key_ops: ["verify"] },
-			GUEST_TOKEN_ALG,
-		) as Promise<jose.CryptoKey>;
-	})();
+function publicKey(): Promise<jose.CryptoKey> {
+	const { kty, n, e, alg, kid } = signingJwk;
+	cachedPublicKey ??= jose.importJWK(
+		{ kty, n, e, alg, kid, key_ops: ["verify"] },
+		GUEST_TOKEN_ALG,
+	) as Promise<jose.CryptoKey>;
 	return cachedPublicKey;
 }
 
 /** Mints a scoped, signed guest JWT. Caller sets it as an httpOnly cookie. */
 export async function mintGuestToken(claims: GuestClaims): Promise<string> {
 	const key = await privateKey();
-	const { kid } = signingJwk();
 	return new jose.SignJWT({ ...claims, role: "authenticated" })
-		.setProtectedHeader({ alg: GUEST_TOKEN_ALG, kid })
+		.setProtectedHeader({ alg: GUEST_TOKEN_ALG, kid: signingJwk.kid })
 		.setIssuedAt()
 		.setExpirationTime(`${GUEST_TOKEN_MIN_TTL_SECONDS}s`)
 		.sign(key);

@@ -1,3 +1,3 @@
-// Shared UI package. Currently ships design tokens only (see ./styles/globals.css);
-// components land here once the design system is implemented.
+// Shared UI package. Ships design tokens (see ./styles/globals.css);
+// shared components are exported from here.
 export {};

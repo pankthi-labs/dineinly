@@ -1,4 +1,4 @@
-import { index, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { foreignKey, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { id } from "./helpers.js";
 import { restaurants } from "./restaurant.js";
 import { tableSessions } from "./table-session.js";
@@ -16,12 +16,23 @@ export const restaurantTables = pgTable(
 			.references(() => restaurants.id, { onDelete: "cascade" }),
 		label: text("label").notNull(),
 		qrToken: text("qr_token").notNull().unique(),
-		sessionId: uuid("session_id").references(() => tableSessions.id, {
-			onDelete: "set null",
-		}),
+		// Plain, nullable column — the real constraint is the composite FK
+		// below, so session_id can never name a session from another
+		// restaurant. A composite FK with a NULL member (the common "table is
+		// free" case) is simply unchecked, per default MATCH SIMPLE.
+		sessionId: uuid("session_id"),
 	},
-	(t) => [
-		index("restaurant_tables_restaurant_id_idx").on(t.restaurantId),
-		index("restaurant_tables_session_id_idx").on(t.sessionId),
+	(table) => [
+		// Backs the composite FK below. Leftmost-prefixed by restaurant_id, so
+		// it doubles as the tenant index — no single-column one needed.
+		index("restaurant_tables_restaurant_id_session_id_idx").on(
+			table.restaurantId,
+			table.sessionId,
+		),
+		foreignKey({
+			columns: [table.restaurantId, table.sessionId],
+			foreignColumns: [tableSessions.restaurantId, tableSessions.id],
+			name: "restaurant_tables_restaurant_id_session_id_fkey",
+		}).onDelete("set null"),
 	],
 );

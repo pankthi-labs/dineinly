@@ -4,15 +4,13 @@ import type { NextConfig } from "next";
 
 // The monorepo's single .env lives at the repo root (shared with
 // packages/db's drizzle.config.ts and the Supabase CLI) — outside
-// apps/web, where Next.js looks by default. Load it explicitly; CI sets
-// real env vars directly and has no .env file, which is fine — this never
-// overrides an already-set process.env value. See
+// apps/web, where Next.js looks by default. Load it explicitly here; this
+// never overrides an already-set process.env value, so CI (which sets
+// real env vars directly and has no .env file) is unaffected. See
 // https://nextjs.org/docs/messages/env-loading (monorepo env loading).
-// forceReload (4th arg) is required: Next.js already calls loadEnvConfig
-// once internally, pointed at this directory (finding nothing, since the
-// root .env lives one level up) — without forcing a reload, @next/env's
-// own module-level cache just replays that empty result and this call is
-// a no-op.
+// forceReload (4th arg) is required: without it, @next/env's module-level
+// cache would keep the empty result from the internal load Next.js already
+// does for this directory, since the root .env lives one level up from it.
 loadEnvConfig(
 	path.resolve(import.meta.dirname, "../.."),
 	process.env.NODE_ENV !== "production",

@@ -48,7 +48,7 @@ Rules:
 - Revocation is not via expiry: RLS policies check live session state (`status = active`), so closing a session denies access immediately.
 - Abuse control: staff can see/remove participants; token issuance is rate-limited per QR.
 
-**Claim contract** — two mechanics that are easy to get wrong, found empirically against local PostgREST:
+**Claim contract** — two mechanics PostgREST requires that are easy to get wrong:
 - Top-level `role` claim is not an app concept — PostgREST reads it to literally `SET LOCAL ROLE <value>` in Postgres, so it must name a real, pre-granted Postgres role. Guest tokens therefore carry `role: "authenticated"` like any other authenticated session; our own `app_role: "guest"` claim is what RLS policies branch on to tell a guest session apart from a future staff one.
 - The JWT header must carry `kid`, matching the signing key registered at `supabase/config.toml`'s `signing_keys_path` (gitignored `supabase/signing_keys.json`, generated via `supabase gen signing-key --algorithm RS256`) — without it PostgREST can't select a key out of the JWKS and rejects the token. The same private key, as JSON, is `GUEST_JWT_SIGNING_KEY` in `.env`.
 
@@ -57,6 +57,7 @@ Rules:
 - RBAC (matrix in `product.md`) is enforced server-side on every mutation; client-side checks are UX-only.
 - Dineinly Admin is the only cross-tenant path (audited). No other code crosses tenant boundaries.
 - **Submit Order** is the only money-affecting mutation guarded against duplicates: a client-supplied `idempotency_key` (unique on Order) makes retries/repeated taps safe. Cart edits are naturally idempotent (row-level, last-write-wins); cancel/modify are guarded by order state (only while `placed`), not by keys. See `core-data-model.md`.
+- **Multi-table guest mutations** (Submit Order, Request Bill) execute as `SECURITY DEFINER` Postgres functions, called via `supabase.rpc()` with the guest JWT forwarded as the bearer token — the same pattern as every other guest request, so no separate credential exists. A function body is one transaction: writing the Order, its Order Items, and clearing the Cart Items happen together or not at all, with no app-level connection to Postgres needed. Tenancy and identity come only from `auth.jwt()` claims read inside the function, never from arguments — a guest cannot name a session, item, or price; item prices and tax rates are read fresh from `menu_items`/`menu_categories` inside the function, never accepted from the client. Retries return the already-created row via `on conflict (restaurant_id, idempotency_key) do nothing returning id`, falling back to a select on conflict. Each function follows the same hardening as the RLS helper functions in `supabase/migrations/*_add_auth_fk_and_rls_policies.sql`: `set search_path = ''`, every table reference schema-qualified, `execute` revoked from `public` and granted only to `authenticated`, and the guest-session-liveness check as its first statement.
 
 ## Real-Time
 

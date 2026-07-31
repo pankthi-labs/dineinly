@@ -1,5 +1,12 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+	index,
+	pgTable,
+	text,
+	unique,
+	uniqueIndex,
+	uuid,
+} from "drizzle-orm/pg-core";
 import { staffRole, staffStatus } from "./enums.js";
 import { createdAt, id, updatedAt } from "./helpers.js";
 import { restaurants } from "./restaurant.js";
@@ -35,16 +42,24 @@ export const staff = pgTable(
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
-	(t) => [
-		index("staff_restaurant_id_idx").on(t.restaurantId),
+	(table) => [
+		// Single-column, because both composite indexes below are partial —
+		// neither can serve an unfiltered restaurant_id lookup however it's
+		// prefixed.
+		index("staff_restaurant_id_idx").on(table.restaurantId),
 		// Partial: frees the email for re-invite once a staff member is removed.
 		uniqueIndex("staff_restaurant_id_email_idx")
-			.on(t.restaurantId, t.email)
-			.where(sql`${t.status} <> 'removed'`),
+			.on(table.restaurantId, table.email)
+			.where(sql`${table.status} <> 'removed'`),
 		// One Supabase Auth identity maps to at most one active Staff row per
 		// restaurant (it can still be staff at several different restaurants).
 		uniqueIndex("staff_restaurant_id_user_id_idx")
-			.on(t.restaurantId, t.userId)
-			.where(sql`${t.userId} is not null and ${t.status} <> 'removed'`),
+			.on(table.restaurantId, table.userId)
+			.where(sql`${table.userId} is not null and ${table.status} <> 'removed'`),
+		// Composite-FK target: lets bills/cart_items/orders reference
+		// (restaurant_id, id) together, so an attribution column can never
+		// name a staff member from another restaurant — see bill.ts,
+		// cart-item.ts, order.ts.
+		unique("staff_restaurant_id_id_key").on(table.restaurantId, table.id),
 	],
 );

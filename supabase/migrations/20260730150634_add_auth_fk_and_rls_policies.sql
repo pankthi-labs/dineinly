@@ -5,13 +5,12 @@
 -- ============================================================================
 -- Hand-written, not Drizzle-generated. See AGENTS.md / docs/architecture.md
 -- § Data: external Supabase schemas (auth, storage, realtime, ...) are
--- never modeled as Drizzle-managed tables. A typed `.references()` stub
--- for auth.users makes drizzle-kit's `generate` (which diffs the TS
--- schema graph, not the live DB) treat that table as ours to manage — it
--- emitted `CREATE SCHEMA auth; CREATE TABLE auth.users`, colliding with
--- the real, already-existing one; on a later regenerate with the stub
--- removed, it emitted `DROP TABLE auth.users CASCADE` instead. Neither
--- must ever run. See packages/db/src/schema/staff.ts for the column.
+-- never modeled as Drizzle-managed tables — `drizzle-kit generate` diffs
+-- the TS schema graph, not the live DB, so a typed `.references()` stub
+-- for auth.users would make it treat that table as ours to manage and
+-- emit DDL that creates or drops Supabase's own `auth.users`. The FK is
+-- added here instead, by hand. See packages/db/src/schema/staff.ts for
+-- the column.
 ALTER TABLE "staff" ADD CONSTRAINT "staff_user_id_fkey"
 	FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
@@ -41,13 +40,13 @@ alter table "bills" enable row level security;
 --    that's a single-table op with no idempotency/atomicity concerns).
 -- ============================================================================
 --
--- Deliberately NOT covered here — flagged separately, not guessed:
---   - Submit Order / Request Bill: routed through a trusted tRPC
---     transaction (DATABASE_URL client), not direct guest RLS writes — see
---     docs/architecture.md § Authorization & Idempotency.
---   - Every staff-side policy: staff auth (Email OTP invite flow, station
---     accounts) has no code yet; `staff.user_id` (added above in this
---     file) is the decided link, but policies come with that flow.
+-- Not covered here:
+--   - Submit Order / Request Bill: multi-table writes, executed as
+--     SECURITY DEFINER Postgres functions rather than direct guest RLS
+--     writes — see docs/architecture.md § Authorization & Idempotency.
+--   - Every staff-side policy: lands with the staff auth flow (Email OTP
+--     invite, station accounts), which `staff.user_id` (added above in
+--     this file) is the link for.
 --
 -- Mechanics (see apps/web/lib/guest-token.ts for the token-minting side):
 --   - Guest JWTs carry the standard `role: authenticated` claim (required
@@ -62,20 +61,33 @@ alter table "bills" enable row level security;
 --     Sessions): a token stays cryptographically valid for its full TTL,
 --     so every policy re-checks `table_sessions.status = 'active'` on each
 --     query rather than trusting the token was valid when minted — that's
---     what makes closing a session deny access immediately.
+--     what makes closing a session deny access immediately. Every policy
+--     below uses the same three helper functions for this reason — none
+--     inlines its own claim-extraction or liveness logic.
+--
+-- Hardening applied to every helper function (Supabase's own linter flags
+-- the absence of these): `set search_path = ''` so a search_path hijack
+-- can't redirect an unqualified reference to a hostile object, with every
+-- table reference inside fully schema-qualified as a result; and
+-- `execute` revoked from `public` and re-granted only to `authenticated`
+-- — otherwise any Postgres role (including `anon`) can call these and
+-- probe, e.g., whether an arbitrary session id is active for an arbitrary
+-- restaurant.
 
--- Shared guest-claim checks, factored out since every policy below needs
--- some subset of them.
 create or replace function public.jwt_is_guest_for_restaurant(
 	p_restaurant_id uuid
 )
 returns boolean
 language sql
 stable
+set search_path = ''
 as $$
 	select (auth.jwt() ->> 'app_role') = 'guest'
 		and p_restaurant_id = ((auth.jwt() ->> 'restaurant_id')::uuid);
 $$;
+
+revoke execute on function public.jwt_is_guest_for_restaurant(uuid) from public;
+grant execute on function public.jwt_is_guest_for_restaurant(uuid) to authenticated;
 
 create or replace function public.jwt_is_guest_for_session(
 	p_restaurant_id uuid,
@@ -84,10 +96,14 @@ create or replace function public.jwt_is_guest_for_session(
 returns boolean
 language sql
 stable
+set search_path = ''
 as $$
 	select public.jwt_is_guest_for_restaurant(p_restaurant_id)
 		and p_session_id = ((auth.jwt() ->> 'table_session_id')::uuid);
 $$;
+
+revoke execute on function public.jwt_is_guest_for_session(uuid, uuid) from public;
+grant execute on function public.jwt_is_guest_for_session(uuid, uuid) to authenticated;
 
 create or replace function public.is_active_guest_session(
 	p_session_id uuid,
@@ -96,15 +112,19 @@ create or replace function public.is_active_guest_session(
 returns boolean
 language sql
 stable
+set search_path = ''
 as $$
 	select exists (
 		select 1
-		from table_sessions ts
+		from public.table_sessions ts
 		where ts.id = p_session_id
 			and ts.restaurant_id = p_restaurant_id
 			and ts.status = 'active'
 	);
 $$;
+
+revoke execute on function public.is_active_guest_session(uuid, uuid) from public;
+grant execute on function public.is_active_guest_session(uuid, uuid) to authenticated;
 
 -- restaurants: bill header fields (address/gst/state/pincode).
 grant select on public.restaurants to authenticated;
@@ -152,10 +172,12 @@ create policy "guest_select_own_active_session" on public.table_sessions
 -- cart (docs/product.md: "any participant edits freely" — not scoped to
 -- rows the guest personally added). Insert/update are pinned to
 -- `added_by_type = 'guest'` / `added_by_staff_id is null` so a guest can
--- never attribute a cart edit to staff, and to `menu_item_id` belonging to
--- the same restaurant — `cart_items.menu_item_id` only FKs to
--- `menu_items.id` (no compound restaurant FK), so without this check a
--- guest could reference another restaurant's menu item by id.
+-- never attribute a cart edit to staff. Unlike the original version of
+-- this policy, no separate `exists (select 1 from menu_items ...)` check
+-- is needed here: `cart_items.menu_item_id` now carries a composite FK to
+-- `menu_items (restaurant_id, id)` (packages/db/src/schema/cart-item.ts),
+-- so a cart item can no longer reference another restaurant's menu item at
+-- all — the database enforces it, not this policy.
 grant select, insert, update, delete on public.cart_items to authenticated;
 
 create policy "guest_select_session_cart_items" on public.cart_items
@@ -174,29 +196,24 @@ create policy "guest_insert_session_cart_items" on public.cart_items
 		and added_by_type = 'guest'
 		and added_by_staff_id is null
 		and public.is_active_guest_session(session_id, restaurant_id)
-		and exists (
-			select 1
-			from menu_items mi
-			where mi.id = menu_item_id
-				and mi.restaurant_id = cart_items.restaurant_id
-		)
 	);
 
+-- USING and WITH CHECK both re-verify session liveness — an update that
+-- passed USING (row was fetched at read time) must not act on a session
+-- that has closed since; without it, closing a session mid-write did not
+-- reliably block that write.
 create policy "guest_update_session_cart_items" on public.cart_items
 	for update
 	to authenticated
-	using (public.jwt_is_guest_for_session(restaurant_id, session_id))
+	using (
+		public.jwt_is_guest_for_session(restaurant_id, session_id)
+		and public.is_active_guest_session(session_id, restaurant_id)
+	)
 	with check (
 		public.jwt_is_guest_for_session(restaurant_id, session_id)
 		and added_by_type = 'guest'
 		and added_by_staff_id is null
 		and public.is_active_guest_session(session_id, restaurant_id)
-		and exists (
-			select 1
-			from menu_items mi
-			where mi.id = menu_item_id
-				and mi.restaurant_id = cart_items.restaurant_id
-		)
 	);
 
 create policy "guest_delete_session_cart_items" on public.cart_items
@@ -221,17 +238,24 @@ create policy "guest_select_session_orders" on public.orders
 
 grant select on public.order_items to authenticated;
 
+-- order_items has no session_id of its own — scope through its parent
+-- order. Rewritten to use the same helper functions as every sibling
+-- policy: the original version of this policy inlined its own auth.jwt()
+-- extraction and, in doing so, dropped the liveness check — a guest
+-- holding a still-valid token could keep reading a closed session's order
+-- items, contradicting architecture.md's "closing a session denies access
+-- immediately".
 create policy "guest_select_session_order_items" on public.order_items
 	for select
 	to authenticated
 	using (
-		(auth.jwt() ->> 'app_role') = 'guest'
-		and restaurant_id = ((auth.jwt() ->> 'restaurant_id')::uuid)
+		public.jwt_is_guest_for_restaurant(restaurant_id)
 		and exists (
 			select 1
-			from orders o
+			from public.orders o
 			where o.id = order_items.order_id
-				and o.session_id = ((auth.jwt() ->> 'table_session_id')::uuid)
+				and public.jwt_is_guest_for_session(o.restaurant_id, o.session_id)
+				and public.is_active_guest_session(o.session_id, o.restaurant_id)
 		)
 	);
 

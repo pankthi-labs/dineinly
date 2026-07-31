@@ -6,15 +6,16 @@
 		"prepare": "simple-git-hooks",
 		"build": "turbo build",
 		"dev": "turbo dev",
-		"lint": "turbo lint",
-		"format": "turbo format",
+		"lint": "biome check .",
+		"format": "biome format --write .",
 		"typecheck": "turbo typecheck",
 		"test": "vitest run",
 		"db:start": "supabase start",
 		"db:stop": "supabase stop",
 		"db:generate": "pnpm --filter @workspace/db db:generate",
 		"db:migrate": "supabase migration up",
-		"db:reset": "supabase db reset"
+		"db:reset": "supabase db reset",
+		"db:types": "supabase gen types typescript --local > packages/db/src/database.types.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.4",

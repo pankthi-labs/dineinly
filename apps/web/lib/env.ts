@@ -6,10 +6,6 @@ import { z } from "zod";
 // See docs/tech-stack.md § Security > Environment Validation.
 export const env = createEnv({
 	server: {
-		// Trusted, RLS-bypassing connection — see packages/db/src/client.ts.
-		DATABASE_URL: z.string().url(),
-		// Service-role key: server-only, never exposed to the client bundle.
-		SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 		// Private JWK (JSON, RS256) used to sign guest JWTs. See
 		// lib/guest-token.ts and supabase/config.toml `signing_keys_path`.
 		GUEST_JWT_SIGNING_KEY: z.string().min(1),

@@ -1,18 +1,20 @@
 {
 	"$schema": "https://turbo.build/schema.json",
 	"ui": "tui",
+	"globalDependencies": [".env"],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"env": ["DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GUEST_JWT_SIGNING_KEY"],
-			"inputs": ["$TURBO_DEFAULT$", ".env*"],
+			"env": [
+				"NEXT_PUBLIC_SUPABASE_URL",
+				"NEXT_PUBLIC_SUPABASE_ANON_KEY",
+				"VERCEL_URL"
+			],
+			"passThroughEnv": ["GUEST_JWT_SIGNING_KEY"],
 			"outputs": [".next/**", "!.next/cache/**"]
 		},
-		"lint": {},
-		"format": {},
+		"//#lint": {},
 		"//#test": {
-			"env": ["DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GUEST_JWT_SIGNING_KEY"],
-			"inputs": ["$TURBO_DEFAULT$", ".env*"],
 			"cache": false
 		},
 		"typecheck": {

@@ -1,9 +1,11 @@
+import { sql } from "drizzle-orm";
 import {
-	index,
+	check,
 	integer,
 	numeric,
 	pgTable,
 	text,
+	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
 import { menuCategoryStatus } from "./enums.js";
@@ -26,5 +28,17 @@ export const menuCategories = pgTable(
 		taxRate: numeric("tax_rate", { precision: 5, scale: 4 }).notNull(),
 		status: menuCategoryStatus("status").notNull().default("active"),
 	},
-	(t) => [index("menu_categories_restaurant_id_idx").on(t.restaurantId)],
+	(table) => [
+		// Composite-FK target for menu_items (see menu-item.ts). Its unique
+		// index is leftmost-prefixed by restaurant_id, so it doubles as the
+		// tenant index — no single-column restaurant_id index needed.
+		unique("menu_categories_restaurant_id_id_key").on(
+			table.restaurantId,
+			table.id,
+		),
+		check(
+			"menu_categories_tax_rate_check",
+			sql`${table.taxRate} between 0 and 1`,
+		),
+	],
 );

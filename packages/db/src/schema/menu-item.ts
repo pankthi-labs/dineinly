@@ -1,9 +1,13 @@
+import { sql } from "drizzle-orm";
 import {
+	check,
+	foreignKey,
 	index,
 	integer,
 	numeric,
 	pgTable,
 	text,
+	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
 import {
@@ -29,9 +33,9 @@ export const menuItems = pgTable(
 		restaurantId: uuid("restaurant_id")
 			.notNull()
 			.references(() => restaurants.id, { onDelete: "cascade" }),
-		categoryId: uuid("category_id")
-			.notNull()
-			.references(() => menuCategories.id),
+		// Plain column — the real constraint is the composite FK below, so
+		// category_id can never name a category from another restaurant.
+		categoryId: uuid("category_id").notNull(),
 		name: text("name").notNull(),
 		description: text("description").notNull(),
 		price: numeric("price", { precision: 12, scale: 2 }).notNull(),
@@ -47,8 +51,22 @@ export const menuItems = pgTable(
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
-	(t) => [
-		index("menu_items_restaurant_id_idx").on(t.restaurantId),
-		index("menu_items_category_id_idx").on(t.categoryId),
+	(table) => [
+		// Lookup path "this restaurant's items in category X", and backs the
+		// composite FK below. Leftmost-prefixed by restaurant_id, so it
+		// doubles as the tenant index — no single-column one needed.
+		index("menu_items_restaurant_id_category_id_idx").on(
+			table.restaurantId,
+			table.categoryId,
+		),
+		// Composite-FK target for cart_items (see cart-item.ts).
+		unique("menu_items_restaurant_id_id_key").on(table.restaurantId, table.id),
+		foreignKey({
+			columns: [table.restaurantId, table.categoryId],
+			foreignColumns: [menuCategories.restaurantId, menuCategories.id],
+			name: "menu_items_restaurant_id_category_id_fkey",
+		}),
+		check("menu_items_price_check", sql`${table.price} >= 0`),
+		check("menu_items_prep_time_check", sql`${table.prepTime} > 0`),
 	],
 );

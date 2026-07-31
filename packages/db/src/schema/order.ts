@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
 	check,
+	foreignKey,
 	index,
 	pgTable,
 	text,
 	timestamp,
+	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
 import { actorType } from "./enums.js";
@@ -16,9 +18,9 @@ import { tableSessions } from "./table-session.js";
 // One confirmed round, sent to the kitchen. Attribution is explicit:
 // `placedByType` says who, `placedByStaffId` is set only when that's staff
 // (waiter/manager/owner) — see cart-item.ts for the same pattern.
-// `idempotencyKey` is the only dedupe guard in MVP — blocks duplicate orders
-// from retries or repeated taps (Submit Order is the only mutation that
-// needs one).
+// `idempotencyKey` blocks duplicate orders from retries or repeated taps —
+// Submit Order is the only mutation that needs one (see
+// docs/architecture.md § Authorization & Idempotency).
 export const orders = pgTable(
 	"orders",
 	{
@@ -26,24 +28,38 @@ export const orders = pgTable(
 		restaurantId: uuid("restaurant_id")
 			.notNull()
 			.references(() => restaurants.id, { onDelete: "cascade" }),
-		sessionId: uuid("session_id")
-			.notNull()
-			.references(() => tableSessions.id),
-		placedAt: timestamp("placed_at", { withTimezone: true })
+		// Plain column — the real constraint is the composite FK below, so
+		// session_id can never name a session from another restaurant.
+		sessionId: uuid("session_id").notNull(),
+		placedAt: timestamp("placed_at", { withTimezone: true, mode: "string" })
 			.defaultNow()
 			.notNull(),
 		placedByType: actorType("placed_by_type").notNull(),
-		placedByStaffId: uuid("placed_by_staff_id").references(() => staff.id, {
-			onDelete: "set null",
-		}),
+		placedByStaffId: uuid("placed_by_staff_id"),
 		idempotencyKey: text("idempotency_key").notNull().unique(),
 	},
-	(t) => [
-		index("orders_restaurant_id_idx").on(t.restaurantId),
-		index("orders_session_id_idx").on(t.sessionId),
+	(table) => [
+		// Backs the composite FK below. Leftmost-prefixed by restaurant_id, so
+		// it doubles as the tenant index — no single-column one needed.
+		index("orders_restaurant_id_session_id_idx").on(
+			table.restaurantId,
+			table.sessionId,
+		),
+		// Composite-FK target for order_items (see order-item.ts).
+		unique("orders_restaurant_id_id_key").on(table.restaurantId, table.id),
+		foreignKey({
+			columns: [table.restaurantId, table.sessionId],
+			foreignColumns: [tableSessions.restaurantId, tableSessions.id],
+			name: "orders_restaurant_id_session_id_fkey",
+		}),
+		foreignKey({
+			columns: [table.restaurantId, table.placedByStaffId],
+			foreignColumns: [staff.restaurantId, staff.id],
+			name: "orders_restaurant_id_placed_by_staff_id_fkey",
+		}).onDelete("set null"),
 		check(
 			"orders_placed_by_staff_id_check",
-			sql`(${t.placedByType} = 'staff' AND ${t.placedByStaffId} IS NOT NULL) OR (${t.placedByType} = 'guest' AND ${t.placedByStaffId} IS NULL)`,
+			sql`(${table.placedByType} = 'staff' AND ${table.placedByStaffId} IS NOT NULL) OR (${table.placedByType} = 'guest' AND ${table.placedByStaffId} IS NULL)`,
 		),
 	],
 );

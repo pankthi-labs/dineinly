@@ -11,9 +11,11 @@
 | Languages | TypeScript, Python (post-MVP, AI only) |
 | Frontend | Next.js 16 (App Router) |
 | Backend (TypeScript) | tRPC |
+| Wire serialization | No tRPC transformer. Drizzle `timestamp` columns use `mode: "string"` (`packages/db/src/schema/helpers.ts`), so every date is already an ISO string — matching what Supabase Realtime broadcast payloads carry (`docs/realtime.md`), one representation on the wire either way |
 | Backend (AI) | FastAPI (Python, `apps/intelligence`) — **deferred — post-MVP** |
 | Database | PostgreSQL (Supabase) |
 | ORM | Drizzle ORM |
+| Query-layer typing | Generated types (`pnpm db:types` → `packages/db/src/database.types.ts`), regenerated after every migration. Every Supabase client is parameterized with `Database` (e.g. `@supabase/ssr`'s `createServerClient<Database>` in `apps/web/server/trpc/context.ts`) so `.from(...)` queries are typed against the real schema |
 | Authentication | Supabase Auth |
 | Multi-tenancy | PostgreSQL Row Level Security (RLS) — mandatory on every tenant-facing table |
 | Realtime | Supabase Realtime |

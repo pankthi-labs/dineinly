@@ -4,10 +4,15 @@ import type { Context } from "./context";
 // Base tRPC setup every router imports from. See docs/architecture.md §
 // Authorization & Idempotency: RBAC is enforced server-side, here — never
 // trust a client-side check.
-const t = initTRPC.context<Context>().create();
+//
+// Every timestamp column is `mode: "string"` (packages/db/src/schema/
+// helpers.ts), so responses carry plain ISO strings with no transformer
+// needed — the same representation Supabase Realtime broadcast payloads
+// carry (docs/realtime.md).
+const trpc = initTRPC.context<Context>().create();
 
-export const router = t.router;
-export const publicProcedure = t.procedure;
+export const router = trpc.router;
+export const publicProcedure = trpc.procedure;
 
 /** Requires a valid, unexpired guest JWT. Staff procedures arrive with staff auth. */
 export const guestProcedure = publicProcedure.use(({ ctx, next }) => {

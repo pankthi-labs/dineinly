@@ -1,11 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@workspace/db";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { type GuestClaims, verifyGuestToken } from "@/lib/guest-token";
 
-// Blueprint only: cookie name and guest-session resolution land with the
-// actual guest flow (QR scan → session → mint). This just defines the
-// shape every procedure/router builds on.
+// Cookie carrying the guest session's signed JWT (see lib/guest-token.ts).
+// Every procedure reads guest identity from ctx.guest, derived here once.
 const GUEST_TOKEN_COOKIE = "dineinly_guest_token";
 
 export async function createContext() {
@@ -19,7 +19,7 @@ export async function createContext() {
 	// the bearer token is what makes RLS evaluate the guest's claims (see
 	// docs/architecture.md § Guest Sessions) — Supabase validates the
 	// signature against supabase/signing_keys.json, not this app.
-	const supabase = createServerClient(
+	const supabase = createServerClient<Database>(
 		env.NEXT_PUBLIC_SUPABASE_URL,
 		env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 		{
@@ -31,7 +31,13 @@ export async function createContext() {
 				// a Route Handler or Server Component — not here.
 				setAll: () => {},
 			},
-			...(guestToken && {
+			// Only ever attach the header once the token has verified — an
+			// unverified cookie (expired, tampered, wrong key) must never reach
+			// Supabase as a Bearer credential, even though ctx.guest is null and
+			// guestProcedure will reject: any publicProcedure touching
+			// ctx.supabase before that check would otherwise run authenticated
+			// as whatever the cookie claimed.
+			...(guest && {
 				global: { headers: { Authorization: `Bearer ${guestToken}` } },
 			}),
 		},

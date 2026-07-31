@@ -5,8 +5,9 @@ packages:
 allowBuilds:
   sharp: true
   esbuild: true
-  # Its own postinstall is unneeded — registration happens via the root
-  # package.json `prepare` script instead (explicit, auditable).
+  # Git hooks are registered via the root package.json `prepare` script
+  # instead (explicit, auditable) — simple-git-hooks's own postinstall
+  # build is not needed.
   simple-git-hooks: false
 
 minimumReleaseAge: 1440

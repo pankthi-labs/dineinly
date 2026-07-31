@@ -13,8 +13,9 @@
 -- values for dev fixtures only — they do NOT resolve the tax/service/
 -- rounding formula marked TBD in docs/core-data-model.md.
 --
--- pin_hash is left null on every staff row: no PIN flow exists yet, and
--- seeding a fake hash would bake in a hashing choice nobody has made.
+-- pin_hash is left null on every staff row — the PIN flow that writes it
+-- lands separately, and a fake hash here would bake in a hashing scheme
+-- this file has no business choosing.
 --
 -- Runs as the postgres superuser, which bypasses RLS.
 

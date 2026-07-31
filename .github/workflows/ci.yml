@@ -10,15 +10,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
-  # Dummy values so @t3-oss/env-nextjs schema validation passes — CI never
-  # talks to a real Supabase instance. Never put real secrets here.
-  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-  SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
-  # `next build` only needs this to satisfy env.ts's z.string().min(1) — it
-  # never signs anything. The unit test that actually exercises jose's
-  # sign/verify path generates its own throwaway key (vitest.setup.ts) so
-  # no key material, real or fake-shaped, has to live in this file.
+  # CI never talks to a real Supabase instance: `next build` only needs
+  # GUEST_JWT_SIGNING_KEY to satisfy env.ts's z.string().min(1), it never
+  # signs anything here, and the test that exercises jose's sign/verify
+  # path mints its own throwaway key (vitest.setup.ts). Never put real
+  # secrets in this block.
   GUEST_JWT_SIGNING_KEY: ci-placeholder-guest-jwt-signing-key
   NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
   NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
@@ -27,13 +27,16 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      # Actions are pinned by commit SHA, not tag: a tag is mutable, a SHA
+      # is not. The `# vX.Y.Z` comment is a human label only — verify it
+      # with `git ls-remote <repo> refs/tags/vX.Y.Z` before trusting it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
