@@ -14,12 +14,14 @@ permissions:
   contents: read
 
 env:
-  # CI never talks to a real Supabase instance: `next build` only needs
-  # GUEST_JWT_SIGNING_KEY to satisfy env.ts's z.string().min(1), it never
-  # signs anything here, and the test that exercises jose's sign/verify
-  # path mints its own throwaway key (vitest.setup.ts). Never put real
-  # secrets in this block.
-  GUEST_JWT_SIGNING_KEY: ci-placeholder-guest-jwt-signing-key
+  # CI never talks to a real Supabase instance, and this key never signs
+  # anything here — the test that exercises jose's sign/verify path mints
+  # its own throwaway key (vitest.setup.ts). It must still be valid,
+  # JWK-shaped JSON, though: apps/web/lib/guest-token.ts parses and
+  # validates it at module load, and `next build`'s page-data collection
+  # imports that module (via the tRPC route) even though it never calls
+  # mint/verify. Never put a real key in this block.
+  GUEST_JWT_SIGNING_KEY: '{"kty":"RSA","kid":"ci-placeholder","n":"ci-placeholder-n","e":"AQAB","alg":"RS256"}'
   NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
   NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
 
