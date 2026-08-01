@@ -133,6 +133,7 @@ Fonts: **Outfit** (display) + **Inter** (UI). Load both via `next/font`. Never f
 - ALL CAPS labels: `text-xs` (12px), **w600 minimum**, letter-spacing **0.08em** (pinned point in the 0.08–0.10em range — `.text-caps` utility), uppercase, Inter only. Never Outfit for all-caps.
 - Max line length: **68ch** (pinned point in the 60–72ch range — `.prose` utility). Never full-bleed body text.
 - Minimum tap-target text size: `text-sm` (14px) for any interactive label.
+- Interactive labels (buttons, tabs, actionable chips) are **w500 minimum** at `text-sm`. The `text-sm` w400 in the scale is for captions and helper text — a button label at w400 under-weights the highest-priority element on screen.
 - Outfit + Inter only for typographic text. `--font-mono` (`ui-monospace, monospace`) is a generic system fallback stack for `code`/`kbd`/`pre`/`samp`, not a third brand typeface — it introduces no named font.
 - Links: underline at rest in `--color-divider`, strengthening to `currentColor` on hover, offset `--space-0_5`. No color change on hover — `--color-accent-hover` is reserved for gold buttons/inputs only (§06).
 
@@ -198,6 +199,7 @@ Cinematic and restrained. Motion communicates state, not decoration.
 | Page | Transition | 500ms | ease-in-out | Crossfade or slide |
 | Card list | Entry | 300ms | ease-out | Stagger 40ms · max 3 items · 120ms total |
 | Skeleton | Shimmer | 1500ms | ease-in-out | Infinite loop |
+| Spinner | Rotate | 700ms | linear | Continuous loop — button/inline loading state |
 
 **Skeleton shimmer implementation** — built from existing surface tokens, no new color introduced:
 
@@ -221,6 +223,7 @@ Cinematic and restrained. Motion communicates state, not decoration.
 - Max 2 animated elements on screen simultaneously.
 - Never animate `width`/`height` in scroll views — opacity + transform only.
 - `prefers-reduced-motion: reduce` must drop all transitions to ~0ms.
+- Every loading state must carry descriptive text (e.g. "Sending…", "Verifying…"), never an icon or animation alone — spinner/shimmer is decorative reinforcement only.
 
 ---
 

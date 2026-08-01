@@ -1,0 +1,352 @@
+"use client";
+
+import { Loader2 } from "lucide-react";
+import Image from "next/image";
+import {
+	type ChangeEvent,
+	type ClipboardEvent,
+	type FormEvent,
+	type KeyboardEvent,
+	useEffect,
+	useId,
+	useRef,
+	useState,
+} from "react";
+
+const OTP_LENGTH = 6;
+const RESEND_COOLDOWN_SECONDS = 30;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type Step = "email" | "otp";
+
+export default function SignInPage() {
+	const [step, setStep] = useState<Step>("email");
+	const [email, setEmail] = useState("");
+	const [emailError, setEmailError] = useState<string | null>(null);
+	const [isSendingCode, setIsSendingCode] = useState(false);
+
+	const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+	const [otpError, setOtpError] = useState<string | null>(null);
+	const [isVerifying, setIsVerifying] = useState(false);
+	const [resendCooldown, setResendCooldown] = useState(0);
+
+	useEffect(() => {
+		if (resendCooldown <= 0) return;
+		const timer = setInterval(() => {
+			setResendCooldown((seconds) => Math.max(0, seconds - 1));
+		}, 1000);
+		return () => clearInterval(timer);
+	}, [resendCooldown]);
+
+	function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (!EMAIL_PATTERN.test(email)) {
+			setEmailError("Enter a valid work email address.");
+			return;
+		}
+		setEmailError(null);
+		setIsSendingCode(true);
+		// UI-only placeholder: sending the real code is a separate backend checkpoint.
+		setTimeout(() => {
+			setIsSendingCode(false);
+			setOtp(Array(OTP_LENGTH).fill(""));
+			setOtpError(null);
+			setResendCooldown(RESEND_COOLDOWN_SECONDS);
+			setStep("otp");
+		}, 600);
+	}
+
+	function handleOtpSubmit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (otp.some((digit) => digit === "")) {
+			setOtpError("Enter the full 6-digit code.");
+			return;
+		}
+		setOtpError(null);
+		setIsVerifying(true);
+		// UI-only placeholder: verifying against the backend is a separate checkpoint.
+		setTimeout(() => setIsVerifying(false), 800);
+	}
+
+	function handleResend() {
+		if (resendCooldown > 0) return;
+		setOtp(Array(OTP_LENGTH).fill(""));
+		setOtpError(null);
+		setResendCooldown(RESEND_COOLDOWN_SECONDS);
+	}
+
+	function handleBack() {
+		setStep("email");
+		setOtpError(null);
+		setIsVerifying(false);
+	}
+
+	return (
+		<main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-16">
+			<Image
+				src="/brand/dineinly-logo-dark.svg"
+				alt="Dineinly"
+				width={180}
+				height={58}
+				priority
+			/>
+
+			<div className="w-full max-w-sm rounded-xl border border-divider bg-surface p-6">
+				{step === "email" ? (
+					<EmailStep
+						email={email}
+						error={emailError}
+						isSubmitting={isSendingCode}
+						onEmailChange={setEmail}
+						onSubmit={handleEmailSubmit}
+					/>
+				) : (
+					<OtpStep
+						email={email}
+						otp={otp}
+						error={otpError}
+						isVerifying={isVerifying}
+						resendCooldown={resendCooldown}
+						onOtpChange={setOtp}
+						onSubmit={handleOtpSubmit}
+						onResend={handleResend}
+						onBack={handleBack}
+					/>
+				)}
+			</div>
+
+			<p className="text-caps text-muted">
+				© {new Date().getFullYear()} Dineinly. All rights reserved.
+			</p>
+		</main>
+	);
+}
+
+function SubmitButton({
+	isPending,
+	pendingLabel,
+	label,
+}: {
+	isPending: boolean;
+	pendingLabel: string;
+	label: string;
+}) {
+	return (
+		<button
+			type="submit"
+			disabled={isPending}
+			aria-busy={isPending}
+			className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-accent font-medium text-background text-sm transition-[background-color,transform] duration-(--duration-base) ease-out hover:bg-accent-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted disabled:active:scale-100"
+		>
+			{isPending ? (
+				<Loader2
+					className="icon-sm spinner"
+					strokeWidth={1.5}
+					aria-hidden="true"
+				/>
+			) : null}
+			{isPending ? pendingLabel : label}
+		</button>
+	);
+}
+
+function EmailStep({
+	email,
+	error,
+	isSubmitting,
+	onEmailChange,
+	onSubmit,
+}: {
+	email: string;
+	error: string | null;
+	isSubmitting: boolean;
+	onEmailChange: (value: string) => void;
+	onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+	const errorId = useId();
+
+	return (
+		<>
+			<div className="mb-6 text-center">
+				<h1 className="text-lg text-primary">Sign in</h1>
+				<p className="mt-1 text-secondary text-sm">
+					Enter your work email to get your sign-in code.
+				</p>
+			</div>
+
+			<form className="space-y-6" onSubmit={onSubmit} noValidate>
+				<div className="flex flex-col space-y-3">
+					<label htmlFor="email" className="text-caps text-secondary">
+						Your work email
+					</label>
+					<input
+						id="email"
+						name="email"
+						type="email"
+						autoComplete="email"
+						placeholder="name@restaurant.com"
+						required
+						value={email}
+						disabled={isSubmitting}
+						aria-invalid={error ? true : undefined}
+						aria-describedby={error ? errorId : undefined}
+						onChange={(event) => onEmailChange(event.target.value)}
+						className={`h-12 w-full rounded-sm border bg-background px-4 text-primary text-sm placeholder:text-muted focus:outline-none disabled:cursor-not-allowed disabled:text-muted ${
+							error ? "border-error" : "border-divider focus:border-accent"
+						}`}
+					/>
+					{error ? (
+						<p id={errorId} role="alert" className="text-error text-sm">
+							{error}
+						</p>
+					) : null}
+				</div>
+
+				<SubmitButton
+					isPending={isSubmitting}
+					pendingLabel="Sending…"
+					label="Continue"
+				/>
+			</form>
+		</>
+	);
+}
+
+function OtpStep({
+	email,
+	otp,
+	error,
+	isVerifying,
+	resendCooldown,
+	onOtpChange,
+	onSubmit,
+	onResend,
+	onBack,
+}: {
+	email: string;
+	otp: string[];
+	error: string | null;
+	isVerifying: boolean;
+	resendCooldown: number;
+	onOtpChange: (otp: string[]) => void;
+	onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+	onResend: () => void;
+	onBack: () => void;
+}) {
+	const errorId = useId();
+	const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+	useEffect(() => {
+		inputRefs.current[0]?.focus();
+	}, []);
+
+	function handleChange(index: number, event: ChangeEvent<HTMLInputElement>) {
+		const digit = event.target.value.replace(/\D/g, "").slice(-1);
+		const next = [...otp];
+		next[index] = digit;
+		onOtpChange(next);
+		if (digit && index < OTP_LENGTH - 1) {
+			inputRefs.current[index + 1]?.focus();
+		}
+	}
+
+	function handleKeyDown(
+		index: number,
+		event: KeyboardEvent<HTMLInputElement>,
+	) {
+		if (event.key === "Backspace" && !otp[index] && index > 0) {
+			inputRefs.current[index - 1]?.focus();
+		}
+	}
+
+	function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+		event.preventDefault();
+		const digits = event.clipboardData
+			.getData("text")
+			.replace(/\D/g, "")
+			.slice(0, OTP_LENGTH)
+			.split("");
+		if (digits.length === 0) return;
+		const next = Array.from({ length: OTP_LENGTH }, (_, i) => digits[i] ?? "");
+		onOtpChange(next);
+		inputRefs.current[Math.min(digits.length, OTP_LENGTH - 1)]?.focus();
+	}
+
+	return (
+		<>
+			<button
+				type="button"
+				onClick={onBack}
+				className="mb-4 text-caps text-secondary hover:text-primary"
+			>
+				← Back
+			</button>
+
+			<div className="mb-6 text-center">
+				<h1 className="text-lg text-primary">Verify login</h1>
+				<p className="mt-1 text-secondary text-sm">
+					Enter the 6-digit code sent to {email}.
+				</p>
+			</div>
+
+			<form className="space-y-6" onSubmit={onSubmit} noValidate>
+				<fieldset className="flex justify-between gap-2" disabled={isVerifying}>
+					<legend className="sr-only">Verification code</legend>
+					{otp.map((digit, index) => (
+						<input
+							key={`otp-digit-${
+								// biome-ignore lint/suspicious/noArrayIndexKey: fixed-length OTP boxes never reorder.
+								index
+							}`}
+							ref={(el) => {
+								inputRefs.current[index] = el;
+							}}
+							type="text"
+							inputMode="numeric"
+							pattern="[0-9]*"
+							maxLength={1}
+							autoComplete={index === 0 ? "one-time-code" : "off"}
+							aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+							aria-invalid={error ? true : undefined}
+							aria-describedby={error ? errorId : undefined}
+							value={digit}
+							onChange={(event) => handleChange(index, event)}
+							onKeyDown={(event) => handleKeyDown(index, event)}
+							onPaste={handlePaste}
+							className={`h-12 w-12 rounded-sm border bg-background text-center text-lg text-primary focus:outline-none disabled:cursor-not-allowed disabled:text-muted ${
+								error ? "border-error" : "border-divider focus:border-accent"
+							}`}
+						/>
+					))}
+				</fieldset>
+
+				{error ? (
+					<p
+						id={errorId}
+						role="alert"
+						className="text-center text-error text-sm"
+					>
+						{error}
+					</p>
+				) : null}
+
+				<button
+					type="button"
+					onClick={onResend}
+					disabled={resendCooldown > 0}
+					className="block w-full text-center text-caps text-secondary hover:text-primary disabled:cursor-not-allowed disabled:text-muted disabled:hover:text-muted"
+				>
+					{resendCooldown > 0
+						? `Resend code (${resendCooldown}s)`
+						: "Resend code"}
+				</button>
+
+				<SubmitButton
+					isPending={isVerifying}
+					pendingLabel="Verifying…"
+					label="Sign in"
+				/>
+			</form>
+		</>
+	);
+}

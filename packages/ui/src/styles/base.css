@@ -151,6 +151,15 @@
 	}
 
 	/*
+	 * §05 Spinner: button/inline loading indicator. Tailwind's stock
+	 * animate-spin is unavailable (globals.css's @theme nulls --animate-*),
+	 * so this rotates on the same duration/easing tokens as everything else.
+	 */
+	.spinner {
+		animation: spin var(--duration-cinematic) var(--ease-linear) infinite;
+	}
+
+	/*
 	 * Glass surface, §01: --color-glass-bg / --color-glass-border were
 	 * documented; the backdrop blur radius wasn't. --blur-glass reuses the
 	 * spacing scale (--space-4, 16px) rather than inventing a blur-specific
@@ -170,5 +179,11 @@
 	}
 	100% {
 		background-position: -200% 0;
+	}
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
 	}
 }
