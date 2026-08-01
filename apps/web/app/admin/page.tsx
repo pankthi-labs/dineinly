@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
-import { LogOut, Settings, User, UserCog, UtensilsCrossed } from "lucide-react";
+import { Settings, UserCog, UtensilsCrossed } from "lucide-react";
 import Image from "next/image";
+import { getViewer } from "@/lib/auth";
+import { AdminHeaderActions } from "./admin-header-actions";
 
 const navCards: Array<{
 	title: string;
@@ -24,10 +26,11 @@ const navCards: Array<{
 	},
 ];
 
-const headerActionClass =
-	"icon-tap-target flex items-center gap-2 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary focus-visible:text-primary";
+export default async function AdminDashboardPage() {
+	// Already gated by app/admin/layout.tsx's requireAdmin() — this call
+	// is just to read the display name, not to re-authorize.
+	const viewer = await getViewer();
 
-export default function AdminDashboardPage() {
 	return (
 		<div className="mx-auto flex min-h-dvh max-w-7xl flex-col px-12 py-16">
 			<header className="mb-16 flex flex-col gap-12">
@@ -40,24 +43,11 @@ export default function AdminDashboardPage() {
 						priority
 					/>
 
-					<div className="flex items-center gap-6">
-						<button type="button" className={headerActionClass}>
-							<User className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
-							Profile
-						</button>
-						<button type="button" className={headerActionClass}>
-							<LogOut
-								className="icon-sm"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-							Log out
-						</button>
-					</div>
+					<AdminHeaderActions />
 				</div>
 
 				<h1 className="font-medium text-5xl text-primary">
-					Good Evening, Puneeth.
+					Good Evening, {viewer?.displayName ?? "Admin"}.
 				</h1>
 			</header>
 

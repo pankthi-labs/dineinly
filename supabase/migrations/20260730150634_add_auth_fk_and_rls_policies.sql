@@ -270,3 +270,95 @@ create policy "guest_select_session_bill" on public.bills
 		public.jwt_is_guest_for_session(restaurant_id, session_id)
 		and public.is_active_guest_session(session_id, restaurant_id)
 	);
+
+-- ============================================================================
+-- 4. Dineinly Admin RLS: full cross-tenant access
+-- ============================================================================
+-- Dineinly Admin identity and its app_metadata.app_role claim: see
+-- docs/architecture.md § Authentication.
+--
+-- Matches the RBAC matrix in docs/product.md — Dineinly Admin is permitted
+-- every action on every table. Known gap: docs/product.md requires every
+-- admin action be audited; audit_logs is deferred (docs/core-data-model.md)
+-- until admin tooling ships, so this section adds access but not the audit
+-- trail — must land before production use.
+--
+-- Same hardening as the guest RLS helpers above: `set search_path = ''`,
+-- schema-qualified references, `execute` revoked from `public` and
+-- granted only to `authenticated`.
+
+create or replace function public.is_dineinly_admin()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+	select (auth.jwt() -> 'app_metadata' ->> 'app_role') = 'dineinly_admin';
+$$;
+
+revoke execute on function public.is_dineinly_admin() from public;
+grant execute on function public.is_dineinly_admin() to authenticated;
+
+-- Grants are table-level capability; RLS below is the row-level gate.
+-- Broadening these grants doesn't broaden guest access — guests still
+-- only match the guest-scoped policies above.
+grant select, insert, update, delete on public.restaurants to authenticated;
+grant select, insert, update, delete on public.staff to authenticated;
+grant select, insert, update, delete on public.restaurant_tables to authenticated;
+grant select, insert, update, delete on public.table_sessions to authenticated;
+grant select, insert, update, delete on public.menu_categories to authenticated;
+grant select, insert, update, delete on public.menu_items to authenticated;
+grant select, insert, update, delete on public.cart_items to authenticated;
+grant select, insert, update, delete on public.orders to authenticated;
+grant select, insert, update, delete on public.order_items to authenticated;
+grant select, insert, update, delete on public.bills to authenticated;
+
+create policy "admin_all_restaurants" on public.restaurants
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_staff" on public.staff
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_restaurant_tables" on public.restaurant_tables
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_table_sessions" on public.table_sessions
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_menu_categories" on public.menu_categories
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_menu_items" on public.menu_items
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_cart_items" on public.cart_items
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_orders" on public.orders
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_order_items" on public.order_items
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_bills" on public.bills
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());

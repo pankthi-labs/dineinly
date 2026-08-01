@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
 	type ChangeEvent,
 	type ClipboardEvent,
@@ -12,6 +13,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -20,6 +22,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type Step = "email" | "otp";
 
 export default function SignInPage() {
+	const router = useRouter();
+	const supabase = createClient();
 	const [step, setStep] = useState<Step>("email");
 	const [email, setEmail] = useState("");
 	const [emailError, setEmailError] = useState<string | null>(null);
@@ -38,7 +42,15 @@ export default function SignInPage() {
 		return () => clearInterval(timer);
 	}, [resendCooldown]);
 
-	function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
+	async function sendOtp() {
+		const { error } = await supabase.auth.signInWithOtp({
+			email,
+			options: { shouldCreateUser: false },
+		});
+		return error;
+	}
+
+	async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!EMAIL_PATTERN.test(email)) {
 			setEmailError("Enter a valid work email address.");
@@ -46,17 +58,19 @@ export default function SignInPage() {
 		}
 		setEmailError(null);
 		setIsSendingCode(true);
-		// UI-only placeholder: sending the real code is a separate backend checkpoint.
-		setTimeout(() => {
-			setIsSendingCode(false);
-			setOtp(Array(OTP_LENGTH).fill(""));
-			setOtpError(null);
-			setResendCooldown(RESEND_COOLDOWN_SECONDS);
-			setStep("otp");
-		}, 600);
+		const error = await sendOtp();
+		setIsSendingCode(false);
+		if (error) {
+			setEmailError("Couldn't send a code to that email.");
+			return;
+		}
+		setOtp(Array(OTP_LENGTH).fill(""));
+		setOtpError(null);
+		setResendCooldown(RESEND_COOLDOWN_SECONDS);
+		setStep("otp");
 	}
 
-	function handleOtpSubmit(event: FormEvent<HTMLFormElement>) {
+	async function handleOtpSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (otp.some((digit) => digit === "")) {
 			setOtpError("Enter the full 6-digit code.");
@@ -64,14 +78,28 @@ export default function SignInPage() {
 		}
 		setOtpError(null);
 		setIsVerifying(true);
-		// UI-only placeholder: verifying against the backend is a separate checkpoint.
-		setTimeout(() => setIsVerifying(false), 800);
+		const { error } = await supabase.auth.verifyOtp({
+			email,
+			token: otp.join(""),
+			type: "email",
+		});
+		setIsVerifying(false);
+		if (error) {
+			setOtpError("That code is incorrect or expired.");
+			return;
+		}
+		router.replace("/admin");
 	}
 
-	function handleResend() {
+	async function handleResend() {
 		if (resendCooldown > 0) return;
 		setOtp(Array(OTP_LENGTH).fill(""));
 		setOtpError(null);
+		const error = await sendOtp();
+		if (error) {
+			setOtpError("Couldn't resend the code.");
+			return;
+		}
 		setResendCooldown(RESEND_COOLDOWN_SECONDS);
 	}
 

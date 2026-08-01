@@ -18,6 +18,44 @@
 -- this file has no business choosing.
 --
 -- Runs as the postgres superuser, which bypasses RLS.
+--
+-- Dineinly Admin identity (local dev only — production provisioning is
+-- unresolved, see docs/architecture.md § Authentication). Dineinly Admin
+-- is a platform-level Supabase Auth identity, not a Staff row (see
+-- core-data-model.md), carrying its privileged claim in
+-- raw_app_meta_data.app_role, which Supabase embeds in every JWT it
+-- issues for this user. No password — signs in via Email OTP like any
+-- Owner/Manager. `aud`/`role`/`email_confirmed_at` are set because GoTrue
+-- requires them to resolve the user during OTP verification. The token
+-- columns (confirmation/recovery/email_change*) default to NULL, but
+-- GoTrue's Go scanner reads them as plain strings, not nullable ones —
+-- a NULL there fails every auth lookup with "converting NULL to string
+-- is unsupported", so they're set to '' explicitly, matching what
+-- GoTrue itself writes on a normal signup.
+
+insert into auth.users (
+	id, instance_id, aud, role, email, email_confirmed_at,
+	confirmation_token, recovery_token, email_change_token_new, email_change,
+	raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) values (
+	'b0000000-0000-4000-8000-000000000001',
+	'00000000-0000-0000-0000-000000000000',
+	'authenticated', 'authenticated',
+	'admin@dineinly.com', now(),
+	'', '', '', '',
+	'{"provider":"email","providers":["email"],"app_role":"dineinly_admin"}'::jsonb,
+	'{"display_name":"Dineinly Admin"}'::jsonb, now(), now()
+)
+on conflict (id) do nothing;
+
+insert into auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
+values (
+	'b0000000-0000-4000-8000-000000000001',
+	'b0000000-0000-4000-8000-000000000001',
+	'{"sub":"b0000000-0000-4000-8000-000000000001","email":"admin@dineinly.com","email_verified":true}'::jsonb,
+	'email', now(), now()
+)
+on conflict (provider_id, provider) do nothing;
 
 -- 1 restaurant -----------------------------------------------------------
 insert into restaurants (id, name, address, gst_number, state, pincode, service_charge_rate, status)

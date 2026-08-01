@@ -23,6 +23,7 @@ Non-negotiable regardless of which doc you're reading:
 - **Tenant isolation is mandatory** — every tenant-facing table has RLS; every query is tenant-scoped. Only Dineinly Admin crosses tenants, and only with audit logging.
 - **Guests never have accounts** — scoped anonymous session tokens only, authorized via RLS.
 - **Staff auth is role-specific**: Owners/Managers use Email OTP; Kitchen/Floor use a shared station account + app-level PIN (PIN is not a DB auth factor). No NFC/passkeys.
+- **Every page goes in the route tree matching who views it, gated by the existing helper — never a new inline auth check.** See `docs/architecture.md` § Route Structure for the four trees (`app/admin`, `app/restaurants/[restaurantId]`, `app/guest`, `app/qr/[qrToken]`) and which `apps/web/lib/auth.ts` function gates each. Check that file before writing a new gate function — it very likely already exists.
 - **tRPC is the only data layer** — no CRUD via Server Actions, no GraphQL, no REST.
 - **No UI component library** — build with semantic HTML/CSS against `docs/design-system.md` tokens only. No values (color/spacing/radius/duration/easing) outside that doc.
 - **Dark-only, text-only MVP** — no light mode, no images.

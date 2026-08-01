@@ -36,6 +36,10 @@ Role-specific and passwordless.
 
 Restaurant identity is always server-derived. No NFC badges, no WebAuthn/passkeys — station account + PIN only.
 
+- **Dineinly Admin:** a platform-level Supabase Auth identity, not a Staff row (see `core-data-model.md`), carrying its privileged claim in `app_metadata.app_role = "dineinly_admin"`. Supabase embeds `app_metadata` in every JWT it issues, so no `custom_access_token` hook is needed; `app_metadata` is writable only by the service role, so a signed-in user can never self-promote. This is the asymmetric counterpart to guest tokens — guests carry a top-level `app_role` claim because we mint those tokens ourselves, but GoTrue-issued admin tokens only expose custom claims via `app_metadata`. `apps/web/lib/auth.ts` (`getViewer`/`requireAdmin`) is the one place the claim string is read app-side; RLS checks the same claim independently via `public.is_dineinly_admin()` (`supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 4), which grants full read/write on every tenant table, matching the RBAC matrix in `product.md`. Signs in via the same Email OTP flow as Owners/Managers, at `/sign-in`.
+  Provisioning today is local-dev only: `supabase/seed.sql` seeds `admin@dineinly.com` with the claim on every `db:reset`. Production provisioning is unresolved — flag and ask before deploying.
+  Audit logging for admin actions (`product.md`: "every action audited") is deferred until `audit_logs` ships (`core-data-model.md`) — not yet built.
+
 ## Guest Sessions & Anonymous Realtime
 
 1. Guest scans QR → server validates and resolves it to a restaurant table → finds/creates the active table session → issues a signed token with only that session's claims (`restaurant_id`, `table_session_id`, `app_role: "guest"`, expiry).
@@ -51,6 +55,25 @@ Rules:
 **Claim contract** — two mechanics PostgREST requires that are easy to get wrong:
 - Top-level `role` claim is not an app concept — PostgREST reads it to literally `SET LOCAL ROLE <value>` in Postgres, so it must name a real, pre-granted Postgres role. Guest tokens therefore carry `role: "authenticated"` like any other authenticated session; our own `app_role: "guest"` claim is what RLS policies branch on to tell a guest session apart from a future staff one.
 - The JWT header must carry `kid`, matching the signing key registered at `supabase/config.toml`'s `signing_keys_path` (gitignored `supabase/signing_keys.json`, generated via `supabase gen signing-key --algorithm RS256`) — without it PostgREST can't select a key out of the JWKS and rejects the token. The same private key, as JSON, is `GUEST_JWT_SIGNING_KEY` in `.env`.
+
+## Route Structure
+
+Four route trees under `apps/web/app/`, one per identity type above, plus one resolve-only route. **Before adding any page, place it in the tree matching who views it — don't invent a fifth tree, and don't write a new auth check inline in a page.** All gating logic lives in `apps/web/lib/auth.ts`; check there before writing a new one.
+
+| Tree | Who | Gate | Credential |
+|---|---|---|---|
+| `app/admin/...` | Dineinly Admin only | `requireAdmin()`, in `admin/layout.tsx` | Supabase Auth cookie |
+| `app/restaurants/[restaurantId]/...` | that restaurant's staff + Dineinly Admin viewing it | `requireRestaurantAccess(restaurantId)`, in `restaurants/[restaurantId]/layout.tsx` | Supabase Auth cookie |
+| `app/guest/...` | anonymous guest | none — RLS is the only gate | `dineinly_guest_token` cookie (self-signed JWT, see above) |
+| `app/qr/[qrToken]` | resolve step, not a page tree | validates `qr_token`, mints the guest JWT, sets the cookie, redirects into `app/guest/menu` | — |
+
+`app/qr/[qrToken]` stays flat, not nested under `app/restaurants/[restaurantId]/qr/[qrToken]`: `restaurant_tables.qr_token` is globally unique (`packages/db/src/schema/restaurant-table.ts`, plain `.unique()`, not composite with `restaurant_id`), so it alone resolves to one table and its restaurant — a `restaurantId` segment would be redundant, not information. Nesting it there would also break guest onboarding outright: everything under `restaurants/[restaurantId]/` runs `requireRestaurantAccess` via that tree's layout, which a child route cannot opt out of, so every anonymous guest scanning a QR would be redirected to `/sign-in` before their cookie is ever minted.
+
+Reuse rules:
+- **New platform-only page** (no restaurant context, admin-only — e.g. the Dineinly Staff or Dineinly Settings cards on `/admin`): put it under `app/admin/`. The existing `admin/layout.tsx` gates the whole tree — never add a redirect/auth check to the page itself.
+- **New restaurant-scoped page** (menu, staff, billing, etc.), reachable by both that restaurant's own staff and Dineinly Admin viewing it: put it under `app/restaurants/[restaurantId]/`. One `restaurants/[restaurantId]/layout.tsx` calling `requireRestaurantAccess(restaurantId)` gates the whole tree, same rule. Staff and Admin share this tree because they share the *same credential* (Supabase Auth cookie) — `requireRestaurantAccess` is one function branching on claim vs. Staff row, not two pages. It currently only admits Dineinly Admin; the staff half isn't implemented (Staff has no session resolution or RLS of its own yet — see the "Every staff-side policy" note in `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql`). Add that check to `requireRestaurantAccess` once the staff auth flow lands — don't invent it ahead of that.
+- **New guest-facing page** (menu, cart, orders, bill): put it under `app/guest/`. No id in the URL — restaurant/session identity lives entirely in the guest JWT cookie, already read via `server/trpc/context.ts`, not via a route param (`docs/product.md`: "a QR code is access-only, never business state" — the same principle applies to every guest URL downstream of it). A `guest/layout.tsx` may exist for shared UI chrome (e.g. a persistent tab bar across those pages) but must never redirect on a missing/invalid guest cookie — that's not an error state, it's just "no data," already handled by RLS. Guests never sign in, so there is nowhere to redirect them to.
+- **Guest can never be folded into the `restaurants/[restaurantId]` tree**, even though it's tempting since both eventually render a menu: guest uses a structurally different credential (self-signed JWT vs. Supabase Auth session), and a Next.js layout can't be selectively bypassed by a child route — a guest page placed under `restaurants/[restaurantId]` would always run `requireRestaurantAccess` first and get redirected to `/sign-in`. If a restaurant-scoped page and a guest page render overlapping content (e.g. both list menu items), share the rendering **component**, not the **route**.
 
 ## Authorization & Idempotency
 

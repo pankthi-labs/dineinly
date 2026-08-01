@@ -259,6 +259,21 @@ otp_expiry = 600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# signInWithOtp() sends the "magic_link" template by default. Overridden
+# here to show only the 6-digit code ({{ .Token }}) — AGENTS.md: Owners/
+# Managers use Email OTP, no magic links. Light-themed by design: the
+# app's dark-only guardrail is scoped to app UI, not transactional email.
+#
+# GoTrue's Go html/template escaper on magic_link.html: no HTML comments,
+# and style-attribute values must use double quotes only (no `'Segoe UI'`
+# nested inside `style="..."`) — either breaks the parser.
+#
+# Dev server caches the parsed template — after editing the HTML file, run
+# `supabase stop && supabase start` (not just db:reset) to see the change.
+[auth.email.template.magic_link]
+subject = "Your Dineinly sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
