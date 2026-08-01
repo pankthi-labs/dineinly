@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dineinly Data"
+  short_description: "Safely change Dineinly schema, RLS, and tRPC."
+  default_prompt: "Implement a tenant-safe Dineinly data-layer change."

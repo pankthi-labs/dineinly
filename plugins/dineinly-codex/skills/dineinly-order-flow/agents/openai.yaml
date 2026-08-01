@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dineinly Order Flow"
+  short_description: "Safely implement Dineinly ordering and billing workflows."
+  default_prompt: "Implement a Dineinly order or billing workflow."

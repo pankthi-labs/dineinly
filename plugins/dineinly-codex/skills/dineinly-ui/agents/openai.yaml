@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dineinly UI"
+  short_description: "Build Dineinly UI within the design system."
+  default_prompt: "Implement a Dineinly UI change using the repository design system."

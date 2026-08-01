@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dineinly Realtime"
+  short_description: "Implement Dineinly realtime updates securely."
+  default_prompt: "Implement a realtime Dineinly workflow."
