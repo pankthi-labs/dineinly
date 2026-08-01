@@ -1,18 +1,18 @@
 {
-  "name": "dineinly-codex",
-  "version": "0.1.0",
-  "description": "Dineinly's task-specific engineering workflows for Codex.",
-  "author": {
-    "name": "Dineinly"
-  },
-  "skills": "./skills/",
-  "interface": {
-    "displayName": "Dineinly Codex",
-    "shortDescription": "Apply Dineinly engineering workflows in Codex.",
-    "longDescription": "Task-specific workflows for Dineinly UI, data, realtime, and order-flow work.",
-    "developerName": "Dineinly",
-    "category": "Productivity",
-    "capabilities": [],
-    "defaultPrompt": "Use the relevant Dineinly skill for this task."
-  }
+	"name": "dineinly-codex",
+	"version": "0.1.0",
+	"description": "Dineinly's task-specific engineering workflows for Codex.",
+	"author": {
+		"name": "Dineinly"
+	},
+	"skills": "./skills/",
+	"interface": {
+		"displayName": "Dineinly Codex",
+		"shortDescription": "Apply Dineinly engineering workflows in Codex.",
+		"longDescription": "Task-specific workflows for Dineinly UI, data, realtime, and order-flow work.",
+		"developerName": "Dineinly",
+		"category": "Productivity",
+		"capabilities": [],
+		"defaultPrompt": "Use the relevant Dineinly skill for this task."
+	}
 }
