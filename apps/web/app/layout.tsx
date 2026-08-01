@@ -22,7 +22,11 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" className={`${outfit.variable} ${inter.variable}`} data-scroll-behavior="smooth">
+		<html
+			lang="en"
+			className={`${outfit.variable} ${inter.variable}`}
+			data-scroll-behavior="smooth"
+		>
 			<body>
 				<TRPCProvider>{children}</TRPCProvider>
 			</body>
