@@ -1,0 +1,174 @@
+/*
+ * Base element defaults.
+ * Tailwind's Preflight (pulled in by `@import "tailwindcss"` in globals.css)
+ * is already a modern CSS reset — this file only adds what Preflight
+ * doesn't cover: dark-only color-scheme, focus/selection/scrollbar
+ * styling, tap behavior, and the Outfit/Inter split from design-system.md §02.
+ */
+
+@layer base {
+	:root {
+		color-scheme: dark;
+	}
+
+	html {
+		-webkit-text-size-adjust: 100%;
+		text-size-adjust: 100%;
+		scroll-behavior: smooth;
+	}
+
+	body {
+		min-height: 100dvh;
+		background: var(--color-bg-base);
+		color: var(--color-text-primary);
+		font-family: var(--font-ui);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	/* Native scrollbar styling — no ::-webkit- vendor hacks needed. */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-surface-3) var(--color-surface-1);
+	}
+
+	:focus-visible {
+		outline: var(--space-0_5) solid var(--color-accent-primary);
+		outline-offset: var(--space-0_5);
+	}
+
+	::selection {
+		background: var(--glow-gold);
+		color: var(--color-text-primary);
+	}
+
+	a {
+		color: inherit;
+		text-decoration: underline;
+		text-decoration-color: var(--color-divider);
+		text-underline-offset: var(--space-0_5);
+	}
+
+	a:hover {
+		text-decoration-color: currentColor;
+	}
+
+	button,
+	[role="button"] {
+		cursor: pointer;
+	}
+
+	::placeholder {
+		color: var(--color-text-muted);
+	}
+
+	p,
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6,
+	li {
+		overflow-wrap: break-word;
+	}
+
+	code,
+	kbd,
+	pre,
+	samp {
+		font-family: var(--font-mono);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		html {
+			scroll-behavior: auto;
+		}
+	}
+}
+
+/*
+ * §02 rule: "Outfit only at text-3xl and above. Never Outfit for body text."
+ * Tailwind's text-* utilities set size/line-height/letter-spacing/weight
+ * (defined in globals.css's @theme); this binds the font-family half of
+ * the rule so it's impossible to get Outfit below 3xl through text-* alone.
+ */
+@layer utilities {
+	.text-3xl,
+	.text-4xl,
+	.text-5xl,
+	.text-6xl {
+		font-family: var(--font-display);
+	}
+
+	/*
+	 * §11: "any interactive icon sits inside a minimum 44px wrapper
+	 * regardless of glyph size." Wrap an icon-sized element in this to
+	 * meet the tap-target requirement without hand-typing 44px anywhere.
+	 */
+	.icon-tap-target {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: var(--icon-tap-target);
+		min-height: var(--icon-tap-target);
+	}
+
+	/*
+	 * §02 ALL CAPS rule: text-xs, w600 minimum, uppercase, never Outfit.
+	 * Letter-spacing is fixed at 0.08em (doc specifies a 0.08-0.10em
+	 * range; a utility needs one value).
+	 */
+	.text-caps {
+		font-family: var(--font-ui);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	/* §02 body copy max-width, fixed at 68ch (doc specifies a 60-72ch range). */
+	.prose {
+		max-width: 68ch;
+	}
+
+	/*
+	 * §05 Skeleton/Shimmer: duration and easing were documented
+	 * (--duration-skeleton, --ease-in-out); the gradient itself wasn't.
+	 * Built from the existing surface tokens — no new color introduced.
+	 */
+	.skeleton {
+		background: linear-gradient(
+			90deg,
+			var(--color-surface-1) 25%,
+			var(--color-surface-2) 50%,
+			var(--color-surface-1) 75%
+		);
+		background-size: 200% 100%;
+		animation: skeleton-shimmer var(--duration-skeleton) var(--ease-in-out)
+			infinite;
+	}
+
+	/*
+	 * Glass surface, §01: --color-glass-bg / --color-glass-border were
+	 * documented; the backdrop blur radius wasn't. --blur-glass reuses the
+	 * spacing scale (--space-4, 16px) rather than inventing a blur-specific
+	 * number — see globals.css's @theme for the token.
+	 */
+	.glass {
+		background: var(--color-glass-bg);
+		border: var(--space-px) solid var(--color-glass-border);
+		-webkit-backdrop-filter: blur(var(--blur-glass));
+		backdrop-filter: blur(var(--blur-glass));
+	}
+}
+
+@keyframes skeleton-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}

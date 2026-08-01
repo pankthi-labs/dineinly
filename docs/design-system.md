@@ -23,7 +23,7 @@ Copy-paste source of truth. Load into `globals.css`.
   --color-text-primary: #E7EAEE;   /* 15.8:1 */
   --color-text-secondary: #A8ADB5; /* 7.1:1 */
   --color-text-muted: #858D97;     /* 4.6:1 */
-  --color-text-disabled: #606672;  /* 3.1:1 — large text only */
+  --color-text-disabled: #606672;  /* 3.1:1 — text-xl (20px) and above only */
 
   /* Accent */
   --color-accent-primary: #D6B36A;  /* Champagne Gold — MAX 12% of any screen */
@@ -43,10 +43,12 @@ Copy-paste source of truth. Load into `globals.css`.
   --glow-gold: rgba(214,179,106,0.16);
   --glow-copper: rgba(200,138,117,0.10);
   --glow-blue: rgba(143,168,186,0.08);
+  --blur-glass: var(--space-4); /* 16px — glass backdrop blur, reuses spacing scale */
 
   /* Typography */
   --font-display: 'Outfit', system-ui, sans-serif;
   --font-ui: 'Inter', system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace; /* generic fallback stack, not a third brand typeface */
 
   /* Spacing — 8px grid */
   --space-px: 1px; --space-0_5: 2px; --space-1: 4px;
@@ -71,7 +73,7 @@ Copy-paste source of truth. Load into `globals.css`.
   --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0.0, 1.0, 1);
   --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-linear: linear;
 
   /* Breakpoints — mobile-first, min-width. NOT usable in var(); see §10. */
@@ -123,15 +125,16 @@ Fonts: **Outfit** (display) + **Inter** (UI). Load both via `next/font`. Never f
 | text-3xl | 30px | w700 | 1.25 | -0.02em | Outfit | Page headings — Outfit starts here |
 | text-4xl | 36px | w700 | 1.20 | -0.03em | Outfit | Hero / screen titles |
 | text-5xl | 48px | w700 | 1.10 | -0.04em | Outfit | Marketing / onboarding |
-| text-6xl | 60px | w300 | 1.05 | -0.05em | Outfit | Splash / cover display |
+| text-6xl | 60px | w300 | 1.05 | -0.04em | Outfit | Splash / cover display |
 
 **Rules (non-negotiable):**
 - Outfit only at `text-3xl` and above. Never Outfit for body text — readability breaks below that size.
 - `text-xs` must be **w500 minimum**, or bump color to `--color-text-secondary`. Raw w400 at 12px fails on OLED.
-- ALL CAPS labels: `text-xs` (12px), **w600 minimum**, letter-spacing 0.08–0.10em. Never Outfit for all-caps.
-- Max line length: 60–72ch. Never full-bleed body text.
+- ALL CAPS labels: `text-xs` (12px), **w600 minimum**, letter-spacing **0.08em** (pinned point in the 0.08–0.10em range — `.text-caps` utility), uppercase, Inter only. Never Outfit for all-caps.
+- Max line length: **68ch** (pinned point in the 60–72ch range — `.prose` utility). Never full-bleed body text.
 - Minimum tap-target text size: `text-sm` (14px) for any interactive label.
-- Outfit + Inter only — introduce no other fonts.
+- Outfit + Inter only for typographic text. `--font-mono` (`ui-monospace, monospace`) is a generic system fallback stack for `code`/`kbd`/`pre`/`samp`, not a third brand typeface — it introduces no named font.
+- Links: underline at rest in `--color-divider`, strengthening to `currentColor` on hover, offset `--space-0_5`. No color change on hover — `--color-accent-hover` is reserved for gold buttons/inputs only (§06).
 
 ---
 
@@ -188,17 +191,32 @@ Cinematic and restrained. Motion communicates state, not decoration.
 | Button | Press | 100ms | ease-in | Scale 0.97 |
 | Modal | Open | 500ms | ease-out | Slide up + fade in |
 | Modal | Close | 150ms | ease-in | Always faster than open |
-| Bottom Sheet | Open | 500ms | ease-spring | Spring — tactile luxury feel |
-| Bottom Sheet | Close | 200ms | ease-in | No spring on exit |
+| Bottom Sheet | Open | 500ms | ease-emphasized | Strong deceleration, no overshoot — tactile luxury feel |
+| Bottom Sheet | Close | 200ms | ease-in | Faster than open, no overshoot |
 | Toast | Enter | 300ms | ease-out | Slide in from top |
 | Toast | Exit | 150ms | ease-in | Fade only |
 | Page | Transition | 500ms | ease-in-out | Crossfade or slide |
 | Card list | Entry | 300ms | ease-out | Stagger 40ms · max 3 items · 120ms total |
 | Skeleton | Shimmer | 1500ms | ease-in-out | Infinite loop |
 
+**Skeleton shimmer implementation** — built from existing surface tokens, no new color introduced:
+
+```css
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--color-surface-1) 25%, var(--color-surface-2) 50%, var(--color-surface-1) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer var(--duration-skeleton) var(--ease-in-out) infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+```
+
 **Rules (non-negotiable):**
 - Exit is always faster than entry — 30–40% of entry duration.
-- `--ease-spring` is **forbidden** on settlement confirmation and error states.
+- `--ease-emphasized` is **forbidden** on settlement confirmation and error states.
 - Stagger cap: max 3 visible items, 40ms each, 120ms total. No animation for items beyond the fold.
 - Max 2 animated elements on screen simultaneously.
 - Never animate `width`/`height` in scroll views — opacity + transform only.
@@ -247,7 +265,7 @@ Use Dineinly domain terms only. Nothing may imply reservation or payment functio
 
 Deviations require explicit written sign-off — never implement speculatively.
 
-- **Dark-only** in the MVP; no light mode.
+- **Dark-only** in the MVP; no light mode. Wordmark ships as one asset, `apps/web/public/brand/dineinly-logo-dark.svg` — no light-mode variant to maintain.
 - **No component library** — semantic HTML/CSS with these tokens only.
 - **No values beyond this document.** The four accents are exhaustive — never a fifth. Breakpoints (§10), icons (§11), shadow (§12), and z-index (§13) define the only allowed values for those — never invent a value outside them.
 - Gold (`--color-accent-primary`) stays under 12% of any screen.

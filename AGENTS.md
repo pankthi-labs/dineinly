@@ -31,6 +31,10 @@ Non-negotiable regardless of which doc you're reading:
 - **Migrations: Drizzle authors, Supabase CLI applies.** `drizzle-kit generate` writes to `supabase/migrations/`; `supabase db reset` / `db push` apply. Never run `drizzle-kit migrate`, `drizzle-kit push`, or `supabase db diff`, and never edit tables in Studio — each starts a second, divergent migration history. See `docs/architecture.md`.
 - **Never model external Supabase schemas as Drizzle tables** (`auth`, `storage`, `realtime`, etc.) — Supabase owns their migrations. A typed `.references()` stub makes `drizzle-kit generate` treat that table as ours to manage and try to create or drop it. FKs into these schemas are a plain column plus a hand-written `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`, in a custom migration (`drizzle-kit generate --custom`), never folded into a Drizzle-generated one. See `docs/architecture.md`.
 
+## Code Comments
+
+Write comments as if authoring the code for the first time — describe what's true now, never the decision process that got here. No "user-confirmed", "pinned value here", "the doc gives a range so we picked X", or any other narration of a discussion, review, or choice. State the constraint and the value plainly; if the reader needs to know a value was chosen from a range, say the range and the value, not that it was confirmed/decided/agreed.
+
 ## Unresolved — Stop and Ask
 
 Marked `TBD` in the docs — do not guess these, flag and ask:

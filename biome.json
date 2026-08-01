@@ -13,12 +13,25 @@
 		"enabled": true,
 		"indentStyle": "tab"
 	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
 			"preset": "recommended",
 			"nursery": {
 				"useSortedClasses": "error"
+			},
+			"suspicious": {
+				"noUnknownAtRules": {
+					"level": "error",
+					"options": {
+						"ignore": ["custom-media"]
+					}
+				}
 			}
 		}
 	},

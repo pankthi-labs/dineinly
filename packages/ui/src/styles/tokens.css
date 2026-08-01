@@ -1,0 +1,123 @@
+/*
+ * Design tokens — verbatim from docs/design-system.md §01.
+ * Do not edit values here without updating the doc first; this file
+ * mirrors it, it does not originate values.
+ *
+ * Deviation from the doc: --font-display / --font-ui reference next/font
+ * CSS variables (set on <html> in apps/web/app/layout.tsx) instead of the
+ * raw family name strings, so the fonts are self-hosted rather than
+ * loaded by name.
+ */
+
+:root {
+	/* Foundation */
+	--color-bg-base: #0b1018;
+	--color-surface-1: #121821;
+	--color-surface-2: #1a212c;
+	--color-surface-3: #222a36;
+	--color-divider: #1a2030;
+
+	/* Text — WCAG AA */
+	--color-text-primary: #e7eaee; /* 15.8:1 */
+	--color-text-secondary: #a8adb5; /* 7.1:1 */
+	--color-text-muted: #858d97; /* 4.6:1 */
+	--color-text-disabled: #606672; /* 3.1:1 — large text only */
+
+	/* Accent */
+	--color-accent-primary: #d6b36a; /* Champagne Gold — MAX 12% of any screen */
+	--color-accent-hover: #e3c589; /* Soft Gold Light — hover only */
+	--color-accent-secondary: #c88a75; /* Rose Copper */
+	--color-accent-support: #c9874a; /* Soft Amber */
+
+	/* State */
+	--color-state-success: #4faf85;
+	--color-state-warning: #d89a52;
+	--color-state-error: #d46a6a;
+	--color-state-info: #7f98ac;
+
+	/* Glass / Glow */
+	--color-glass-bg: rgba(20, 24, 32, 0.72);
+	--color-glass-border: rgba(255, 255, 255, 0.07);
+	--glow-gold: rgba(214, 179, 106, 0.16);
+	--glow-copper: rgba(200, 138, 117, 0.1);
+	--glow-blue: rgba(143, 168, 186, 0.08);
+	/* Blur radius wasn't documented alongside the glass colors — reuses
+	   the spacing scale instead of inventing a blur-specific number. */
+	--blur-glass: var(--space-4);
+
+	/* Typography — --font-display / --font-ui / --font-mono all declared
+	   in globals.css's @theme (--font-* is a Tailwind theme namespace,
+	   same collision reasoning as radius above). */
+
+	/* Spacing — 8px grid */
+	--space-px: 1px;
+	--space-0_5: 2px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+	--space-8: 32px;
+	--space-10: 40px;
+	--space-12: 48px;
+	--space-16: 64px;
+	--space-24: 96px;
+
+	/* Border Radius — declared in globals.css's @theme (§04); the Tailwind
+	   theme namespace is literally --radius-*, so defining it here too
+	   would duplicate the same custom property under the same name. */
+
+	/* Duration */
+	--duration-instant: 0ms;
+	--duration-fast: 100ms;
+	--duration-base: 200ms;
+	--duration-slow: 300ms;
+	--duration-deliberate: 500ms;
+	--duration-cinematic: 700ms;
+	--duration-exit-fast: 150ms;
+	--duration-skeleton: 1500ms;
+
+	/* Easing — declared in globals.css's @theme (§01/§05); same collision
+	   reasoning as radius above (--ease-* is a Tailwind theme namespace). */
+
+	/* Breakpoints — declared in globals.css's @theme (§10); same collision
+	   reasoning as radius above (--breakpoint-* is a Tailwind theme
+	   namespace consumed by sm:/md:/lg:/xl: variants). */
+
+	/* Icon sizes — see §11. Scale (xs–xl) declared in globals.css's @theme
+	   (--icon-* is a Tailwind theme namespace, same collision reasoning as
+	   radius above). Stroke width and tap target don't name a Tailwind
+	   namespace, so they stay here. */
+	--icon-stroke: 1.5;
+	--icon-tap-target: 44px; /* §11 — minimum interactive wrapper size */
+
+	/* Shadow — declared in globals.css's @theme (§12); same collision
+	   reasoning as radius above (--shadow-* is a Tailwind theme namespace). */
+
+	/* Z-Index — see §13 */
+	--z-base: 0;
+	--z-sticky: 10;
+	--z-dropdown: 20;
+	--z-overlay: 30;
+	--z-modal: 40;
+	--z-toast: 50;
+	--z-tooltip: 60;
+}
+
+/* §10 — breakpoints as @custom-media; var() cannot be used in @media. */
+@custom-media --bp-sm (min-width: 480px);
+@custom-media --bp-md (min-width: 768px);
+@custom-media --bp-lg (min-width: 1024px);
+@custom-media --bp-xl (min-width: 1280px);
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		/* biome-ignore lint/complexity/noImportantStyles: doc-mandated override — must win regardless of any component's specificity. */
+		animation-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: doc-mandated override — must win regardless of any component's specificity. */
+		transition-duration: 0.01ms !important;
+	}
+}
