@@ -19,6 +19,7 @@ loadEnvConfig(
 );
 
 const nextConfig: NextConfig = {
+	allowedDevOrigins: ["127.0.0.1"],
 	transpilePackages: ["@workspace/ui", "@workspace/db"],
 };
 

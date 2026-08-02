@@ -60,6 +60,7 @@
 	   so an undocumented step (p-7) does not compile. */
 	--spacing: initial;
 
+	--spacing-0: var(--space-0);
 	--spacing-px: var(--space-px);
 	--spacing-0\.5: var(--space-0_5);
 	--spacing-1: var(--space-1);

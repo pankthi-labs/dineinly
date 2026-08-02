@@ -50,6 +50,7 @@
 	   same collision reasoning as radius above). */
 
 	/* Spacing — 8px grid */
+	--space-0: 0;
 	--space-px: 1px;
 	--space-0_5: 2px;
 	--space-1: 4px;

@@ -51,7 +51,7 @@ Copy-paste source of truth. Load into `globals.css`.
   --font-mono: ui-monospace, monospace; /* generic fallback stack, not a third brand typeface */
 
   /* Spacing — 8px grid */
-  --space-px: 1px; --space-0_5: 2px; --space-1: 4px;
+  --space-0: 0; --space-px: 1px; --space-0_5: 2px; --space-1: 4px;
   --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;
   --space-10: 40px; --space-12: 48px; --space-16: 64px;
@@ -145,6 +145,7 @@ Fonts: **Outfit** (display) + **Inter** (UI). Load both via `next/font`. Never f
 
 | Token | px | Usage |
 |---|---|---|
+| `--space-0` | 0 | Flush positioning and spacing resets |
 | `--space-px` | 1px | Hairline dividers only |
 | `--space-0_5` | 2px | Icon-to-label micro gap |
 | `--space-1` | 4px | Tight chip/badge padding |

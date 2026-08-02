@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
+import { getViewer } from "@/lib/auth";
 import type { Context } from "./context";
 
 // Base tRPC setup every router imports from. See docs/architecture.md §
@@ -13,6 +14,18 @@ const trpc = initTRPC.context<Context>().create();
 
 export const router = trpc.router;
 export const publicProcedure = trpc.procedure;
+
+/** Requires the platform-level Dineinly Admin identity. */
+export const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
+	const viewer = await getViewer();
+	if (!viewer?.isAdmin) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Dineinly Admin access required.",
+		});
+	}
+	return next({ ctx: { ...ctx, viewer } });
+});
 
 /** Requires a valid, unexpired guest JWT. Staff procedures arrive with staff auth. */
 export const guestProcedure = publicProcedure.use(({ ctx, next }) => {
