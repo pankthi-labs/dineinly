@@ -60,12 +60,15 @@ export async function requireAdmin(): Promise<Viewer> {
  * staff, etc.), reachable by both that restaurant's own staff and
  * Dineinly Admin viewing any restaurant. Dineinly Admin always passes.
  *
- * Staff access is not implemented yet — Staff has no RLS or session
- * resolution to a restaurant (see supabase/migrations/
+ * Staff access is not implemented yet — an invited Staff row can now link
+ * to a real session and reach status = "active" (see
+ * supabase/migrations/20260803042459_add_staff_auth_flow.sql), but Staff
+ * still has no RLS of its own (see supabase/migrations/
  * 20260730150634_add_auth_fk_and_rls_policies.sql: "Every staff-side
- * policy: lands with the staff auth flow"). Add the check here —
- * viewer's Staff row has restaurant_id === restaurantId and
- * status === "active" — once that flow exists.
+ * policy: lands with the staff auth flow"), so there's no query this
+ * function could run yet. Add the check here — viewer's Staff row has
+ * restaurant_id === restaurantId and status === "active" — once that
+ * RLS exists.
  */
 export async function requireRestaurantAccess(
 	// Unused until the staff-side check above lands — kept named in the

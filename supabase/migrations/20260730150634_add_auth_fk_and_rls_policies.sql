@@ -293,7 +293,16 @@ language sql
 stable
 set search_path = ''
 as $$
-	select (auth.jwt() -> 'app_metadata' ->> 'app_role') = 'dineinly_admin';
+	-- coalesce, not a bare comparison: a real non-admin session's JWT still
+	-- has an app_metadata object, just without an app_role key, so the `->>`
+	-- lookup is SQL NULL, not `false` — an `if not is_dineinly_admin() then
+	-- raise` guard (see admin_create_restaurant, admin_reassign_primary_owner,
+	-- admin_update_restaurant below) never fires on `not null`, silently
+	-- skipping past the check. RLS `using`/`with check` clauses already treat
+	-- NULL as "no match", so this was never a security hole, only a dead
+	-- fail-fast check with a confusing downstream error instead of a clear
+	-- one.
+	select coalesce((auth.jwt() -> 'app_metadata' ->> 'app_role') = 'dineinly_admin', false);
 $$;
 
 revoke execute on function public.is_dineinly_admin() from public;
@@ -362,3 +371,111 @@ create policy "admin_all_bills" on public.bills
 	for all to authenticated
 	using (public.is_dineinly_admin())
 	with check (public.is_dineinly_admin());
+
+-- ============================================================================
+-- 5. Dineinly Admin restaurant management: atomic multi-table writes
+-- ============================================================================
+-- Both functions run as SECURITY INVOKER (the default) — Dineinly Admin
+-- already has full read/write grants and RLS access on restaurants/staff
+-- (§ 4 above), so no elevated privilege is needed, unlike the guest
+-- SECURITY DEFINER functions referenced in docs/architecture.md §
+-- Authorization & Idempotency. A plpgsql function body is one transaction,
+-- giving the restaurant + staff insert/update pair atomicity for free — no
+-- partial-write cleanup needed in application code.
+--
+-- Same hardening as every other RLS-adjacent function in this migration:
+-- `set search_path = ''` with fully schema-qualified references, `execute`
+-- revoked from `public` and granted only to `authenticated`, and an
+-- explicit `is_dineinly_admin()` check as the first statement — RLS would
+-- also block a non-admin's writes, but failing fast here gives a clear
+-- error instead of a silent zero-row update.
+
+create or replace function public.admin_create_restaurant(
+	p_name text,
+	p_address text,
+	p_gst_number text,
+	p_state text,
+	p_pincode text,
+	p_service_charge_rate numeric,
+	p_admin_name text,
+	p_admin_email text,
+	p_admin_mobile text
+)
+returns table (restaurant_id uuid, staff_id uuid)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid;
+	v_staff_id uuid;
+begin
+	if not public.is_dineinly_admin() then
+		raise exception 'Only Dineinly Admin may create restaurants';
+	end if;
+
+	insert into public.restaurants (name, address, gst_number, state, pincode, service_charge_rate)
+	values (p_name, p_address, p_gst_number, p_state, p_pincode, p_service_charge_rate)
+	returning id into v_restaurant_id;
+
+	-- The restaurant's first owner: an invitation record, not a live
+	-- account. user_id stays null until they complete their first Email
+	-- OTP sign-in (staff auth flow — not yet built, see docs/architecture.md
+	-- § Authentication, "Invited staff can't sign in yet").
+	insert into public.staff (restaurant_id, email, name, mobile, role, status, is_primary_owner)
+	values (v_restaurant_id, p_admin_email, p_admin_name, p_admin_mobile, 'owner', 'invited', true)
+	returning id into v_staff_id;
+
+	return query select v_restaurant_id, v_staff_id;
+end;
+$$;
+
+revoke execute on function public.admin_create_restaurant(
+	text, text, text, text, text, numeric, text, text, text
+) from public;
+grant execute on function public.admin_create_restaurant(
+	text, text, text, text, text, numeric, text, text, text
+) to authenticated;
+
+-- Replaces the restaurant's primary admin without removing the previous
+-- one — they keep their existing access (any role, any status) as a
+-- regular, non-primary owner. See docs/core-data-model.md's Staff row and
+-- packages/db/src/schema/staff.ts's is_primary_owner column.
+create or replace function public.admin_reassign_primary_owner(
+	p_restaurant_id uuid,
+	p_admin_name text,
+	p_admin_email text,
+	p_admin_mobile text
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+	v_staff_id uuid;
+begin
+	if not public.is_dineinly_admin() then
+		raise exception 'Only Dineinly Admin may reassign the primary admin';
+	end if;
+
+	update public.staff
+	set is_primary_owner = false
+	where restaurant_id = p_restaurant_id
+		and role = 'owner'
+		and is_primary_owner = true;
+
+	insert into public.staff (restaurant_id, email, name, mobile, role, status, is_primary_owner)
+	values (p_restaurant_id, p_admin_email, p_admin_name, p_admin_mobile, 'owner', 'invited', true)
+	returning id into v_staff_id;
+
+	return v_staff_id;
+end;
+$$;
+
+revoke execute on function public.admin_reassign_primary_owner(
+	uuid, text, text, text
+) from public;
+grant execute on function public.admin_reassign_primary_owner(
+	uuid, text, text, text
+) to authenticated;

@@ -57,6 +57,46 @@ values (
 )
 on conflict (provider_id, provider) do nothing;
 
+-- 4 already-linked Staff auth identities (owner/manager/waiter/kitchen —
+-- everyone but the 5th, still-invited staff row below), representing the
+-- end state apps/web/server/routers/auth.ts's link_staff_account leaves
+-- after a real first sign-in: an auth.users row, plus staff.user_id
+-- pointing at it. raw_user_meta_data.display_name is set here to match
+-- staff.name directly, standing in for the display_name copy
+-- link_staff_account's caller normally makes via auth.updateUser() right
+-- after linking — seeding bypasses that RPC, so it has to do the copy
+-- itself. Same column set and NOT NULL-token workaround as the Dineinly
+-- Admin identity above (see that block's comment).
+insert into auth.users (
+	id, instance_id, aud, role, email, email_confirmed_at,
+	confirmation_token, recovery_token, email_change_token_new, email_change,
+	raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) values
+	('b0000000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000',
+		'authenticated', 'authenticated', 'owner@dineinly.test', now(), '', '', '', '',
+		'{"provider":"email","providers":["email"]}'::jsonb, '{"display_name":"Asha Rao"}'::jsonb, now(), now()),
+	('b0000000-0000-4000-8000-000000000003', '00000000-0000-0000-0000-000000000000',
+		'authenticated', 'authenticated', 'manager@dineinly.test', now(), '', '', '', '',
+		'{"provider":"email","providers":["email"]}'::jsonb, '{"display_name":"Ravi Shetty"}'::jsonb, now(), now()),
+	('b0000000-0000-4000-8000-000000000004', '00000000-0000-0000-0000-000000000000',
+		'authenticated', 'authenticated', 'waiter@dineinly.test', now(), '', '', '', '',
+		'{"provider":"email","providers":["email"]}'::jsonb, '{"display_name":"Priya Nair"}'::jsonb, now(), now()),
+	('b0000000-0000-4000-8000-000000000005', '00000000-0000-0000-0000-000000000000',
+		'authenticated', 'authenticated', 'kitchen@dineinly.test', now(), '', '', '', '',
+		'{"provider":"email","providers":["email"]}'::jsonb, '{"display_name":"Vikram Das"}'::jsonb, now(), now())
+on conflict (id) do nothing;
+
+insert into auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at) values
+	('b0000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000002',
+		'{"sub":"b0000000-0000-4000-8000-000000000002","email":"owner@dineinly.test","email_verified":true}'::jsonb, 'email', now(), now()),
+	('b0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000003',
+		'{"sub":"b0000000-0000-4000-8000-000000000003","email":"manager@dineinly.test","email_verified":true}'::jsonb, 'email', now(), now()),
+	('b0000000-0000-4000-8000-000000000004', 'b0000000-0000-4000-8000-000000000004',
+		'{"sub":"b0000000-0000-4000-8000-000000000004","email":"waiter@dineinly.test","email_verified":true}'::jsonb, 'email', now(), now()),
+	('b0000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000005',
+		'{"sub":"b0000000-0000-4000-8000-000000000005","email":"kitchen@dineinly.test","email_verified":true}'::jsonb, 'email', now(), now())
+on conflict (provider_id, provider) do nothing;
+
 -- 1 restaurant -----------------------------------------------------------
 insert into restaurants (id, name, address, gst_number, state, pincode, service_charge_rate, status)
 values (
@@ -71,12 +111,26 @@ values (
 )
 on conflict (id) do nothing;
 
--- 4 staff — owner, manager, waiter, kitchen, all active ------------------
-insert into staff (id, restaurant_id, email, role, status) values
-	('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'owner@dineinly.test', 'owner', 'active'),
-	('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'manager@dineinly.test', 'manager', 'active'),
-	('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'waiter@dineinly.test', 'waiter', 'active'),
-	('20000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', 'kitchen@dineinly.test', 'kitchen', 'active')
+-- 5 staff — owner, manager, waiter, kitchen (linked + active, user_id
+-- pointing at the auth identities above — already completed the invite ->
+-- Email OTP -> link_staff_account flow) plus a 5th, Meera Iyer, still
+-- 'invited' with no user_id and no auth.users row of her own: the
+-- pre-link state, fixture for testing resolve_staff_signin's 'invited'
+-- branch (see supabase/migrations/20260803042459_add_staff_auth_flow.sql)
+-- and the admin restaurants directory's "invited" status badge.
+--
+-- is_primary_owner is set only on the owner row, matching what
+-- admin_create_restaurant() always sets on its inserted owner (see
+-- migrations) — leaving it false here (the column default) means the
+-- admin restaurants directory finds no primary owner for this restaurant
+-- and treats every edit as "no owner yet", inserting a second staff row
+-- instead of updating this one. ------------------------------------------
+insert into staff (id, restaurant_id, user_id, name, email, role, status, is_primary_owner) values
+	('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'Asha Rao', 'owner@dineinly.test', 'owner', 'active', true),
+	('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000003', 'Ravi Shetty', 'manager@dineinly.test', 'manager', 'active', false),
+	('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000004', 'Priya Nair', 'waiter@dineinly.test', 'waiter', 'active', false),
+	('20000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000005', 'Vikram Das', 'kitchen@dineinly.test', 'kitchen', 'active', false),
+	('20000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', null, 'Meera Iyer', 'waiter2@dineinly.test', 'waiter', 'invited', false)
 on conflict (id) do nothing;
 
 -- 2 menu categories — Food (5% tax), Beverages (18% tax) -----------------

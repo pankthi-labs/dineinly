@@ -1,0 +1,118 @@
+"use client";
+
+import type { inferRouterOutputs } from "@trpc/server";
+import { ChevronDown } from "lucide-react";
+import { useId } from "react";
+import type { AppRouter } from "@/server/routers/_app";
+
+type RestaurantListItem =
+	inferRouterOutputs<AppRouter>["restaurants"]["list"]["items"][number];
+
+export function RestaurantRow({
+	restaurant,
+	isExpanded,
+	onToggle,
+	onEdit,
+	onRequestStatusChange,
+}: {
+	restaurant: RestaurantListItem;
+	isExpanded: boolean;
+	onToggle: () => void;
+	onEdit: () => void;
+	onRequestStatusChange: () => void;
+}) {
+	const regionId = useId();
+	const isLive = restaurant.status === "active";
+
+	return (
+		<div
+			className={`rounded-xl border border-divider bg-surface transition-colors duration-(--duration-base) ease-out ${isLive ? "" : "opacity-60"}`}
+		>
+			<button
+				type="button"
+				onClick={onToggle}
+				aria-expanded={isExpanded}
+				aria-controls={regionId}
+				className="flex w-full items-start justify-between gap-4 p-6 text-left"
+			>
+				<div className="flex flex-col gap-1">
+					<span
+						className={`text-caps ${isLive ? "text-success" : "text-secondary"}`}
+					>
+						{isLive ? "Live" : "Paused"}
+					</span>
+					<h3 className="text-lg text-primary">{restaurant.name}</h3>
+				</div>
+				<ChevronDown
+					className={`icon-md shrink-0 text-muted transition-transform duration-(--duration-base) ease-out ${
+						isExpanded ? "rotate-180" : ""
+					}`}
+					strokeWidth={1.5}
+					aria-hidden="true"
+				/>
+			</button>
+
+			{isExpanded ? (
+				<section
+					id={regionId}
+					className="border-divider border-t px-6 pt-6 pb-6"
+				>
+					<dl className="grid grid-cols-1 gap-6 border-divider border-b pb-6 sm:grid-cols-2 lg:grid-cols-3">
+						<Detail
+							label="Address"
+							value={`${restaurant.address}, ${restaurant.state}`}
+						/>
+						<Detail label="GST Number" value={restaurant.gstNumber} />
+						<Detail label="Pincode" value={restaurant.pincode} />
+						<Detail
+							label="Service Charge"
+							value={
+								restaurant.serviceChargePercent === null
+									? "None"
+									: `${restaurant.serviceChargePercent}%`
+							}
+						/>
+						<Detail
+							label="Admin Name"
+							value={restaurant.admin?.name ?? "Not assigned"}
+						/>
+						<Detail
+							label="Admin Email"
+							value={restaurant.admin?.email ?? "—"}
+						/>
+						<Detail
+							label="Admin Mobile"
+							value={restaurant.admin?.mobile ?? "—"}
+						/>
+					</dl>
+
+					<div className="flex items-center gap-6 pt-6">
+						<button
+							type="button"
+							onClick={onEdit}
+							className="text-caps text-secondary hover:text-primary"
+						>
+							Edit
+						</button>
+						<button
+							type="button"
+							onClick={onRequestStatusChange}
+							className="text-accent-secondary text-caps hover:opacity-80"
+						>
+							{isLive ? "Pause Restaurant" : "Reactivate Restaurant"}
+						</button>
+					</div>
+				</section>
+			) : null}
+		</div>
+	);
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex flex-col gap-1">
+			<dt className="text-caps text-muted">{label}</dt>
+			<dd className="wrap-break-word text-primary text-sm">{value}</dd>
+		</div>
+	);
+}

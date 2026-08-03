@@ -490,6 +490,9 @@ export type Database = {
 					created_at: string;
 					email: string;
 					id: string;
+					is_primary_owner: boolean;
+					mobile: string | null;
+					name: string | null;
 					pin_hash: string | null;
 					restaurant_id: string;
 					role: Database["public"]["Enums"]["staff_role"];
@@ -501,6 +504,9 @@ export type Database = {
 					created_at?: string;
 					email: string;
 					id?: string;
+					is_primary_owner?: boolean;
+					mobile?: string | null;
+					name?: string | null;
 					pin_hash?: string | null;
 					restaurant_id: string;
 					role: Database["public"]["Enums"]["staff_role"];
@@ -512,6 +518,9 @@ export type Database = {
 					created_at?: string;
 					email?: string;
 					id?: string;
+					is_primary_owner?: boolean;
+					mobile?: string | null;
+					name?: string | null;
 					pin_hash?: string | null;
 					restaurant_id?: string;
 					role?: Database["public"]["Enums"]["staff_role"];
@@ -566,10 +575,52 @@ export type Database = {
 			[_ in never]: never;
 		};
 		Functions: {
+			admin_create_restaurant: {
+				Args: {
+					p_address: string;
+					p_admin_email: string;
+					p_admin_mobile: string;
+					p_admin_name: string;
+					p_gst_number: string;
+					p_name: string;
+					p_pincode: string;
+					p_service_charge_rate: number;
+					p_state: string;
+				};
+				Returns: {
+					restaurant_id: string;
+					staff_id: string;
+				}[];
+			};
+			admin_reassign_primary_owner: {
+				Args: {
+					p_admin_email: string;
+					p_admin_mobile: string;
+					p_admin_name: string;
+					p_restaurant_id: string;
+				};
+				Returns: string;
+			};
+			admin_update_restaurant: {
+				Args: {
+					p_address: string;
+					p_admin_email: string;
+					p_admin_mobile: string;
+					p_admin_name: string;
+					p_gst_number: string;
+					p_id: string;
+					p_name: string;
+					p_pincode: string;
+					p_service_charge_rate: number;
+					p_state: string;
+				};
+				Returns: string;
+			};
 			is_active_guest_session: {
 				Args: { p_restaurant_id: string; p_session_id: string };
 				Returns: boolean;
 			};
+			is_dineinly_admin: { Args: never; Returns: boolean };
 			jwt_is_guest_for_restaurant: {
 				Args: { p_restaurant_id: string };
 				Returns: boolean;
@@ -578,6 +629,16 @@ export type Database = {
 				Args: { p_restaurant_id: string; p_session_id: string };
 				Returns: boolean;
 			};
+			link_staff_account: {
+				Args: never;
+				Returns: {
+					name: string;
+					restaurant_id: string;
+					role: Database["public"]["Enums"]["staff_role"];
+					staff_id: string;
+				}[];
+			};
+			resolve_staff_signin: { Args: { p_email: string }; Returns: string };
 		};
 		Enums: {
 			actor_type: "staff" | "guest";

@@ -1,0 +1,192 @@
+import { TRPCError } from "@trpc/server";
+import { adminProcedure, router } from "../trpc/init";
+import {
+	createRestaurantInput,
+	listRestaurantsInput,
+	reassignPrimaryOwnerInput,
+	setRestaurantStatusInput,
+	updateRestaurantInput,
+} from "./restaurants.schema";
+
+type PrimaryOwnerRow = {
+	id: string;
+	name: string | null;
+	email: string;
+	mobile: string | null;
+	status: "invited" | "active" | "removed";
+};
+
+function toServiceChargePercent(rate: number | null): number | null {
+	return rate === null ? null : Math.round(rate * 10000) / 100;
+}
+
+function toServiceChargeRate(percent: number | null): number | null {
+	return percent === null ? null : percent / 100;
+}
+
+export const restaurantsRouter = router({
+	list: adminProcedure
+		.input(listRestaurantsInput)
+		.query(async ({ ctx, input }) => {
+			const { page, pageSize, search } = input;
+			const from = (page - 1) * pageSize;
+			const to = from + pageSize - 1;
+
+			let query = ctx.auth
+				.from("restaurants")
+				.select("*, staff(id, name, email, mobile, status, is_primary_owner)", {
+					count: "exact",
+				})
+				// Default (non-inner) embed filter: narrows the nested `staff`
+				// array to the primary owner without excluding restaurants that
+				// don't have one yet (that would need `staff!inner`).
+				.eq("staff.is_primary_owner", true)
+				.order("created_at", { ascending: false })
+				.range(from, to);
+
+			if (search) {
+				query = query.ilike("name", `%${search}%`);
+			}
+
+			const { data, error, count } = await query;
+
+			if (error) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error.message,
+				});
+			}
+
+			return {
+				items: (data ?? []).map((row) => {
+					const primaryOwner = (row.staff as PrimaryOwnerRow[])[0] ?? null;
+					return {
+						id: row.id,
+						name: row.name,
+						address: row.address,
+						gstNumber: row.gst_number,
+						state: row.state,
+						pincode: row.pincode,
+						serviceChargePercent: toServiceChargePercent(
+							row.service_charge_rate,
+						),
+						status: row.status,
+						admin: primaryOwner
+							? {
+									staffId: primaryOwner.id,
+									name: primaryOwner.name,
+									email: primaryOwner.email,
+									mobile: primaryOwner.mobile,
+									status: primaryOwner.status,
+								}
+							: null,
+					};
+				}),
+				total: count ?? 0,
+				page,
+				pageSize,
+			};
+		}),
+
+	create: adminProcedure
+		.input(createRestaurantInput)
+		.mutation(async ({ ctx, input }) => {
+			const { data, error } = await ctx.auth.rpc("admin_create_restaurant", {
+				p_name: input.name,
+				p_address: input.address,
+				p_gst_number: input.gstNumber,
+				p_state: input.state,
+				p_pincode: input.pincode,
+				// numeric SQL params generate as non-nullable in database.types.ts —
+				// the column itself (restaurants.service_charge_rate) is nullable.
+				p_service_charge_rate: toServiceChargeRate(
+					input.serviceChargePercent,
+				) as number,
+				p_admin_name: input.adminName,
+				p_admin_email: input.adminEmail,
+				p_admin_mobile: input.adminMobile,
+			});
+
+			if (error) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error.message,
+				});
+			}
+
+			return data[0];
+		}),
+
+	update: adminProcedure
+		.input(updateRestaurantInput)
+		.mutation(async ({ ctx, input }) => {
+			// Atomic — see admin_update_restaurant (supabase/migrations/
+			// 20260803044818_admin_update_restaurant_rpc.sql) for the
+			// restaurant+staff write and the "email locked once active" check,
+			// same pattern as create/reassignPrimaryOwner below.
+			const { data, error } = await ctx.auth.rpc("admin_update_restaurant", {
+				p_id: input.id,
+				p_name: input.name,
+				p_address: input.address,
+				p_gst_number: input.gstNumber,
+				p_state: input.state,
+				p_pincode: input.pincode,
+				p_service_charge_rate: toServiceChargeRate(
+					input.serviceChargePercent,
+				) as number,
+				p_admin_name: input.adminName,
+				p_admin_email: input.adminEmail,
+				p_admin_mobile: input.adminMobile,
+			});
+
+			if (error) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error.message,
+				});
+			}
+
+			return { id: data };
+		}),
+
+	reassignPrimaryOwner: adminProcedure
+		.input(reassignPrimaryOwnerInput)
+		.mutation(async ({ ctx, input }) => {
+			const { data, error } = await ctx.auth.rpc(
+				"admin_reassign_primary_owner",
+				{
+					p_restaurant_id: input.restaurantId,
+					p_admin_name: input.adminName,
+					p_admin_email: input.adminEmail,
+					p_admin_mobile: input.adminMobile,
+				},
+			);
+
+			if (error) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error.message,
+				});
+			}
+
+			return { staffId: data };
+		}),
+
+	setStatus: adminProcedure
+		.input(setRestaurantStatusInput)
+		.mutation(async ({ ctx, input }) => {
+			const { error } = await ctx.auth
+				.from("restaurants")
+				.update({ status: input.status })
+				.eq("id", input.id);
+
+			if (error) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error.message,
+				});
+			}
+
+			return { id: input.id, status: input.status };
+		}),
+});

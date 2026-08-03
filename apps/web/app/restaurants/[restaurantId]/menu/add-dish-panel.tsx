@@ -1,9 +1,15 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
+import {
+	Field,
+	FieldGroup,
+	FieldRow,
+	FormSheet,
+	PreferenceFields,
+} from "@/components/form-sheet";
 import { trpc } from "@/lib/trpc-client";
-import { SideDrawer } from "./side-drawer";
 
 type MenuCategory = {
 	id: string;
@@ -26,9 +32,6 @@ type FormState = {
 	ice: "none" | "less" | "regular" | null;
 	status: "active" | "archived";
 };
-
-const fieldClassName =
-	"w-full rounded-sm border border-divider bg-background px-3 py-3 text-primary text-sm outline-none transition-colors duration-(--duration-base) ease-out focus:border-accent disabled:cursor-not-allowed disabled:text-muted";
 
 export function AddDishPanel({
 	restaurantId,
@@ -55,7 +58,6 @@ export function AddDishPanel({
 		status: "active",
 	}));
 	const [formError, setFormError] = useState<string | null>(null);
-	const nameInput = useRef<HTMLInputElement>(null);
 	const utils = trpc.useUtils();
 	const createItem = trpc.menu.createItem.useMutation({
 		onSuccess: async () => {
@@ -140,263 +142,155 @@ export function AddDishPanel({
 	}
 
 	return (
-		<SideDrawer
+		<FormSheet
 			title="Add Dish"
-			titleId="add-dish-title"
 			onClose={onClose}
-			isBusy={createItem.isPending}
-			initialFocusRef={nameInput}
+			footer={
+				<button
+					type="submit"
+					form="add-dish-form"
+					disabled={createItem.isPending}
+					className="flex w-full items-center justify-center gap-2 rounded-md bg-accent px-6 py-4 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted"
+				>
+					{createItem.isPending ? (
+						<Loader2
+							aria-hidden="true"
+							className="icon-sm spinner"
+							strokeWidth={1.5}
+						/>
+					) : null}
+					{createItem.isPending ? "Adding dish…" : "Add dish"}
+				</button>
+			}
 		>
-			<form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-				<div className="flex-1 overflow-y-auto px-6 py-8">
-					<div className="flex flex-col gap-6">
-						<Field id="add-dish-category" label="Category" required>
+			<form id="add-dish-form" onSubmit={handleSubmit} className="space-y-6">
+				<FieldGroup legend="Dish Details">
+					<Field label="Category" required>
+						<select
+							value={form.categoryId}
+							onChange={(event) => updateForm("categoryId", event.target.value)}
+						>
+							{categories.map((category) => (
+								<option key={category.id} value={category.id}>
+									{category.name}
+									{category.status === "archived" ? " (Hidden)" : ""}
+								</option>
+							))}
+						</select>
+					</Field>
+
+					<Field label="Dish name" required>
+						<input
+							required
+							value={form.name}
+							placeholder="e.g. Pan-Seared Scallops"
+							onChange={(event) => updateForm("name", event.target.value)}
+						/>
+					</Field>
+
+					<Field label="Description" required className="resize-y">
+						<textarea
+							required
+							rows={3}
+							value={form.description}
+							placeholder="Describe the ingredients and preparation."
+							onChange={(event) =>
+								updateForm("description", event.target.value)
+							}
+						/>
+					</Field>
+
+					<FieldRow>
+						<Field label="Price (₹)" required>
+							<input
+								required
+								type="number"
+								min="0"
+								step="0.01"
+								value={form.price}
+								onChange={(event) => updateForm("price", event.target.value)}
+							/>
+						</Field>
+						<Field label="Status" required>
 							<select
-								id="add-dish-category"
-								value={form.categoryId}
+								value={getDisplayStatus()}
 								onChange={(event) =>
-									updateForm("categoryId", event.target.value)
+									setDisplayStatus(
+										event.target.value as "live" | "sold_out" | "hidden",
+									)
 								}
-								className={fieldClassName}
 							>
-								{categories.map((category) => (
-									<option key={category.id} value={category.id}>
-										{category.name}
-										{category.status === "archived" ? " (Hidden)" : ""}
-									</option>
-								))}
+								<option value="live">Live</option>
+								<option value="sold_out">Sold out</option>
+								<option value="hidden">Hidden</option>
 							</select>
 						</Field>
-
-						<Field id="add-dish-name" label="Dish name" required>
-							<input
-								id="add-dish-name"
-								ref={nameInput}
+					</FieldRow>
+					<FieldRow>
+						<Field label="Dietary type" required>
+							<select
 								required
-								value={form.name}
-								placeholder="e.g. Pan-Seared Scallops"
-								onChange={(event) => updateForm("name", event.target.value)}
-								className={fieldClassName}
-							/>
-						</Field>
-
-						<Field id="add-dish-description" label="Description" required>
-							<textarea
-								id="add-dish-description"
-								required
-								value={form.description}
-								placeholder="Describe the ingredients and preparation."
+								value={form.diet}
 								onChange={(event) =>
-									updateForm("description", event.target.value)
+									updateForm("diet", event.target.value as FormState["diet"])
 								}
-								className={`${fieldClassName} min-h-24 resize-y`}
-							/>
-						</Field>
-
-						<div className="grid gap-6 sm:grid-cols-2">
-							<Field id="add-dish-price" label="Price (₹)" required>
-								<input
-									id="add-dish-price"
-									required
-									type="number"
-									min="0"
-									step="0.01"
-									value={form.price}
-									onChange={(event) => updateForm("price", event.target.value)}
-									className={fieldClassName}
-								/>
-							</Field>
-							<Field id="add-dish-status" label="Status" required>
-								<select
-									id="add-dish-status"
-									value={getDisplayStatus()}
-									onChange={(event) =>
-										setDisplayStatus(
-											event.target.value as "live" | "sold_out" | "hidden",
-										)
-									}
-									className={fieldClassName}
-								>
-									<option value="live">Live</option>
-									<option value="sold_out">Sold out</option>
-									<option value="hidden">Hidden</option>
-								</select>
-							</Field>
-							<Field id="add-dish-diet" label="Dietary type" required>
-								<select
-									id="add-dish-diet"
-									required
-									value={form.diet}
-									onChange={(event) =>
-										updateForm("diet", event.target.value as FormState["diet"])
-									}
-									className={fieldClassName}
-								>
-									<option value="" disabled>
-										Choose dietary type
-									</option>
-									<option value="veg">Vegetarian</option>
-									<option value="non_veg">Non-vegetarian</option>
-								</select>
-							</Field>
-							<Field
-								id="add-dish-prep-time"
-								label="Preparation time (minutes)"
-								required
 							>
-								<input
-									id="add-dish-prep-time"
-									required
-									type="number"
-									min="1"
-									step="1"
-									value={form.prepTime}
-									onChange={(event) =>
-										updateForm("prepTime", event.target.value)
-									}
-									className={fieldClassName}
-								/>
-							</Field>
-						</div>
-
-						<Field id="add-dish-serving-size" label="Serving size" required>
+								<option value="" disabled>
+									Choose dietary type
+								</option>
+								<option value="veg">Vegetarian</option>
+								<option value="non_veg">Non-vegetarian</option>
+							</select>
+						</Field>
+						<Field label="Preparation time (minutes)" required>
 							<input
-								id="add-dish-serving-size"
 								required
-								value={form.servingSize}
-								placeholder="e.g. Serves 1"
-								onChange={(event) =>
-									updateForm("servingSize", event.target.value)
-								}
-								className={fieldClassName}
+								type="number"
+								min="1"
+								step="1"
+								value={form.prepTime}
+								onChange={(event) => updateForm("prepTime", event.target.value)}
 							/>
 						</Field>
+					</FieldRow>
 
-						<Field
-							id="add-dish-labels"
-							label="Labels"
-							hint="Optional. Separate labels with commas."
-						>
-							<input
-								id="add-dish-labels"
-								value={form.labels}
-								placeholder="Seasonal, Chef recommended"
-								onChange={(event) => updateForm("labels", event.target.value)}
-								className={fieldClassName}
-							/>
-						</Field>
+					<Field label="Serving size" required>
+						<input
+							required
+							value={form.servingSize}
+							placeholder="e.g. Serves 1"
+							onChange={(event) =>
+								updateForm("servingSize", event.target.value)
+							}
+						/>
+					</Field>
 
-						<fieldset>
-							<legend className="text-caps text-primary">Preferences</legend>
-							<div className="mt-3 grid gap-4 sm:grid-cols-3">
-								<PreferenceSelect
-									label="Spice"
-									value={form.spice}
-									options={["mild", "regular", "extra spicy"]}
-									onChange={(value) =>
-										updateForm("spice", value as FormState["spice"])
-									}
-								/>
-								<PreferenceSelect
-									label="Salt"
-									value={form.salt}
-									options={["less salt", "regular"]}
-									onChange={(value) =>
-										updateForm("salt", value as FormState["salt"])
-									}
-								/>
-								<PreferenceSelect
-									label="Ice"
-									value={form.ice}
-									options={["none", "less", "regular"]}
-									onChange={(value) =>
-										updateForm("ice", value as FormState["ice"])
-									}
-								/>
-							</div>
-						</fieldset>
+					<Field label="Labels" hint="Optional. Separate labels with commas.">
+						<input
+							value={form.labels}
+							placeholder="Seasonal, Chef recommended"
+							onChange={(event) => updateForm("labels", event.target.value)}
+						/>
+					</Field>
+				</FieldGroup>
 
-						{formError || createItem.error ? (
-							<p role="alert" className="text-error text-sm">
-								{formError ?? createItem.error?.message}
-							</p>
-						) : null}
-					</div>
-				</div>
-				<footer className="border-divider border-t bg-surface p-6">
-					<button
-						type="submit"
-						disabled={createItem.isPending}
-						className="flex w-full items-center justify-center gap-2 rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted"
-					>
-						{createItem.isPending ? (
-							<Loader2
-								aria-hidden="true"
-								className="icon-sm spinner"
-								strokeWidth={1.5}
-							/>
-						) : null}
-						{createItem.isPending ? "Adding dish…" : "Add dish"}
-					</button>
-				</footer>
+				<FieldGroup legend="Preferences">
+					<PreferenceFields
+						spice={form.spice}
+						salt={form.salt}
+						ice={form.ice}
+						onSpiceChange={(value) => updateForm("spice", value)}
+						onSaltChange={(value) => updateForm("salt", value)}
+						onIceChange={(value) => updateForm("ice", value)}
+					/>
+				</FieldGroup>
+
+				{formError || createItem.error ? (
+					<p role="alert" className="text-error text-sm">
+						{formError ?? createItem.error?.message}
+					</p>
+				) : null}
 			</form>
-		</SideDrawer>
-	);
-}
-
-function Field({
-	id,
-	label,
-	required,
-	hint,
-	children,
-}: {
-	id: string;
-	label: string;
-	required?: boolean;
-	hint?: string;
-	children: React.ReactNode;
-}) {
-	return (
-		<div className="block">
-			<label htmlFor={id} className="text-caps text-primary">
-				{label}
-				{required ? " *" : ""}
-			</label>
-			{hint ? (
-				<span className="mt-2 block text-muted text-sm">{hint}</span>
-			) : null}
-			<span className="mt-3 block">{children}</span>
-		</div>
-	);
-}
-
-function PreferenceSelect({
-	label,
-	value,
-	options,
-	onChange,
-}: {
-	label: string;
-	value: string | null;
-	options: string[];
-	onChange: (value: string | null) => void;
-}) {
-	return (
-		<label className="block">
-			<span className="text-muted text-sm">{label}</span>
-			<select
-				value={value ?? ""}
-				onChange={(event) => onChange(event.target.value || null)}
-				className={`${fieldClassName} mt-2`}
-			>
-				<option value="">Not offered</option>
-				{options.map((option) => (
-					<option key={option} value={option}>
-						{option}
-					</option>
-				))}
-			</select>
-		</label>
+		</FormSheet>
 	);
 }

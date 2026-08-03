@@ -3,6 +3,7 @@ import type { Database } from "@workspace/db";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { type GuestClaims, verifyGuestToken } from "@/lib/guest-token";
+import { createClient as createAuthClient } from "@/lib/supabase/server";
 
 // Cookie carrying the guest session's signed JWT (see lib/guest-token.ts).
 // Every procedure reads guest identity from ctx.guest, derived here once.
@@ -43,7 +44,16 @@ export async function createContext() {
 		},
 	);
 
-	return { guest, supabase };
+	// Session-authenticated client for staff/admin procedures (adminProcedure,
+	// trpc/init.ts) — @supabase/ssr's cookie-based client, same factory
+	// lib/auth.ts uses server-side. Distinct from `supabase` above: that one
+	// is anon-key + a manually forwarded guest JWT bearer, this one reads the
+	// real Supabase Auth session cookie, so RLS evaluates the signed-in
+	// admin's own claims (is_dineinly_admin(), see
+	// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 4).
+	const auth = await createAuthClient();
+
+	return { guest, supabase, auth };
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;

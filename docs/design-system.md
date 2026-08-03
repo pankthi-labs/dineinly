@@ -195,6 +195,8 @@ Cinematic and restrained. Motion communicates state, not decoration.
 | Modal | Close | 150ms | ease-in | Always faster than open |
 | Bottom Sheet | Open | 500ms | ease-emphasized | Strong deceleration, no overshoot — tactile luxury feel |
 | Bottom Sheet | Close | 200ms | ease-in | Faster than open, no overshoot |
+| Side Dock | Open | 500ms | ease-emphasized | Slide in from right — same timing as Bottom Sheet, `md:` and up |
+| Side Dock | Close | 200ms | ease-in | Faster than open, no overshoot |
 | Toast | Enter | 300ms | ease-out | Slide in from top |
 | Toast | Exit | 150ms | ease-in | Fade only |
 | Page | Transition | 500ms | ease-in-out | Crossfade or slide |

@@ -13,7 +13,9 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { Field } from "@/components/form-sheet";
 import { createClient } from "@/lib/supabase/client";
+import { trpc } from "@/lib/trpc-client";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -24,6 +26,8 @@ type Step = "email" | "otp";
 export default function SignInPage() {
 	const router = useRouter();
 	const supabase = createClient();
+	const resolveSignIn = trpc.auth.resolveSignIn.useMutation();
+	const linkStaffAccount = trpc.auth.linkStaffAccount.useMutation();
 	const [step, setStep] = useState<Step>("email");
 	const [email, setEmail] = useState("");
 	const [emailError, setEmailError] = useState<string | null>(null);
@@ -42,12 +46,31 @@ export default function SignInPage() {
 		return () => clearInterval(timer);
 	}, [resendCooldown]);
 
+	// Same generic message whether the email isn't invited or Supabase
+	// itself failed — the resolveSignIn gate must not tell an unauthorized
+	// caller which case it hit (see supabase/migrations/
+	// 20260803042459_add_staff_auth_flow.sql).
+	const SEND_FAILED_MESSAGE = "Couldn't send a code to that email.";
+
 	async function sendOtp() {
+		const normalizedEmail = email.trim().toLowerCase();
+		let shouldCreateUser: boolean;
+		try {
+			const resolved = await resolveSignIn.mutateAsync({
+				email: normalizedEmail,
+			});
+			if (!resolved.allowed) {
+				return SEND_FAILED_MESSAGE;
+			}
+			shouldCreateUser = resolved.shouldCreateUser;
+		} catch {
+			return SEND_FAILED_MESSAGE;
+		}
 		const { error } = await supabase.auth.signInWithOtp({
-			email,
-			options: { shouldCreateUser: false },
+			email: normalizedEmail,
+			options: { shouldCreateUser },
 		});
-		return error;
+		return error ? SEND_FAILED_MESSAGE : null;
 	}
 
 	async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
@@ -61,7 +84,7 @@ export default function SignInPage() {
 		const error = await sendOtp();
 		setIsSendingCode(false);
 		if (error) {
-			setEmailError("Couldn't send a code to that email.");
+			setEmailError(error);
 			return;
 		}
 		setOtp(Array(OTP_LENGTH).fill(""));
@@ -79,15 +102,23 @@ export default function SignInPage() {
 		setOtpError(null);
 		setIsVerifying(true);
 		const { error } = await supabase.auth.verifyOtp({
-			email,
+			email: email.trim().toLowerCase(),
 			token: otp.join(""),
 			type: "email",
 		});
-		setIsVerifying(false);
 		if (error) {
+			setIsVerifying(false);
 			setOtpError("That code is incorrect or expired.");
 			return;
 		}
+		// No-op for the seeded Dineinly Admin (no matching invited Staff row)
+		// — only an invited Owner/Manager's first sign-in links anything.
+		// Best-effort: the OTP itself already verified, so a link failure
+		// here shouldn't strand the user on the sign-in screen.
+		try {
+			await linkStaffAccount.mutateAsync();
+		} catch {}
+		setIsVerifying(false);
 		router.replace("/admin");
 	}
 
@@ -191,8 +222,6 @@ function EmailStep({
 	onEmailChange: (value: string) => void;
 	onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-	const errorId = useId();
-
 	return (
 		<>
 			<div className="mb-6 text-center">
@@ -203,12 +232,8 @@ function EmailStep({
 			</div>
 
 			<form className="space-y-6" onSubmit={onSubmit} noValidate>
-				<div className="flex flex-col space-y-3">
-					<label htmlFor="email" className="text-caps text-secondary">
-						Your work email
-					</label>
+				<Field label="Your work email" error={error ?? undefined}>
 					<input
-						id="email"
 						name="email"
 						type="email"
 						autoComplete="email"
@@ -216,19 +241,9 @@ function EmailStep({
 						required
 						value={email}
 						disabled={isSubmitting}
-						aria-invalid={error ? true : undefined}
-						aria-describedby={error ? errorId : undefined}
 						onChange={(event) => onEmailChange(event.target.value)}
-						className={`h-12 w-full rounded-sm border bg-background px-4 text-primary text-sm placeholder:text-muted focus:outline-none disabled:cursor-not-allowed disabled:text-muted ${
-							error ? "border-error" : "border-divider focus:border-accent"
-						}`}
 					/>
-					{error ? (
-						<p id={errorId} role="alert" className="text-error text-sm">
-							{error}
-						</p>
-					) : null}
-				</div>
+				</Field>
 
 				<SubmitButton
 					isPending={isSubmitting}
@@ -341,8 +356,8 @@ function OtpStep({
 							onChange={(event) => handleChange(index, event)}
 							onKeyDown={(event) => handleKeyDown(index, event)}
 							onPaste={handlePaste}
-							className={`h-12 w-12 rounded-sm border bg-background text-center text-lg text-primary focus:outline-none disabled:cursor-not-allowed disabled:text-muted ${
-								error ? "border-error" : "border-divider focus:border-accent"
+							className={`h-12 w-12 border-b bg-transparent text-center text-lg text-primary transition-colors duration-(--duration-base) ease-out focus:outline-none disabled:cursor-not-allowed disabled:text-muted ${
+								error ? "border-error" : "border-secondary focus:border-accent"
 							}`}
 						/>
 					))}

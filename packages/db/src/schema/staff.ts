@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
+	boolean,
+	check,
 	index,
 	pgTable,
 	text,
@@ -36,13 +38,31 @@ export const staff = pgTable(
 			.references(() => restaurants.id, { onDelete: "cascade" }),
 		userId: uuid("user_id"),
 		email: text("email").notNull(),
+		// Contact fields captured when Dineinly Admin creates a restaurant
+		// and invites its owner (apps/web/server/routers/restaurants.ts).
+		// Nullable — other invite paths (Owner/Manager inviting Waiters,
+		// Kitchen, other Managers) don't collect these.
+		name: text("name"),
+		mobile: text("mobile"),
 		role: staffRole("role").notNull(),
 		pinHash: text("pin_hash"),
 		status: staffStatus("status").notNull().default("invited"),
+		// At most one true per restaurant among role = owner — the
+		// Restaurants Directory's single admin contact. Reassigning it
+		// (see admin_reassign_primary_owner) flips this rather than
+		// removing the previous owner, who keeps full access.
+		isPrimaryOwner: boolean("is_primary_owner").notNull().default(false),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
 	(table) => [
+		check(
+			"staff_primary_owner_requires_owner_role_check",
+			sql`not ${table.isPrimaryOwner} or ${table.role} = 'owner'`,
+		),
+		uniqueIndex("staff_restaurant_id_primary_owner_idx")
+			.on(table.restaurantId)
+			.where(sql`${table.isPrimaryOwner}`),
 		// Single-column, because both composite indexes below are partial —
 		// neither can serve an unfiltered restaurant_id lookup however it's
 		// prefixed.

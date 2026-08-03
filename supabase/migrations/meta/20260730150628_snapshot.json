@@ -1239,6 +1239,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mobile": {
+          "name": "mobile",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "role": {
           "name": "role",
           "type": "staff_role",
@@ -1260,6 +1272,13 @@
           "notNull": true,
           "default": "'invited'"
         },
+        "is_primary_owner": {
+          "name": "is_primary_owner",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1276,6 +1295,22 @@
         }
       },
       "indexes": {
+        "staff_restaurant_id_primary_owner_idx": {
+          "name": "staff_restaurant_id_primary_owner_idx",
+          "columns": [
+            {
+              "expression": "restaurant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"staff\".\"is_primary_owner\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "staff_restaurant_id_idx": {
           "name": "staff_restaurant_id_idx",
           "columns": [
@@ -1363,7 +1398,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "staff_primary_owner_requires_owner_role_check": {
+          "name": "staff_primary_owner_requires_owner_role_check",
+          "value": "not \"staff\".\"is_primary_owner\" or \"staff\".\"role\" = 'owner'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.table_sessions": {

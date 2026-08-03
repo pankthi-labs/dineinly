@@ -145,12 +145,16 @@ CREATE TABLE "staff" (
 	"restaurant_id" uuid NOT NULL,
 	"user_id" uuid,
 	"email" text NOT NULL,
+	"name" text,
+	"mobile" text,
 	"role" "staff_role" NOT NULL,
 	"pin_hash" text,
 	"status" "staff_status" DEFAULT 'invited' NOT NULL,
+	"is_primary_owner" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "staff_restaurant_id_id_key" UNIQUE("restaurant_id","id")
+	CONSTRAINT "staff_restaurant_id_id_key" UNIQUE("restaurant_id","id"),
+	CONSTRAINT "staff_primary_owner_requires_owner_role_check" CHECK (not "staff"."is_primary_owner" or "staff"."role" = 'owner')
 );
 --> statement-breakpoint
 CREATE TABLE "table_sessions" (
@@ -192,6 +196,7 @@ CREATE INDEX "order_items_order_id_idx" ON "order_items" USING btree ("order_id"
 CREATE INDEX "order_items_restaurant_id_order_id_idx" ON "order_items" USING btree ("restaurant_id","order_id");--> statement-breakpoint
 CREATE INDEX "order_items_restaurant_id_status_idx" ON "order_items" USING btree ("restaurant_id","status");--> statement-breakpoint
 CREATE INDEX "restaurant_tables_restaurant_id_session_id_idx" ON "restaurant_tables" USING btree ("restaurant_id","session_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "staff_restaurant_id_primary_owner_idx" ON "staff" USING btree ("restaurant_id") WHERE "staff"."is_primary_owner";--> statement-breakpoint
 CREATE INDEX "staff_restaurant_id_idx" ON "staff" USING btree ("restaurant_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "staff_restaurant_id_email_idx" ON "staff" USING btree ("restaurant_id","email") WHERE "staff"."status" <> 'removed';--> statement-breakpoint
 CREATE UNIQUE INDEX "staff_restaurant_id_user_id_idx" ON "staff" USING btree ("restaurant_id","user_id") WHERE "staff"."user_id" is not null and "staff"."status" <> 'removed';

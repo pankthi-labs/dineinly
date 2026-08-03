@@ -171,6 +171,39 @@
 		-webkit-backdrop-filter: blur(var(--blur-glass));
 		backdrop-filter: blur(var(--blur-glass));
 	}
+
+	/*
+	 * §05 Toast Enter/Exit: 300ms ease-out slide-from-top-in, 150ms ease-in
+	 * fade-out. No animation plugin in this stack — plain keyframes on the
+	 * doc's own duration/easing tokens, same pattern as .skeleton/.spinner.
+	 */
+	.toast-enter {
+		animation: toast-enter var(--duration-slow) var(--ease-out);
+	}
+
+	.toast-exit {
+		animation: toast-exit var(--duration-exit-fast) var(--ease-in) forwards;
+	}
+}
+
+@keyframes toast-enter {
+	from {
+		opacity: 0;
+		transform: translateY(calc(-1 * var(--space-4)));
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes toast-exit {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
 }
 
 @keyframes skeleton-shimmer {
