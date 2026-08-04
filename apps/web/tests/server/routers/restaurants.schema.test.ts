@@ -7,6 +7,7 @@ import {
 const validRestaurant = {
 	name: "Obsidian Roast",
 	address: "12 Kaikoukan Street, Shibuya",
+	city: "Mumbai",
 	gstNumber: "27ABCDE1234F1Z5",
 	state: "Maharashtra",
 	pincode: "400001",
