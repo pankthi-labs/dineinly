@@ -41,7 +41,12 @@ export const restaurantsRouter = router({
 				// array to the primary owner without excluding restaurants that
 				// don't have one yet (that would need `staff!inner`).
 				.eq("staff.is_primary_owner", true)
-				.order("created_at", { ascending: false })
+				// restaurant_status is declared active-then-archived (packages/db/
+				// src/schema/enums.ts), so ascending sorts live restaurants first
+				// by Postgres enum ordinal — paused ones always trail. Name breaks
+				// ties within each group.
+				.order("status", { ascending: true })
+				.order("name", { ascending: true })
 				.range(from, to);
 
 			if (search) {
@@ -64,6 +69,7 @@ export const restaurantsRouter = router({
 						id: row.id,
 						name: row.name,
 						address: row.address,
+						city: row.city,
 						gstNumber: row.gst_number,
 						state: row.state,
 						pincode: row.pincode,
@@ -94,6 +100,7 @@ export const restaurantsRouter = router({
 			const { data, error } = await ctx.auth.rpc("admin_create_restaurant", {
 				p_name: input.name,
 				p_address: input.address,
+				p_city: input.city,
 				p_gst_number: input.gstNumber,
 				p_state: input.state,
 				p_pincode: input.pincode,
@@ -128,6 +135,7 @@ export const restaurantsRouter = router({
 				p_id: input.id,
 				p_name: input.name,
 				p_address: input.address,
+				p_city: input.city,
 				p_gst_number: input.gstNumber,
 				p_state: input.state,
 				p_pincode: input.pincode,

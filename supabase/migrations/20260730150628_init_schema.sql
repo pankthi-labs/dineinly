@@ -121,6 +121,7 @@ CREATE TABLE "restaurants" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"address" text NOT NULL,
+	"city" text NOT NULL,
 	"gst_number" text NOT NULL,
 	"state" text NOT NULL,
 	"pincode" text NOT NULL,

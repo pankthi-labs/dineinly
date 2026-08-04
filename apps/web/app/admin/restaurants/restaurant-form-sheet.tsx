@@ -33,6 +33,7 @@ const EMPTY_ADMIN: AdminContact = {
 const EMPTY_VALUES: RestaurantFormValues = {
 	name: "",
 	address: "",
+	city: "",
 	gstNumber: "",
 	state: "",
 	pincode: "",
@@ -41,6 +42,8 @@ const EMPTY_VALUES: RestaurantFormValues = {
 };
 
 type FieldErrors = Partial<Record<keyof RestaurantFormValues, string>>;
+
+const formSchema = restaurantFieldsSchema.merge(adminContactSchema);
 
 export function RestaurantFormSheet({
 	editTarget,
@@ -90,6 +93,24 @@ export function RestaurantFormSheet({
 		setValues((current) => ({ ...current, [key]: value }));
 	}
 
+	// Runs on blur so a mistake surfaces as soon as the user leaves the
+	// field, not only after they submit the whole form.
+	function validateField(key: keyof RestaurantFormValues) {
+		const result = formSchema.safeParse(values);
+		const issue = result.success
+			? undefined
+			: result.error.issues.find((i) => i.path[0] === key)?.message;
+		setErrors((current) => {
+			if (!issue) {
+				if (!(key in current)) return current;
+				const next = { ...current };
+				delete next[key];
+				return next;
+			}
+			return { ...current, [key]: issue };
+		});
+	}
+
 	function startReassign() {
 		originalAdmin.current = {
 			adminName: values.adminName,
@@ -108,9 +129,7 @@ export function RestaurantFormSheet({
 	function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 
-		const result = restaurantFieldsSchema
-			.merge(adminContactSchema)
-			.safeParse(values);
+		const result = formSchema.safeParse(values);
 
 		if (!result.success) {
 			const fieldErrors: FieldErrors = {};
@@ -184,6 +203,7 @@ export function RestaurantFormSheet({
 						<input
 							value={values.name}
 							onChange={(e) => setField("name", e.target.value)}
+							onBlur={() => validateField("name")}
 							placeholder="Enter establishment name"
 						/>
 					</Field>
@@ -191,14 +211,24 @@ export function RestaurantFormSheet({
 						<input
 							value={values.address}
 							onChange={(e) => setField("address", e.target.value)}
-							placeholder="Street, area, city"
+							onBlur={() => validateField("address")}
+							placeholder="Street, area"
 						/>
 					</Field>
-					<FieldRow>
+					<FieldRow columns={3}>
+						<Field label="City" error={errors.city}>
+							<input
+								value={values.city}
+								onChange={(e) => setField("city", e.target.value)}
+								onBlur={() => validateField("city")}
+								placeholder="e.g. Mumbai"
+							/>
+						</Field>
 						<Field label="State" error={errors.state}>
 							<input
 								value={values.state}
 								onChange={(e) => setField("state", e.target.value)}
+								onBlur={() => validateField("state")}
 								placeholder="e.g. Maharashtra"
 							/>
 						</Field>
@@ -206,6 +236,7 @@ export function RestaurantFormSheet({
 							<input
 								value={values.pincode}
 								onChange={(e) => setField("pincode", e.target.value)}
+								onBlur={() => validateField("pincode")}
 								placeholder="6-digit code"
 								inputMode="numeric"
 							/>
@@ -217,6 +248,7 @@ export function RestaurantFormSheet({
 							onChange={(e) =>
 								setField("gstNumber", e.target.value.toUpperCase())
 							}
+							onBlur={() => validateField("gstNumber")}
 							placeholder="15-character GSTIN"
 						/>
 					</Field>
@@ -232,6 +264,7 @@ export function RestaurantFormSheet({
 									e.target.value === "" ? null : Number(e.target.value),
 								)
 							}
+							onBlur={() => validateField("serviceChargePercent")}
 							placeholder="e.g. 5"
 							inputMode="decimal"
 						/>
@@ -252,6 +285,7 @@ export function RestaurantFormSheet({
 						<input
 							value={values.adminName}
 							onChange={(e) => setField("adminName", e.target.value)}
+							onBlur={() => validateField("adminName")}
 							placeholder="Full name of representative"
 						/>
 					</Field>
@@ -268,6 +302,7 @@ export function RestaurantFormSheet({
 							type="email"
 							value={values.adminEmail}
 							onChange={(e) => setField("adminEmail", e.target.value)}
+							onBlur={() => validateField("adminEmail")}
 							placeholder="official@email.com"
 							disabled={emailLocked}
 						/>
@@ -277,6 +312,7 @@ export function RestaurantFormSheet({
 							type="tel"
 							value={values.adminMobile}
 							onChange={(e) => setField("adminMobile", e.target.value)}
+							onBlur={() => validateField("adminMobile")}
 							placeholder="+X XX XXXX XXXX"
 						/>
 					</Field>

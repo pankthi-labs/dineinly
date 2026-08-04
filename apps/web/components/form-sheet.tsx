@@ -295,9 +295,8 @@ export function Field({
 				<p id={errorId} role="alert" className="mt-2 text-error text-sm">
 					{error}
 				</p>
-			) : hint ? (
-				<p className="mt-2 text-muted text-sm">{hint}</p>
 			) : null}
+			{hint ? <p className="mt-2 text-muted text-sm">{hint}</p> : null}
 		</div>
 	);
 }

@@ -1047,6 +1047,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "gst_number": {
           "name": "gst_number",
           "type": "text",

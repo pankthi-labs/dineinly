@@ -393,6 +393,7 @@ create policy "admin_all_bills" on public.bills
 create or replace function public.admin_create_restaurant(
 	p_name text,
 	p_address text,
+	p_city text,
 	p_gst_number text,
 	p_state text,
 	p_pincode text,
@@ -414,8 +415,8 @@ begin
 		raise exception 'Only Dineinly Admin may create restaurants';
 	end if;
 
-	insert into public.restaurants (name, address, gst_number, state, pincode, service_charge_rate)
-	values (p_name, p_address, p_gst_number, p_state, p_pincode, p_service_charge_rate)
+	insert into public.restaurants (name, address, city, gst_number, state, pincode, service_charge_rate)
+	values (p_name, p_address, p_city, p_gst_number, p_state, p_pincode, p_service_charge_rate)
 	returning id into v_restaurant_id;
 
 	-- The restaurant's first owner: an invitation record, not a live
@@ -431,10 +432,10 @@ end;
 $$;
 
 revoke execute on function public.admin_create_restaurant(
-	text, text, text, text, text, numeric, text, text, text
+	text, text, text, text, text, text, numeric, text, text, text
 ) from public;
 grant execute on function public.admin_create_restaurant(
-	text, text, text, text, text, numeric, text, text, text
+	text, text, text, text, text, text, numeric, text, text, text
 ) to authenticated;
 
 -- Replaces the restaurant's primary admin without removing the previous

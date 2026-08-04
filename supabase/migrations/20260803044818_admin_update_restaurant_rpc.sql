@@ -24,6 +24,7 @@ create or replace function public.admin_update_restaurant(
 	p_id uuid,
 	p_name text,
 	p_address text,
+	p_city text,
 	p_gst_number text,
 	p_state text,
 	p_pincode text,
@@ -67,6 +68,7 @@ begin
 	set
 		name = p_name,
 		address = p_address,
+		city = p_city,
 		gst_number = p_gst_number,
 		state = p_state,
 		pincode = p_pincode,
@@ -90,8 +92,8 @@ end;
 $$;
 
 revoke execute on function public.admin_update_restaurant(
-	uuid, text, text, text, text, text, numeric, text, text, text
+	uuid, text, text, text, text, text, text, numeric, text, text, text
 ) from public;
 grant execute on function public.admin_update_restaurant(
-	uuid, text, text, text, text, text, numeric, text, text, text
+	uuid, text, text, text, text, text, text, numeric, text, text, text
 ) to authenticated;

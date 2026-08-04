@@ -114,6 +114,7 @@ export default function RestaurantsDirectoryPage() {
 			values: {
 				name: item.name,
 				address: item.address,
+				city: item.city,
 				gstNumber: item.gstNumber,
 				state: item.state,
 				pincode: item.pincode,

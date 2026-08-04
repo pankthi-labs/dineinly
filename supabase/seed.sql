@@ -98,11 +98,12 @@ insert into auth.identities (provider_id, user_id, identity_data, provider, crea
 on conflict (provider_id, provider) do nothing;
 
 -- 1 restaurant -----------------------------------------------------------
-insert into restaurants (id, name, address, gst_number, state, pincode, service_charge_rate, status)
+insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status)
 values (
 	'10000000-0000-4000-8000-000000000001',
 	'Dineinly Test Kitchen',
 	'12 MG Road, Indiranagar',
+	'Bengaluru',
 	'29ABCDE1234F1Z5',
 	'Karnataka',
 	'560038',

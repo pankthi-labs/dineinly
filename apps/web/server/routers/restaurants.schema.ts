@@ -7,6 +7,7 @@ import { z } from "zod";
 export const restaurantFieldsSchema = z.object({
 	name: z.string().trim().min(2).max(120),
 	address: z.string().trim().min(5).max(240),
+	city: z.string().trim().min(2).max(80),
 	gstNumber: z
 		.string()
 		.trim()

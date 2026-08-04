@@ -60,7 +60,7 @@ export function RestaurantRow({
 					<dl className="grid grid-cols-1 gap-6 border-divider border-b pb-6 sm:grid-cols-2 lg:grid-cols-3">
 						<Detail
 							label="Address"
-							value={`${restaurant.address}, ${restaurant.state}`}
+							value={`${restaurant.address}, ${restaurant.city}, ${restaurant.state}`}
 						/>
 						<Detail label="GST Number" value={restaurant.gstNumber} />
 						<Detail label="Pincode" value={restaurant.pincode} />
