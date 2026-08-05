@@ -14,10 +14,10 @@ const validRestaurant = {
 	serviceChargePercent: 5,
 };
 
-const validAdmin = {
-	adminName: "Kenji Sato",
-	adminEmail: "k.sato@obsidianroast.com",
-	adminMobile: "+819012345678",
+const validOwner = {
+	ownerName: "Kenji Sato",
+	ownerEmail: "k.sato@obsidianroast.com",
+	ownerMobile: "+819012345678",
 };
 
 describe("restaurantFieldsSchema", () => {
@@ -73,21 +73,21 @@ describe("restaurantFieldsSchema", () => {
 });
 
 describe("createRestaurantInput", () => {
-	it("requires the admin contact fields alongside the restaurant fields", () => {
+	it("requires the owner contact fields alongside the restaurant fields", () => {
 		expect(createRestaurantInput.safeParse(validRestaurant).success).toBe(
 			false,
 		);
 		expect(
-			createRestaurantInput.safeParse({ ...validRestaurant, ...validAdmin })
+			createRestaurantInput.safeParse({ ...validRestaurant, ...validOwner })
 				.success,
 		).toBe(true);
 	});
 
-	it("rejects an invalid admin email", () => {
+	it("rejects an invalid owner email", () => {
 		const result = createRestaurantInput.safeParse({
 			...validRestaurant,
-			...validAdmin,
-			adminEmail: "not-an-email",
+			...validOwner,
+			ownerEmail: "not-an-email",
 		});
 		expect(result.success).toBe(false);
 	});

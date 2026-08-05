@@ -178,7 +178,15 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = false
+# On: gating already happens per-request, not here. resolve_staff_signin
+# (supabase/migrations/20260803042459_add_staff_auth_flow.sql) only ever
+# returns shouldCreateUser: true for an email with an invited Staff row, and
+# apps/web/app/sign-in/page.tsx passes that straight through as
+# signInWithOtp's create_user option — so GoTrue only ever creates a user
+# for an invited email. Off would block that path unconditionally (GoTrue
+# rejects /otp's create_user regardless of the per-request flag), breaking
+# the entire invite-only sign-in flow, not just open self-signup.
+enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 # Off: guests never get a Supabase auth.users identity — Dineinly mints its
 # own scoped JWTs (see apps/web/lib/guest-token.ts, docs/architecture.md
@@ -267,6 +275,11 @@ otp_expiry = 600
 # here to show only the 6-digit code ({{ .Token }}) — AGENTS.md: Owners/
 # Managers use Email OTP, no magic links. Light-themed by design: the
 # app's dark-only guardrail is scoped to app UI, not transactional email.
+# Every color in the template is docs/design-system.md's dark palette with
+# each token's HSL lightness inverted and hue/saturation held fixed (bg-base
+# L7%->L93%, text-primary L92%->L8%, etc.) — never a separately chosen light
+# palette. --color-accent-primary (gold, #D6B36A) is the one exception and
+# stays as-is, unflipped, same as any other theme-invariant brand accent.
 #
 # GoTrue's Go html/template escaper on magic_link.html: no HTML comments,
 # and style-attribute values must use double quotes only (no `'Segoe UI'`

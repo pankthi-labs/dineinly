@@ -48,9 +48,10 @@ export const staff = pgTable(
 		pinHash: text("pin_hash"),
 		status: staffStatus("status").notNull().default("invited"),
 		// At most one true per restaurant among role = owner — the
-		// Restaurants Directory's single admin contact. Reassigning it
-		// (see admin_reassign_primary_owner) flips this rather than
-		// removing the previous owner, who keeps full access.
+		// Restaurants Directory's single owner contact. Immutable via
+		// admin_update_restaurant once this row's status is 'active';
+		// reassigning it to someone else is a Staff Roster capability
+		// (not yet built).
 		isPrimaryOwner: boolean("is_primary_owner").notNull().default(false),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),

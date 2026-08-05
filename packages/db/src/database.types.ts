@@ -581,12 +581,12 @@ export type Database = {
 			admin_create_restaurant: {
 				Args: {
 					p_address: string;
-					p_admin_email: string;
-					p_admin_mobile: string;
-					p_admin_name: string;
 					p_city: string;
 					p_gst_number: string;
 					p_name: string;
+					p_owner_email: string;
+					p_owner_mobile: string;
+					p_owner_name: string;
 					p_pincode: string;
 					p_service_charge_rate: number;
 					p_state: string;
@@ -596,25 +596,16 @@ export type Database = {
 					staff_id: string;
 				}[];
 			};
-			admin_reassign_primary_owner: {
-				Args: {
-					p_admin_email: string;
-					p_admin_mobile: string;
-					p_admin_name: string;
-					p_restaurant_id: string;
-				};
-				Returns: string;
-			};
 			admin_update_restaurant: {
 				Args: {
 					p_address: string;
-					p_admin_email: string;
-					p_admin_mobile: string;
-					p_admin_name: string;
 					p_city: string;
 					p_gst_number: string;
 					p_id: string;
 					p_name: string;
+					p_owner_email: string;
+					p_owner_mobile: string;
+					p_owner_name: string;
 					p_pincode: string;
 					p_service_charge_rate: number;
 					p_state: string;

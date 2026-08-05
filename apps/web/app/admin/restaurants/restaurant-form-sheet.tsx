@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useState } from "react";
 import type { z } from "zod";
 import {
 	Field,
@@ -9,25 +9,25 @@ import {
 	FormSheet,
 } from "@/components/form-sheet";
 import {
-	adminContactSchema,
+	ownerContactSchema,
 	restaurantFieldsSchema,
 } from "@/server/routers/restaurants.schema";
 
-type AdminContact = z.infer<typeof adminContactSchema>;
+type OwnerContact = z.infer<typeof ownerContactSchema>;
 
 export type RestaurantFormValues = z.infer<typeof restaurantFieldsSchema> &
-	AdminContact;
+	OwnerContact;
 
 export type EditTarget = {
 	id: string;
 	values: RestaurantFormValues;
-	adminStatus: "invited" | "active" | "removed" | null;
+	ownerStatus: "invited" | "active" | "removed" | null;
 };
 
-const EMPTY_ADMIN: AdminContact = {
-	adminName: "",
-	adminEmail: "",
-	adminMobile: "",
+const EMPTY_OWNER: OwnerContact = {
+	ownerName: "",
+	ownerEmail: "",
+	ownerMobile: "",
 };
 
 const EMPTY_VALUES: RestaurantFormValues = {
@@ -38,12 +38,12 @@ const EMPTY_VALUES: RestaurantFormValues = {
 	state: "",
 	pincode: "",
 	serviceChargePercent: null,
-	...EMPTY_ADMIN,
+	...EMPTY_OWNER,
 };
 
 type FieldErrors = Partial<Record<keyof RestaurantFormValues, string>>;
 
-const formSchema = restaurantFieldsSchema.merge(adminContactSchema);
+const formSchema = restaurantFieldsSchema.merge(ownerContactSchema);
 
 export function RestaurantFormSheet({
 	editTarget,
@@ -57,16 +57,7 @@ export function RestaurantFormSheet({
 	editTarget: EditTarget | null;
 	onClose: () => void;
 	onCreate: (values: RestaurantFormValues) => void;
-	/**
-	 * `reassignTo` is set only when the admin section is mid-reassignment —
-	 * the caller is responsible for running both writes (update, then
-	 * reassign) as one unit and only closing/toasting once both succeed.
-	 */
-	onUpdate: (
-		id: string,
-		values: RestaurantFormValues,
-		reassignTo?: AdminContact,
-	) => void;
+	onUpdate: (id: string, values: RestaurantFormValues) => void;
 	isSubmitting: boolean;
 	submitError: string | null;
 }) {
@@ -75,16 +66,6 @@ export function RestaurantFormSheet({
 		editTarget?.values ?? EMPTY_VALUES,
 	);
 	const [errors, setErrors] = useState<FieldErrors>({});
-	const [isReassigning, setIsReassigning] = useState(false);
-	const originalAdmin = useRef<AdminContact>(
-		editTarget
-			? {
-					adminName: editTarget.values.adminName,
-					adminEmail: editTarget.values.adminEmail,
-					adminMobile: editTarget.values.adminMobile,
-				}
-			: EMPTY_ADMIN,
-	);
 
 	function setField<K extends keyof RestaurantFormValues>(
 		key: K,
@@ -111,21 +92,6 @@ export function RestaurantFormSheet({
 		});
 	}
 
-	function startReassign() {
-		originalAdmin.current = {
-			adminName: values.adminName,
-			adminEmail: values.adminEmail,
-			adminMobile: values.adminMobile,
-		};
-		setValues((current) => ({ ...current, ...EMPTY_ADMIN }));
-		setIsReassigning(true);
-	}
-
-	function cancelReassign() {
-		setValues((current) => ({ ...current, ...originalAdmin.current }));
-		setIsReassigning(false);
-	}
-
 	function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 
@@ -147,24 +113,13 @@ export function RestaurantFormSheet({
 			return;
 		}
 
-		if (isReassigning) {
-			onUpdate(
-				editTarget.id,
-				{ ...result.data, ...originalAdmin.current },
-				{
-					adminName: result.data.adminName,
-					adminEmail: result.data.adminEmail,
-					adminMobile: result.data.adminMobile,
-				},
-			);
-			return;
-		}
-
 		onUpdate(editTarget.id, result.data);
 	}
 
-	const emailLocked =
-		isEdit && !isReassigning && editTarget.adminStatus === "active";
+	// Once the primary owner has signed in once, their details are only
+	// changeable via Staff Roster (reassign primary owner) — this sheet
+	// doesn't show them at all past that point.
+	const ownerLocked = isEdit && editTarget.ownerStatus === "active";
 
 	return (
 		<FormSheet
@@ -271,64 +226,36 @@ export function RestaurantFormSheet({
 					</Field>
 				</FieldGroup>
 
-				<FieldGroup
-					legend={isReassigning ? "New Primary Admin" : "Primary Admin"}
-				>
-					{isReassigning ? (
-						<p className="px-5 py-4 text-secondary text-sm">
-							{originalAdmin.current.adminName} stays an owner with full access,
-							just no longer primary.
-						</p>
-					) : null}
-
-					<Field label="Admin name" error={errors.adminName}>
-						<input
-							value={values.adminName}
-							onChange={(e) => setField("adminName", e.target.value)}
-							onBlur={() => validateField("adminName")}
-							placeholder="Full name of representative"
-						/>
-					</Field>
-					<Field
-						label="Admin email"
-						error={errors.adminEmail}
-						hint={
-							emailLocked
-								? "Login email — use Reassign to change the primary admin."
-								: undefined
-						}
-					>
-						<input
-							type="email"
-							value={values.adminEmail}
-							onChange={(e) => setField("adminEmail", e.target.value)}
-							onBlur={() => validateField("adminEmail")}
-							placeholder="official@email.com"
-							disabled={emailLocked}
-						/>
-					</Field>
-					<Field label="Admin mobile" error={errors.adminMobile}>
-						<input
-							type="tel"
-							value={values.adminMobile}
-							onChange={(e) => setField("adminMobile", e.target.value)}
-							onBlur={() => validateField("adminMobile")}
-							placeholder="+X XX XXXX XXXX"
-						/>
-					</Field>
-
-					{isEdit && editTarget.adminStatus === "active" ? (
-						<div className="px-5 py-4">
-							<button
-								type="button"
-								onClick={isReassigning ? cancelReassign : startReassign}
-								className="text-accent-secondary text-caps hover:opacity-80"
-							>
-								{isReassigning ? "Cancel Reassign" : "Reassign Primary Admin"}
-							</button>
-						</div>
-					) : null}
-				</FieldGroup>
+				{ownerLocked ? null : (
+					<FieldGroup legend="Primary Owner">
+						<Field label="Owner name" error={errors.ownerName}>
+							<input
+								value={values.ownerName}
+								onChange={(e) => setField("ownerName", e.target.value)}
+								onBlur={() => validateField("ownerName")}
+								placeholder="Full name of representative"
+							/>
+						</Field>
+						<Field label="Owner email" error={errors.ownerEmail}>
+							<input
+								type="email"
+								value={values.ownerEmail}
+								onChange={(e) => setField("ownerEmail", e.target.value)}
+								onBlur={() => validateField("ownerEmail")}
+								placeholder="official@email.com"
+							/>
+						</Field>
+						<Field label="Owner mobile" error={errors.ownerMobile}>
+							<input
+								type="tel"
+								value={values.ownerMobile}
+								onChange={(e) => setField("ownerMobile", e.target.value)}
+								onBlur={() => validateField("ownerMobile")}
+								placeholder="+X XX XXXX XXXX"
+							/>
+						</Field>
+					</FieldGroup>
+				)}
 			</form>
 		</FormSheet>
 	);

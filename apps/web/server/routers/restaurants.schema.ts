@@ -23,25 +23,21 @@ export const restaurantFieldsSchema = z.object({
 	serviceChargePercent: z.number().min(0).max(100).nullable(),
 });
 
-export const adminContactSchema = z.object({
-	adminName: z.string().trim().min(2).max(80),
-	adminEmail: z.string().trim().toLowerCase().email(),
-	adminMobile: z
+export const ownerContactSchema = z.object({
+	ownerName: z.string().trim().min(2).max(80),
+	ownerEmail: z.string().trim().toLowerCase().email(),
+	ownerMobile: z
 		.string()
 		.trim()
 		.regex(/^\+?\d{7,15}$/, "Enter a valid mobile number."),
 });
 
 export const createRestaurantInput =
-	restaurantFieldsSchema.merge(adminContactSchema);
+	restaurantFieldsSchema.merge(ownerContactSchema);
 
 export const updateRestaurantInput = restaurantFieldsSchema
-	.merge(adminContactSchema)
+	.merge(ownerContactSchema)
 	.extend({ id: z.string().uuid() });
-
-export const reassignPrimaryOwnerInput = adminContactSchema.extend({
-	restaurantId: z.string().uuid(),
-});
 
 export const setRestaurantStatusInput = z.object({
 	id: z.string().uuid(),
@@ -55,4 +51,4 @@ export const listRestaurantsInput = z.object({
 });
 
 export type RestaurantFields = z.infer<typeof restaurantFieldsSchema>;
-export type AdminContact = z.infer<typeof adminContactSchema>;
+export type OwnerContact = z.infer<typeof ownerContactSchema>;

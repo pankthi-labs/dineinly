@@ -67,10 +67,6 @@ export default function RestaurantsDirectoryPage() {
 		onError: notifyError,
 	});
 
-	const reassignMutation = trpc.restaurants.reassignPrimaryOwner.useMutation({
-		onError: notifyError,
-	});
-
 	const setStatusMutation = trpc.restaurants.setStatus.useMutation({
 		onSuccess: (data) => {
 			setPauseTarget(null);
@@ -110,7 +106,7 @@ export default function RestaurantsDirectoryPage() {
 		setSubmitError(null);
 		setEditTarget({
 			id: item.id,
-			adminStatus: item.admin?.status ?? null,
+			ownerStatus: item.owner?.status ?? null,
 			values: {
 				name: item.name,
 				address: item.address,
@@ -119,38 +115,26 @@ export default function RestaurantsDirectoryPage() {
 				state: item.state,
 				pincode: item.pincode,
 				serviceChargePercent: item.serviceChargePercent,
-				adminName: item.admin?.name ?? "",
-				adminEmail: item.admin?.email ?? "",
-				adminMobile: item.admin?.mobile ?? "",
+				ownerName: item.owner?.name ?? "",
+				ownerEmail: item.owner?.email ?? "",
+				ownerMobile: item.owner?.mobile ?? "",
 			},
 		});
 		setSheetMode("edit");
 	}
 
-	async function handleUpdateSubmit(
-		id: string,
-		values: RestaurantFormValues,
-		reassignTo?: { adminName: string; adminEmail: string; adminMobile: string },
-	) {
+	async function handleUpdateSubmit(id: string, values: RestaurantFormValues) {
 		setSubmitError(null);
 		try {
 			await updateMutation.mutateAsync({ id, ...values });
-			if (reassignTo) {
-				await reassignMutation.mutateAsync({ restaurantId: id, ...reassignTo });
-			}
 			setSheetMode("closed");
-			invalidateAndNotify(
-				reassignTo ? "Primary admin reassigned." : "Restaurant updated.",
-			);
+			invalidateAndNotify("Restaurant updated.");
 		} catch {
 			// submitError already set by the failing mutation's onError above.
 		}
 	}
 
-	const isSubmitting =
-		createMutation.isPending ||
-		updateMutation.isPending ||
-		reassignMutation.isPending;
+	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
 	const items = listQuery.data?.items ?? [];
 	const total = listQuery.data?.total ?? 0;

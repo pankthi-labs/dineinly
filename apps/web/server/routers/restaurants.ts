@@ -3,7 +3,6 @@ import { adminProcedure, router } from "../trpc/init";
 import {
 	createRestaurantInput,
 	listRestaurantsInput,
-	reassignPrimaryOwnerInput,
 	setRestaurantStatusInput,
 	updateRestaurantInput,
 } from "./restaurants.schema";
@@ -77,7 +76,7 @@ export const restaurantsRouter = router({
 							row.service_charge_rate,
 						),
 						status: row.status,
-						admin: primaryOwner
+						owner: primaryOwner
 							? {
 									staffId: primaryOwner.id,
 									name: primaryOwner.name,
@@ -109,9 +108,9 @@ export const restaurantsRouter = router({
 				p_service_charge_rate: toServiceChargeRate(
 					input.serviceChargePercent,
 				) as number,
-				p_admin_name: input.adminName,
-				p_admin_email: input.adminEmail,
-				p_admin_mobile: input.adminMobile,
+				p_owner_name: input.ownerName,
+				p_owner_email: input.ownerEmail,
+				p_owner_mobile: input.ownerMobile,
 			});
 
 			if (error) {
@@ -129,8 +128,8 @@ export const restaurantsRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			// Atomic — see admin_update_restaurant (supabase/migrations/
 			// 20260803044818_admin_update_restaurant_rpc.sql) for the
-			// restaurant+staff write and the "email locked once active" check,
-			// same pattern as create/reassignPrimaryOwner below.
+			// restaurant+staff write and the "primary owner locked once active"
+			// rule, same pattern as create above.
 			const { data, error } = await ctx.auth.rpc("admin_update_restaurant", {
 				p_id: input.id,
 				p_name: input.name,
@@ -142,9 +141,9 @@ export const restaurantsRouter = router({
 				p_service_charge_rate: toServiceChargeRate(
 					input.serviceChargePercent,
 				) as number,
-				p_admin_name: input.adminName,
-				p_admin_email: input.adminEmail,
-				p_admin_mobile: input.adminMobile,
+				p_owner_name: input.ownerName,
+				p_owner_email: input.ownerEmail,
+				p_owner_mobile: input.ownerMobile,
 			});
 
 			if (error) {
@@ -155,29 +154,6 @@ export const restaurantsRouter = router({
 			}
 
 			return { id: data };
-		}),
-
-	reassignPrimaryOwner: adminProcedure
-		.input(reassignPrimaryOwnerInput)
-		.mutation(async ({ ctx, input }) => {
-			const { data, error } = await ctx.auth.rpc(
-				"admin_reassign_primary_owner",
-				{
-					p_restaurant_id: input.restaurantId,
-					p_admin_name: input.adminName,
-					p_admin_email: input.adminEmail,
-					p_admin_mobile: input.adminMobile,
-				},
-			);
-
-			if (error) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: error.message,
-				});
-			}
-
-			return { staffId: data };
 		}),
 
 	setStatus: adminProcedure

@@ -23,17 +23,16 @@ export function RestaurantRow({
 }) {
 	const regionId = useId();
 	const isLive = restaurant.status === "active";
+	const dimClass = isLive ? "" : "opacity-60";
 
 	return (
-		<div
-			className={`rounded-xl border border-divider bg-surface transition-colors duration-(--duration-base) ease-out ${isLive ? "" : "opacity-60"}`}
-		>
+		<div className="rounded-xl border border-divider bg-surface transition-colors duration-(--duration-base) ease-out">
 			<button
 				type="button"
 				onClick={onToggle}
 				aria-expanded={isExpanded}
 				aria-controls={regionId}
-				className="flex w-full items-start justify-between gap-4 p-6 text-left"
+				className={`flex w-full items-start justify-between gap-4 p-6 text-left ${dimClass}`}
 			>
 				<div className="flex flex-col gap-1">
 					<span
@@ -57,7 +56,9 @@ export function RestaurantRow({
 					id={regionId}
 					className="border-divider border-t px-6 pt-6 pb-6"
 				>
-					<dl className="grid grid-cols-1 gap-6 border-divider border-b pb-6 sm:grid-cols-2 lg:grid-cols-3">
+					<dl
+						className={`grid grid-cols-1 gap-6 border-divider border-b pb-6 sm:grid-cols-2 lg:grid-cols-3 ${dimClass}`}
+					>
 						<Detail
 							label="Address"
 							value={`${restaurant.address}, ${restaurant.city}, ${restaurant.state}`}
@@ -73,16 +74,16 @@ export function RestaurantRow({
 							}
 						/>
 						<Detail
-							label="Admin Name"
-							value={restaurant.admin?.name ?? "Not assigned"}
+							label="Owner Name"
+							value={restaurant.owner?.name ?? "Not assigned"}
 						/>
 						<Detail
-							label="Admin Email"
-							value={restaurant.admin?.email ?? "—"}
+							label="Owner Email"
+							value={restaurant.owner?.email ?? "—"}
 						/>
 						<Detail
-							label="Admin Mobile"
-							value={restaurant.admin?.mobile ?? "—"}
+							label="Owner Mobile"
+							value={restaurant.owner?.mobile ?? "—"}
 						/>
 					</dl>
 

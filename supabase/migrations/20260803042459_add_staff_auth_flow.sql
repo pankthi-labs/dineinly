@@ -50,8 +50,12 @@ as $$
 $$;
 
 revoke execute on function public.resolve_staff_signin(text) from public;
--- Called before sign-in, with no session yet — anon, not authenticated.
-grant execute on function public.resolve_staff_signin(text) to anon;
+-- Called from /sign-in before signInWithOtp — usually anon (no session yet),
+-- but a still-valid leftover session cookie makes the same request arrive
+-- as `authenticated` (e.g. a signed-in user reloading /sign-in, or a token
+-- that hasn't expired despite the app treating the user as logged out).
+-- Grant both; the check itself doesn't depend on the caller's identity.
+grant execute on function public.resolve_staff_signin(text) to anon, authenticated;
 
 create or replace function public.link_staff_account()
 returns table (restaurant_id uuid, staff_id uuid, name text, role public.staff_role)
