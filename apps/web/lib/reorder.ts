@@ -12,15 +12,19 @@ export function moveId(ids: string[], id: string, direction: "up" | "down") {
 	return next;
 }
 
-/** Move `id` to sit immediately before `targetId`. No-op if either is missing. */
-export function moveIdBefore(ids: string[], id: string, targetId: string) {
+/** Move `id` to the position `targetId` currently occupies. No-op if either
+ * is missing. Symmetric in both directions — unlike inserting strictly
+ * "before" the target, which is a no-op when `id` is already the target's
+ * immediate predecessor (removing `id` slides the target into the exact
+ * slot just vacated). */
+export function moveIdTo(ids: string[], id: string, targetId: string) {
 	if (id === targetId) return ids;
 	const from = ids.indexOf(id);
-	if (from === -1) return ids;
+	const to = ids.indexOf(targetId);
+	if (from === -1 || to === -1) return ids;
 	const next = [...ids];
-	next.splice(from, 1);
-	const to = next.indexOf(targetId);
-	if (to === -1) return ids;
-	next.splice(to, 0, id);
+	const [moved] = next.splice(from, 1);
+	if (moved === undefined) return ids;
+	next.splice(to, 0, moved);
 	return next;
 }

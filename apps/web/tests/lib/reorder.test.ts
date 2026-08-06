@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveId, moveIdBefore } from "@/lib/reorder";
+import { moveId, moveIdTo } from "@/lib/reorder";
 
 describe("moveId", () => {
 	it("swaps with the previous item when moving up", () => {
@@ -19,20 +19,24 @@ describe("moveId", () => {
 	});
 });
 
-describe("moveIdBefore", () => {
+describe("moveIdTo", () => {
 	it("moves an id earlier in the list", () => {
-		expect(moveIdBefore(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
+		expect(moveIdTo(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
 	});
 
 	it("moves an id later in the list", () => {
-		expect(moveIdBefore(["a", "b", "c"], "a", "c")).toEqual(["b", "a", "c"]);
+		expect(moveIdTo(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
+	});
+
+	it("moves an id down onto its immediate neighbor", () => {
+		expect(moveIdTo(["a", "b"], "a", "b")).toEqual(["b", "a"]);
 	});
 
 	it("is a no-op when dragged onto itself", () => {
-		expect(moveIdBefore(["a", "b", "c"], "b", "b")).toEqual(["a", "b", "c"]);
+		expect(moveIdTo(["a", "b", "c"], "b", "b")).toEqual(["a", "b", "c"]);
 	});
 
 	it("is a no-op for an id not in the list", () => {
-		expect(moveIdBefore(["a", "b", "c"], "z", "a")).toEqual(["a", "b", "c"]);
+		expect(moveIdTo(["a", "b", "c"], "z", "a")).toEqual(["a", "b", "c"]);
 	});
 });

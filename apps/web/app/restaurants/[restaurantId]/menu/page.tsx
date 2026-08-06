@@ -20,7 +20,7 @@ import {
 	SERVING_SIZE_LABELS,
 	type SERVING_SIZE_OPTIONS,
 } from "@/lib/menu-options";
-import { moveId, moveIdBefore } from "@/lib/reorder";
+import { moveId, moveIdTo } from "@/lib/reorder";
 import { trpc } from "@/lib/trpc-client";
 
 import { AddCategoryPanel } from "./add-category-panel";
@@ -114,10 +114,10 @@ export default function RestaurantMenuPage() {
 		reorderTo(moveId(ids, categoryId, direction));
 	}
 
-	function moveCategoryBeforeDrop(categoryId: string, targetId: string) {
+	function moveCategoryOnDrop(categoryId: string, targetId: string) {
 		if (!menu.data) return;
 		const ids = menu.data.categories.map((category) => category.id);
-		reorderTo(moveIdBefore(ids, categoryId, targetId));
+		reorderTo(moveIdTo(ids, categoryId, targetId));
 	}
 
 	if (menu.isPending) {
@@ -229,7 +229,7 @@ export default function RestaurantMenuPage() {
 									onDrop={(event) => {
 										event.preventDefault();
 										if (draggedCategoryId) {
-											moveCategoryBeforeDrop(draggedCategoryId, category.id);
+											moveCategoryOnDrop(draggedCategoryId, category.id);
 											setDraggedCategoryId(null);
 										}
 									}}
