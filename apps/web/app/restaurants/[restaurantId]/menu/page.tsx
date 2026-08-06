@@ -12,8 +12,6 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
-import { PoweredByDineinly } from "@/components/brand-logo";
 import { titleCase } from "@/lib/format";
 import {
 	type PREP_TIME_OPTIONS,
@@ -22,7 +20,10 @@ import {
 } from "@/lib/menu-options";
 import { moveId, moveIdTo } from "@/lib/reorder";
 import { trpc } from "@/lib/trpc-client";
-
+import {
+	RestaurantBreadcrumb,
+	RestaurantNavHeader,
+} from "../restaurant-nav-header";
 import { AddCategoryPanel } from "./add-category-panel";
 import { AddDishPanel } from "./add-dish-panel";
 import { AddLabelPanel } from "./add-label-panel";
@@ -44,15 +45,6 @@ type MenuItem = {
 	offers_salt: boolean;
 	offers_ice: boolean;
 };
-
-const navigation = [
-	"Overview",
-	"Menu Desk",
-	"Table Matrix",
-	"Staff Roster",
-	"Venue Settings",
-	"Bills",
-];
 
 export default function RestaurantMenuPage() {
 	const { restaurantId } = useParams<{ restaurantId: string }>();
@@ -136,38 +128,14 @@ export default function RestaurantMenuPage() {
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
-			<header className="border-divider border-b bg-surface">
-				<div className="flex flex-col gap-6 px-4 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-16 xl:px-24">
-					<div>
-						<p className="text-2xl text-primary">{menu.data.restaurant.name}</p>
-						<PoweredByDineinly className="mt-1.5" />
-					</div>
-					<div className="flex items-center gap-6 overflow-x-auto lg:gap-8">
-						<nav aria-label="Restaurant navigation">
-							<ul className="flex min-w-max items-center gap-6 text-sm lg:gap-8">
-								{navigation.map((item) => (
-									<li key={item}>
-										<span
-											aria-current={item === "Menu Desk" ? "page" : undefined}
-											className={
-												item === "Menu Desk"
-													? "border-accent border-b-2 pb-2 font-medium text-primary"
-													: "text-muted"
-											}
-										>
-											{item}
-										</span>
-									</li>
-								))}
-							</ul>
-						</nav>
-						<AdminHeaderActions />
-					</div>
-				</div>
-			</header>
+			<RestaurantNavHeader
+				restaurantName={menu.data.restaurant.name}
+				active="Menu Desk"
+			/>
 
-			<main className="px-4 py-10 lg:px-16 lg:py-16 xl:px-24">
-				<div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
+				<RestaurantBreadcrumb />
+				<div className="mt-4 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
 					<div>
 						<h1 className="text-3xl text-primary lg:text-4xl">Menu Desk</h1>
 						<p className="prose mt-3 text-base text-secondary">
@@ -216,7 +184,7 @@ export default function RestaurantMenuPage() {
 				{categories.length === 0 ? (
 					<EmptyMenu />
 				) : (
-					<div className="mt-16 flex flex-col gap-12">
+					<div className="mt-12 flex flex-col gap-12">
 						{categories.map((category, index) => {
 							const isCollapsed = collapsedCategoryIds.has(category.id);
 							return (
@@ -564,7 +532,7 @@ function MenuUnavailable() {
 }
 function EmptyMenu() {
 	return (
-		<section className="mt-16 rounded-xl border border-divider bg-surface p-6">
+		<section className="mt-12 rounded-xl border border-divider bg-surface p-6">
 			<p className="text-caps text-muted">No categories yet</p>
 			<p className="prose mt-3 text-secondary">
 				Create a category, then add the restaurant’s first dish.

@@ -81,6 +81,14 @@ Reuse rules:
 - **New guest-facing page** (menu, cart, orders, bill): put it under `app/guest/`. No id in the URL — restaurant/session identity lives entirely in the guest JWT cookie, already read via `server/trpc/context.ts`, not via a route param (`docs/product.md`: "a QR code is access-only, never business state" — the same principle applies to every guest URL downstream of it). A `guest/layout.tsx` may exist for shared UI chrome (e.g. a persistent tab bar across those pages) but must never redirect on a missing/invalid guest cookie — that's not an error state, it's just "no data," already handled by RLS. Guests never sign in, so there is nowhere to redirect them to.
 - **Guest can never be folded into the `restaurants/[restaurantId]` tree**, even though it's tempting since both eventually render a menu: guest uses a structurally different credential (self-signed JWT vs. Supabase Auth session), and a Next.js layout can't be selectively bypassed by a child route — a guest page placed under `restaurants/[restaurantId]` would always run `requireRestaurantAccess` first and get redirected to `/sign-in`. If a restaurant-scoped page and a guest page render overlapping content (e.g. both list menu items), share the rendering **component**, not the **route**.
 
+### Restaurant Sub-Navigation & Admin Exit
+
+Every page under `app/restaurants/[restaurantId]/` renders `RestaurantNavHeader` (`restaurants/[restaurantId]/restaurant-nav-header.tsx`) for chrome and the tab strip, and — as the first element inside its own `<main>`, not inside the header — `RestaurantBreadcrumb` for the one Admin-only "← Restaurants Directory" exit link. Both are exported from that same file; `RestaurantBreadcrumb` renders `null` for non-admin viewers.
+
+`isAdmin` reaches these client components via `RestaurantViewerProvider` (`viewer-context.tsx`), a React Context populated in `restaurants/[restaurantId]/layout.tsx` from the `Viewer` already returned by `requireRestaurantAccess` — no extra fetch.
+
+The breadcrumb is a single hop back to the Directory, never a multi-level trail — switching between a restaurant's own sub-pages (Menu Desk, Staff Roster, etc.) is the nav header's tab strip's job, not the breadcrumb's. The Restaurant Directory (`app/admin/restaurants/restaurant-row.tsx`) links into a restaurant via an explicit "Open" action per row; it currently points at Menu Desk since the restaurant Overview/home page doesn't exist yet — repoint it there once that page is built.
+
 ## Authorization & Idempotency
 
 - RBAC (matrix in `product.md`) is enforced server-side on every mutation; client-side checks are UX-only.

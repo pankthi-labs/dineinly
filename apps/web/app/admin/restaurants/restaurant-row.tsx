@@ -2,6 +2,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import { ChevronDown } from "lucide-react";
+import Link from "next/link";
 import { useId } from "react";
 import type { AppRouter } from "@/server/routers/_app";
 
@@ -88,6 +89,12 @@ export function RestaurantRow({
 					</dl>
 
 					<div className="flex items-center gap-6 pt-6">
+						<Link
+							href={`/restaurants/${restaurant.id}/menu`}
+							className="text-accent text-caps no-underline hover:opacity-80"
+						>
+							Open
+						</Link>
 						<button
 							type="button"
 							onClick={onEdit}
