@@ -10,6 +10,7 @@ import {
 	useId,
 	useState,
 } from "react";
+import { titleCase } from "@/lib/format";
 import { useDismissableOverlay } from "./use-dismissable-overlay";
 
 const OPEN_MOTION = "duration-(--duration-deliberate) ease-emphasized";
@@ -158,69 +159,111 @@ export function FieldRow({
 	);
 }
 
-type SpiceValue = "mild" | "regular" | "extra spicy" | null;
-type SaltValue = "less salt" | "regular" | null;
-type IceValue = "none" | "less" | "regular" | null;
-
-/** The Spice/Salt/Ice row shared by AddDishPanel and EditDishPanel — every
- * dish has the same three optional preferences, each "Not offered" by
- * default. */
-export function PreferenceFields({
-	spice,
-	salt,
-	ice,
-	onSpiceChange,
-	onSaltChange,
-	onIceChange,
+/** One preference toggle: whether the guest gets to choose a value for this
+ * preference at order time. The value options themselves (mild/regular/extra
+ * spicy, etc.) are fixed per preference and never set here — only whether
+ * the preference applies to this dish at all. */
+function OfferedField({
+	label,
+	checked,
+	onChange,
 }: {
-	spice: SpiceValue;
-	salt: SaltValue;
-	ice: IceValue;
-	onSpiceChange: (value: SpiceValue) => void;
-	onSaltChange: (value: SaltValue) => void;
-	onIceChange: (value: IceValue) => void;
+	label: string;
+	checked: boolean;
+	onChange: (checked: boolean) => void;
 }) {
 	return (
-		<FieldRow columns={3}>
-			<Field label="Spice">
-				<select
-					value={spice ?? ""}
-					onChange={(event) =>
-						onSpiceChange((event.target.value || null) as SpiceValue)
-					}
-				>
-					<option value="">Not offered</option>
-					<option value="mild">mild</option>
-					<option value="regular">regular</option>
-					<option value="extra spicy">extra spicy</option>
-				</select>
-			</Field>
-			<Field label="Salt">
-				<select
-					value={salt ?? ""}
-					onChange={(event) =>
-						onSaltChange((event.target.value || null) as SaltValue)
-					}
-				>
-					<option value="">Not offered</option>
-					<option value="less salt">less salt</option>
-					<option value="regular">regular</option>
-				</select>
-			</Field>
-			<Field label="Ice">
-				<select
-					value={ice ?? ""}
-					onChange={(event) =>
-						onIceChange((event.target.value || null) as IceValue)
-					}
-				>
-					<option value="">Not offered</option>
-					<option value="none">none</option>
-					<option value="less">less</option>
-					<option value="regular">regular</option>
-				</select>
-			</Field>
-		</FieldRow>
+		<label className="flex items-center gap-2 text-base text-primary">
+			<input
+				type="checkbox"
+				checked={checked}
+				onChange={(event) => onChange(event.target.checked)}
+				className="accent-current"
+			/>
+			{label}
+		</label>
+	);
+}
+
+/** The Spice/Salt/Ice row shared by AddDishPanel and EditDishPanel — each is
+ * a plain on/off toggle for whether the dish offers that preference; the
+ * guest picks the actual value (mild/regular/extra spicy, etc.) at order
+ * time, not here. */
+export function PreferenceFields({
+	offersSpice,
+	offersSalt,
+	offersIce,
+	onOffersSpiceChange,
+	onOffersSaltChange,
+	onOffersIceChange,
+}: {
+	offersSpice: boolean;
+	offersSalt: boolean;
+	offersIce: boolean;
+	onOffersSpiceChange: (value: boolean) => void;
+	onOffersSaltChange: (value: boolean) => void;
+	onOffersIceChange: (value: boolean) => void;
+}) {
+	return (
+		<div className="px-5 py-4">
+			<p className="text-secondary text-sm">Guest preferences</p>
+			<div className="mt-2 flex flex-wrap gap-6 pb-2">
+				<OfferedField
+					label="Spice level"
+					checked={offersSpice}
+					onChange={onOffersSpiceChange}
+				/>
+				<OfferedField
+					label="Salt level"
+					checked={offersSalt}
+					onChange={onOffersSaltChange}
+				/>
+				<OfferedField
+					label="Ice level"
+					checked={offersIce}
+					onChange={onOffersIceChange}
+				/>
+			</div>
+		</div>
+	);
+}
+
+/** The bounded, restaurant-managed label set (see menu_labels) — a dish
+ * carries at most one, so a single select rather than a multi-pick control.
+ * New labels are added from the Menu Desk header, not here. */
+export function LabelFields({
+	labels,
+	selected,
+	onChange,
+}: {
+	labels: { id: string; name: string }[];
+	selected: string[];
+	onChange: (labels: string[]) => void;
+}) {
+	if (labels.length === 0) {
+		return (
+			<p className="px-5 py-4 text-muted text-sm">
+				No labels yet — add one from the Menu Desk header.
+			</p>
+		);
+	}
+
+	return (
+		<Field label="Label">
+			<select
+				value={selected[0] ?? ""}
+				onChange={(event) =>
+					onChange(event.target.value ? [event.target.value] : [])
+				}
+			>
+				<option value="">No label</option>
+				{labels.map((label) => (
+					<option key={label.id} value={label.name}>
+						{titleCase(label.name)}
+					</option>
+				))}
+			</select>
+		</Field>
 	);
 }
 

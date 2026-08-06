@@ -45,6 +45,24 @@ export const spice = pgEnum("spice", ["mild", "regular", "extra spicy"]);
 export const salt = pgEnum("salt", ["less salt", "regular"]);
 export const ice = pgEnum("ice", ["none", "less", "regular"]);
 
+// Display-only (docs/product.md) — never used for timing/calculation, so a
+// bucketed range is as precise as it needs to be.
+export const menuItemPrepTime = pgEnum("menu_item_prep_time", [
+	"5-10 mins",
+	"10-15 mins",
+	"15-20 mins",
+	"20-30 mins",
+	"30-45 mins",
+]);
+export const menuItemServingSize = pgEnum("menu_item_serving_size", [
+	"serves 1",
+	"serves 1-2",
+	"serves 2",
+	"serves 2-3",
+	"serves 4-5",
+	"serves 5+",
+]);
+
 export const orderItemStatus = pgEnum("order_item_status", [
 	"placed",
 	"preparing",

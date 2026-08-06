@@ -7,8 +7,15 @@ import {
 	FieldGroup,
 	FieldRow,
 	FormSheet,
+	LabelFields,
 	PreferenceFields,
 } from "@/components/form-sheet";
+import { titleCase } from "@/lib/format";
+import {
+	PREP_TIME_OPTIONS,
+	SERVING_SIZE_LABELS,
+	SERVING_SIZE_OPTIONS,
+} from "@/lib/menu-options";
 import { trpc } from "@/lib/trpc-client";
 
 type EditableMenuItem = {
@@ -17,14 +24,14 @@ type EditableMenuItem = {
 	name: string;
 	description: string;
 	price: number;
-	prep_time: number;
-	serving_size: string;
+	prep_time: (typeof PREP_TIME_OPTIONS)[number];
+	serving_size: (typeof SERVING_SIZE_OPTIONS)[number];
 	diet: "veg" | "non_veg";
 	availability: "available" | "sold_out";
 	labels: string[];
-	spice: "mild" | "regular" | "extra spicy" | null;
-	salt: "less salt" | "regular" | null;
-	ice: "none" | "less" | "regular" | null;
+	offers_spice: boolean;
+	offers_salt: boolean;
+	offers_ice: boolean;
 	status: "active" | "archived";
 };
 
@@ -33,20 +40,21 @@ type MenuCategory = {
 	name: string;
 	status: "active" | "archived";
 };
+type MenuLabel = { id: string; name: string };
 
 type FormState = {
 	categoryId: string;
 	name: string;
 	description: string;
 	price: string;
-	prepTime: string;
-	servingSize: string;
+	prepTime: EditableMenuItem["prep_time"];
+	servingSize: EditableMenuItem["serving_size"];
 	diet: EditableMenuItem["diet"];
 	availability: EditableMenuItem["availability"];
-	labels: string;
-	spice: EditableMenuItem["spice"];
-	salt: EditableMenuItem["salt"];
-	ice: EditableMenuItem["ice"];
+	labels: string[];
+	offersSpice: EditableMenuItem["offers_spice"];
+	offersSalt: EditableMenuItem["offers_salt"];
+	offersIce: EditableMenuItem["offers_ice"];
 	status: EditableMenuItem["status"];
 };
 
@@ -56,14 +64,14 @@ function toFormState(item: EditableMenuItem): FormState {
 		name: item.name,
 		description: item.description,
 		price: String(item.price),
-		prepTime: String(item.prep_time),
+		prepTime: item.prep_time,
 		servingSize: item.serving_size,
 		diet: item.diet,
 		availability: item.availability,
-		labels: item.labels.join(", "),
-		spice: item.spice,
-		salt: item.salt,
-		ice: item.ice,
+		labels: item.labels,
+		offersSpice: item.offers_spice,
+		offersSalt: item.offers_salt,
+		offersIce: item.offers_ice,
 		status: item.status,
 	};
 }
@@ -72,11 +80,13 @@ export function EditDishPanel({
 	restaurantId,
 	item,
 	categories,
+	labels,
 	onClose,
 }: {
 	restaurantId: string;
 	item: EditableMenuItem;
 	categories: MenuCategory[];
+	labels: MenuLabel[];
 	onClose: () => void;
 }) {
 	const [form, setForm] = useState<FormState>(() => toFormState(item));
@@ -125,13 +135,8 @@ export function EditDishPanel({
 		event.preventDefault();
 		setFormError(null);
 		const price = Number(form.price);
-		const prepTime = Number(form.prepTime);
 		if (!Number.isFinite(price) || price < 0) {
 			setFormError("Enter a valid non-negative price.");
-			return;
-		}
-		if (!Number.isInteger(prepTime) || prepTime <= 0) {
-			setFormError("Preparation time must be a whole number of minutes.");
 			return;
 		}
 
@@ -142,18 +147,15 @@ export function EditDishPanel({
 			name: form.name,
 			description: form.description,
 			price,
-			prepTime,
+			prepTime: form.prepTime,
 			servingSize: form.servingSize,
 			diet: form.diet,
 			availability: form.availability,
 			status: form.status,
-			labels: form.labels
-				.split(",")
-				.map((label) => label.trim())
-				.filter(Boolean),
-			spice: form.spice,
-			salt: form.salt,
-			ice: form.ice,
+			labels: form.labels,
+			offersSpice: form.offersSpice,
+			offersSalt: form.offersSalt,
+			offersIce: form.offersIce,
 		});
 	}
 
@@ -188,7 +190,7 @@ export function EditDishPanel({
 						>
 							{categories.map((category) => (
 								<option key={category.id} value={category.id}>
-									{category.name}
+									{titleCase(category.name)}
 									{category.status === "archived" ? " (Hidden)" : ""}
 								</option>
 							))}
@@ -252,45 +254,55 @@ export function EditDishPanel({
 								<option value="non_veg">Non-vegetarian</option>
 							</select>
 						</Field>
-						<Field label="Preparation time (minutes)" required>
-							<input
-								required
-								type="number"
-								min="1"
-								step="1"
+						<Field label="Preparation time" required>
+							<select
 								value={form.prepTime}
-								onChange={(event) => updateForm("prepTime", event.target.value)}
-							/>
+								onChange={(event) =>
+									updateForm(
+										"prepTime",
+										event.target.value as FormState["prepTime"],
+									)
+								}
+							>
+								{PREP_TIME_OPTIONS.map((option) => (
+									<option key={option} value={option}>
+										{titleCase(option)}
+									</option>
+								))}
+							</select>
 						</Field>
 					</FieldRow>
 
 					<Field label="Serving size" required>
-						<input
-							required
+						<select
 							value={form.servingSize}
 							onChange={(event) =>
-								updateForm("servingSize", event.target.value)
+								updateForm(
+									"servingSize",
+									event.target.value as FormState["servingSize"],
+								)
 							}
-						/>
+						>
+							{SERVING_SIZE_OPTIONS.map((option) => (
+								<option key={option} value={option}>
+									{SERVING_SIZE_LABELS[option]}
+								</option>
+							))}
+						</select>
 					</Field>
 
-					<Field label="Labels" hint="Separate labels with commas.">
-						<input
-							value={form.labels}
-							onChange={(event) => updateForm("labels", event.target.value)}
-							placeholder="Chef recommended, Seasonal"
-						/>
-					</Field>
-				</FieldGroup>
-
-				<FieldGroup legend="Preferences">
+					<LabelFields
+						labels={labels}
+						selected={form.labels}
+						onChange={(value) => updateForm("labels", value)}
+					/>
 					<PreferenceFields
-						spice={form.spice}
-						salt={form.salt}
-						ice={form.ice}
-						onSpiceChange={(value) => updateForm("spice", value)}
-						onSaltChange={(value) => updateForm("salt", value)}
-						onIceChange={(value) => updateForm("ice", value)}
+						offersSpice={form.offersSpice}
+						offersSalt={form.offersSalt}
+						offersIce={form.offersIce}
+						onOffersSpiceChange={(value) => updateForm("offersSpice", value)}
+						onOffersSaltChange={(value) => updateForm("offersSalt", value)}
+						onOffersIceChange={(value) => updateForm("offersIce", value)}
 					/>
 				</FieldGroup>
 

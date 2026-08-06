@@ -3,6 +3,7 @@ export * from "./cart-item.js";
 export * from "./enums.js";
 export * from "./menu-category.js";
 export * from "./menu-item.js";
+export * from "./menu-label.js";
 export * from "./order.js";
 export * from "./order-item.js";
 export * from "./relations.js";

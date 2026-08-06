@@ -271,7 +271,8 @@ Use Dineinly domain terms only. Nothing may imply reservation or payment functio
 
 Deviations require explicit written sign-off — never implement speculatively.
 
-- **Dark-only** in the MVP; no light mode. Wordmark ships as one asset, `apps/web/public/brand/dineinly-logo-dark.svg` — no light-mode variant to maintain.
+- **Dark-only** in the MVP; no light mode. Wordmark ships as one asset, `apps/web/public/brand/dineinly-logo-dark-v2.svg` — no light-mode variant to maintain.
+- **"Powered by Dineinly" lockup** (`PoweredByDineinly` in `apps/web/components/brand-logo.tsx`) — the only sanctioned pairing of the wordmark with adjacent text. `text-xs` (12px/w500/Inter, §02), `--color-muted`, `--space-1` gap (matches "Powered by"'s own word-space, so the text-to-logo gap reads even with the word gap), logo `height={12}`. Never rebuild this pairing inline at a call site — import the component.
 - **No component library** — semantic HTML/CSS with these tokens only.
 - **No values beyond this document.** The four accents are exhaustive — never a fifth. Breakpoints (§10), icons (§11), shadow (§12), and z-index (§13) define the only allowed values for those — never invent a value outside them.
 - Gold (`--color-accent-primary`) stays under 12% of any screen.

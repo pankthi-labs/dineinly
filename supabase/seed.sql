@@ -140,36 +140,45 @@ insert into menu_categories (id, restaurant_id, name, sort, tax_rate, status) va
 	('30000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'Beverages', 1, 0.1800, 'active')
 on conflict (id) do nothing;
 
--- 8 menu items — mixed diet, one sold_out, one archived, some with -------
--- spice/salt/ice set and some left null
+-- Restaurant-scoped label vocabulary — the bounded set menu items below pick
+-- labels from, and what the Menu Desk "Add label" flow manages.
+insert into menu_labels (id, restaurant_id, name) values
+	('35000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'chef special'),
+	('35000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'spicy'),
+	('35000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'bestseller')
+on conflict (id) do nothing;
+
+-- 8 menu items — mixed diet, one sold_out, one archived, some offering ----
+-- spice/salt/ice and some not
 insert into menu_items (
 	id, restaurant_id, category_id, name, description, price, prep_time,
-	serving_size, diet, availability, labels, spice, salt, ice, status
+	serving_size, diet, availability, labels, offers_spice, offers_salt,
+	offers_ice, status
 ) values
 	('40000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001',
-		'Paneer Butter Masala', 'Cottage cheese in a creamy tomato gravy.', 320.00, 20, '1 bowl (serves 2)',
-		'veg', 'available', array['chef special'], 'regular', null, null, 'active'),
+		'Paneer Butter Masala', 'Cottage cheese in a creamy tomato gravy.', 320.00, '15-20 mins', 'serves 2',
+		'veg', 'available', array['chef special'], true, false, false, 'active'),
 	('40000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001',
-		'Butter Chicken', 'Slow-cooked chicken in a rich buttery tomato gravy.', 380.00, 25, '1 bowl (serves 2)',
-		'non_veg', 'available', array[]::text[], 'mild', null, null, 'active'),
+		'Butter Chicken', 'Slow-cooked chicken in a rich buttery tomato gravy.', 380.00, '20-30 mins', 'serves 2',
+		'non_veg', 'available', array[]::text[], true, false, false, 'active'),
 	('40000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001',
-		'Veg Biryani', 'Layered basmati rice with mixed vegetables and spices.', 260.00, 30, '1 plate',
-		'veg', 'sold_out', array[]::text[], 'extra spicy', null, null, 'active'),
+		'Veg Biryani', 'Layered basmati rice with mixed vegetables and spices.', 260.00, '20-30 mins', 'serves 1',
+		'veg', 'sold_out', array[]::text[], true, false, false, 'active'),
 	('40000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001',
-		'Chicken 65', 'Deep-fried spiced chicken bites.', 300.00, 15, '1 plate (12 pcs)',
-		'non_veg', 'available', array['spicy'], null, null, null, 'active'),
+		'Chicken 65', 'Deep-fried spiced chicken bites.', 300.00, '10-15 mins', 'serves 2',
+		'non_veg', 'available', array['spicy'], false, false, false, 'active'),
 	('40000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001',
-		'Dal Fry (old recipe)', 'Discontinued — replaced by the new dal tadka.', 180.00, 15, '1 bowl',
-		'veg', 'available', array[]::text[], null, null, null, 'archived'),
+		'Dal Fry (old recipe)', 'Discontinued — replaced by the new dal tadka.', 180.00, '10-15 mins', 'serves 1',
+		'veg', 'available', array[]::text[], false, false, false, 'archived'),
 	('40000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002',
-		'Masala Chai', 'Spiced Indian tea with milk.', 60.00, 5, '1 cup',
-		'veg', 'available', array[]::text[], null, null, null, 'active'),
+		'Masala Chai', 'Spiced Indian tea with milk.', 60.00, '5-10 mins', 'serves 1',
+		'veg', 'available', array[]::text[], false, false, false, 'active'),
 	('40000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002',
-		'Lemon Soda', 'Fresh lime soda, sweet or salted.', 90.00, 5, '1 glass',
-		'veg', 'available', array[]::text[], null, 'less salt', 'regular', 'active'),
+		'Lemon Soda', 'Fresh lime soda, sweet or salted.', 90.00, '5-10 mins', 'serves 1',
+		'veg', 'available', array[]::text[], false, true, true, 'active'),
 	('40000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002',
-		'Cold Coffee', 'Blended iced coffee with milk.', 140.00, 8, '1 glass',
-		'veg', 'available', array['bestseller'], null, null, 'less', 'active')
+		'Cold Coffee', 'Blended iced coffee with milk.', 140.00, '5-10 mins', 'serves 1',
+		'veg', 'available', array['bestseller'], false, false, true, 'active')
 on conflict (id) do nothing;
 
 -- 2 table sessions — one active, one closed -------------------------------

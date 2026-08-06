@@ -505,6 +505,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "sort": {
+          "name": "sort",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "price": {
           "name": "price",
           "type": "numeric(12, 2)",
@@ -513,13 +520,15 @@
         },
         "prep_time": {
           "name": "prep_time",
-          "type": "integer",
+          "type": "menu_item_prep_time",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
         "serving_size": {
           "name": "serving_size",
-          "type": "text",
+          "type": "menu_item_serving_size",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -545,26 +554,26 @@
           "notNull": true,
           "default": "'{}'"
         },
-        "spice": {
-          "name": "spice",
-          "type": "spice",
-          "typeSchema": "public",
+        "offers_spice": {
+          "name": "offers_spice",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": false
         },
-        "salt": {
-          "name": "salt",
-          "type": "salt",
-          "typeSchema": "public",
+        "offers_salt": {
+          "name": "offers_salt",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": false
         },
-        "ice": {
-          "name": "ice",
-          "type": "ice",
-          "typeSchema": "public",
+        "offers_ice": {
+          "name": "offers_ice",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": false
         },
         "status": {
           "name": "status",
@@ -658,12 +667,63 @@
         "menu_items_price_check": {
           "name": "menu_items_price_check",
           "value": "\"menu_items\".\"price\" >= 0"
-        },
-        "menu_items_prep_time_check": {
-          "name": "menu_items_prep_time_check",
-          "value": "\"menu_items\".\"prep_time\" > 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.menu_labels": {
+      "name": "menu_labels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "menu_labels_restaurant_id_restaurants_id_fk": {
+          "name": "menu_labels_restaurant_id_restaurants_id_fk",
+          "tableFrom": "menu_labels",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "menu_labels_restaurant_id_name_key": {
+          "name": "menu_labels_restaurant_id_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "restaurant_id",
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.orders": {
@@ -1537,6 +1597,29 @@
       "values": [
         "active",
         "archived"
+      ]
+    },
+    "public.menu_item_prep_time": {
+      "name": "menu_item_prep_time",
+      "schema": "public",
+      "values": [
+        "5-10 mins",
+        "10-15 mins",
+        "15-20 mins",
+        "20-30 mins",
+        "30-45 mins"
+      ]
+    },
+    "public.menu_item_serving_size": {
+      "name": "menu_item_serving_size",
+      "schema": "public",
+      "values": [
+        "serves 1",
+        "serves 1-2",
+        "serves 2",
+        "serves 2-3",
+        "serves 4-5",
+        "serves 5+"
       ]
     },
     "public.menu_item_status": {

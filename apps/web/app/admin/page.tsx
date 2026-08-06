@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { Settings, UserCog, UtensilsCrossed } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 import { getViewer } from "@/lib/auth";
 import { AdminHeaderActions } from "./admin-header-actions";
 
@@ -40,13 +40,7 @@ export default async function AdminDashboardPage() {
 		<div className="mx-auto flex min-h-dvh max-w-7xl flex-col px-4 py-8 sm:px-6 md:px-8 md:py-12 lg:px-12 lg:py-16">
 			<header className="mb-10 flex flex-col gap-8 sm:mb-16 sm:gap-12">
 				<div className="flex flex-wrap items-center justify-between gap-4">
-					<Image
-						src="/brand/dineinly-logo-dark.svg"
-						alt="Dineinly"
-						width={140}
-						height={45}
-						priority
-					/>
+					<BrandLogo height={31} priority />
 
 					<AdminHeaderActions showProfile />
 				</div>

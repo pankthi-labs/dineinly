@@ -1,7 +1,7 @@
 <svg
-  width="260"
-  height="84"
-  viewBox="0 0 260 84"
+  width="252"
+  height="58"
+  viewBox="0 15 252 58"
   fill="none"
   xmlns="http://www.w3.org/2000/svg"
   role="img"
@@ -23,6 +23,13 @@
       radius 22.08   cy 38.08   capTop 16.00
       gap 5.00   textX 27.08   baselineY 60.16
       letter spacing -0.5
+
+    viewBox is cropped tight to the visible mark+wordmark (y 15–73, full
+    260-wide canvas trimmed to 252) — element coordinates below are
+    untouched, only the crop window changed. This makes the rendered
+    bounding box equal the visible glyphs, so flex/grid centering (e.g.
+    items-center against adjacent text) lines up on the actual artwork
+    instead of centering a box with asymmetric internal padding.
 
     The wordmark is baked as vector path outlines extracted directly from
     Outfit, weight 400 — not a live text element. This removes any

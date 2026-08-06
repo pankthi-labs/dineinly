@@ -4,6 +4,8 @@ CREATE TYPE "public"."bill_status" AS ENUM('open', 'requested', 'settled');--> s
 CREATE TYPE "public"."diet" AS ENUM('veg', 'non_veg');--> statement-breakpoint
 CREATE TYPE "public"."ice" AS ENUM('none', 'less', 'regular');--> statement-breakpoint
 CREATE TYPE "public"."menu_category_status" AS ENUM('active', 'archived');--> statement-breakpoint
+CREATE TYPE "public"."menu_item_prep_time" AS ENUM('5-10 mins', '10-15 mins', '15-20 mins', '20-30 mins', '30-45 mins');--> statement-breakpoint
+CREATE TYPE "public"."menu_item_serving_size" AS ENUM('serves 1', 'serves 1-2', 'serves 2', 'serves 2-3', 'serves 4-5', 'serves 5+');--> statement-breakpoint
 CREATE TYPE "public"."menu_item_status" AS ENUM('active', 'archived');--> statement-breakpoint
 CREATE TYPE "public"."order_item_status" AS ENUM('placed', 'preparing', 'ready', 'served', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."restaurant_status" AS ENUM('active', 'archived');--> statement-breakpoint
@@ -68,21 +70,28 @@ CREATE TABLE "menu_items" (
 	"category_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"description" text NOT NULL,
+	"sort" integer DEFAULT 0 NOT NULL,
 	"price" numeric(12, 2) NOT NULL,
-	"prep_time" integer NOT NULL,
-	"serving_size" text NOT NULL,
+	"prep_time" "menu_item_prep_time" NOT NULL,
+	"serving_size" "menu_item_serving_size" NOT NULL,
 	"diet" "diet" NOT NULL,
 	"availability" "availability" DEFAULT 'available' NOT NULL,
 	"labels" text[] DEFAULT '{}' NOT NULL,
-	"spice" "spice",
-	"salt" "salt",
-	"ice" "ice",
+	"offers_spice" boolean DEFAULT false NOT NULL,
+	"offers_salt" boolean DEFAULT false NOT NULL,
+	"offers_ice" boolean DEFAULT false NOT NULL,
 	"status" "menu_item_status" DEFAULT 'active' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "menu_items_restaurant_id_id_key" UNIQUE("restaurant_id","id"),
-	CONSTRAINT "menu_items_price_check" CHECK ("menu_items"."price" >= 0),
-	CONSTRAINT "menu_items_prep_time_check" CHECK ("menu_items"."prep_time" > 0)
+	CONSTRAINT "menu_items_price_check" CHECK ("menu_items"."price" >= 0)
+);
+--> statement-breakpoint
+CREATE TABLE "menu_labels" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"restaurant_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	CONSTRAINT "menu_labels_restaurant_id_name_key" UNIQUE("restaurant_id","name")
 );
 --> statement-breakpoint
 CREATE TABLE "orders" (
@@ -178,6 +187,7 @@ ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_added_by_staff
 ALTER TABLE "menu_categories" ADD CONSTRAINT "menu_categories_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_restaurant_id_category_id_fkey" FOREIGN KEY ("restaurant_id","category_id") REFERENCES "public"."menu_categories"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "menu_labels" ADD CONSTRAINT "menu_labels_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_placed_by_staff_id_fkey" FOREIGN KEY ("restaurant_id","placed_by_staff_id") REFERENCES "public"."staff"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint

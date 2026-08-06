@@ -1,7 +1,6 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
 	type ChangeEvent,
@@ -13,6 +12,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { BrandLogo } from "@/components/brand-logo";
 import { Field } from "@/components/form-sheet";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
@@ -142,13 +142,7 @@ export default function SignInPage() {
 
 	return (
 		<main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-16">
-			<Image
-				src="/brand/dineinly-logo-dark.svg"
-				alt="Dineinly"
-				width={180}
-				height={58}
-				priority
-			/>
+			<BrandLogo height={40} priority />
 
 			<div className="w-full max-w-sm rounded-xl border border-divider bg-surface p-6">
 				{step === "email" ? (

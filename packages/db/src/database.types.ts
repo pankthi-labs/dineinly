@@ -217,16 +217,17 @@ export type Database = {
 					created_at: string;
 					description: string;
 					diet: Database["public"]["Enums"]["diet"];
-					ice: Database["public"]["Enums"]["ice"] | null;
 					id: string;
 					labels: string[];
 					name: string;
-					prep_time: number;
+					offers_ice: boolean;
+					offers_salt: boolean;
+					offers_spice: boolean;
+					prep_time: Database["public"]["Enums"]["menu_item_prep_time"];
 					price: number;
 					restaurant_id: string;
-					salt: Database["public"]["Enums"]["salt"] | null;
-					serving_size: string;
-					spice: Database["public"]["Enums"]["spice"] | null;
+					serving_size: Database["public"]["Enums"]["menu_item_serving_size"];
+					sort: number;
 					status: Database["public"]["Enums"]["menu_item_status"];
 					updated_at: string;
 				};
@@ -236,16 +237,17 @@ export type Database = {
 					created_at?: string;
 					description: string;
 					diet: Database["public"]["Enums"]["diet"];
-					ice?: Database["public"]["Enums"]["ice"] | null;
 					id?: string;
 					labels?: string[];
 					name: string;
-					prep_time: number;
+					offers_ice?: boolean;
+					offers_salt?: boolean;
+					offers_spice?: boolean;
+					prep_time: Database["public"]["Enums"]["menu_item_prep_time"];
 					price: number;
 					restaurant_id: string;
-					salt?: Database["public"]["Enums"]["salt"] | null;
-					serving_size: string;
-					spice?: Database["public"]["Enums"]["spice"] | null;
+					serving_size: Database["public"]["Enums"]["menu_item_serving_size"];
+					sort?: number;
 					status?: Database["public"]["Enums"]["menu_item_status"];
 					updated_at?: string;
 				};
@@ -255,16 +257,17 @@ export type Database = {
 					created_at?: string;
 					description?: string;
 					diet?: Database["public"]["Enums"]["diet"];
-					ice?: Database["public"]["Enums"]["ice"] | null;
 					id?: string;
 					labels?: string[];
 					name?: string;
-					prep_time?: number;
+					offers_ice?: boolean;
+					offers_salt?: boolean;
+					offers_spice?: boolean;
+					prep_time?: Database["public"]["Enums"]["menu_item_prep_time"];
 					price?: number;
 					restaurant_id?: string;
-					salt?: Database["public"]["Enums"]["salt"] | null;
-					serving_size?: string;
-					spice?: Database["public"]["Enums"]["spice"] | null;
+					serving_size?: Database["public"]["Enums"]["menu_item_serving_size"];
+					sort?: number;
 					status?: Database["public"]["Enums"]["menu_item_status"];
 					updated_at?: string;
 				};
@@ -278,6 +281,32 @@ export type Database = {
 					},
 					{
 						foreignKeyName: "menu_items_restaurant_id_restaurants_id_fk";
+						columns: ["restaurant_id"];
+						isOneToOne: false;
+						referencedRelation: "restaurants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
+			menu_labels: {
+				Row: {
+					id: string;
+					name: string;
+					restaurant_id: string;
+				};
+				Insert: {
+					id?: string;
+					name: string;
+					restaurant_id: string;
+				};
+				Update: {
+					id?: string;
+					name?: string;
+					restaurant_id?: string;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "menu_labels_restaurant_id_restaurants_id_fk";
 						columns: ["restaurant_id"];
 						isOneToOne: false;
 						referencedRelation: "restaurants";
@@ -634,6 +663,10 @@ export type Database = {
 					staff_id: string;
 				}[];
 			};
+			reorder_menu_categories: {
+				Args: { p_category_ids: string[]; p_restaurant_id: string };
+				Returns: undefined;
+			};
 			resolve_staff_signin: { Args: { p_email: string }; Returns: string };
 		};
 		Enums: {
@@ -643,6 +676,19 @@ export type Database = {
 			diet: "veg" | "non_veg";
 			ice: "none" | "less" | "regular";
 			menu_category_status: "active" | "archived";
+			menu_item_prep_time:
+				| "5-10 mins"
+				| "10-15 mins"
+				| "15-20 mins"
+				| "20-30 mins"
+				| "30-45 mins";
+			menu_item_serving_size:
+				| "serves 1"
+				| "serves 1-2"
+				| "serves 2"
+				| "serves 2-3"
+				| "serves 4-5"
+				| "serves 5+";
 			menu_item_status: "active" | "archived";
 			order_item_status:
 				| "placed"
@@ -795,6 +841,21 @@ export const Constants = {
 			diet: ["veg", "non_veg"],
 			ice: ["none", "less", "regular"],
 			menu_category_status: ["active", "archived"],
+			menu_item_prep_time: [
+				"5-10 mins",
+				"10-15 mins",
+				"15-20 mins",
+				"20-30 mins",
+				"30-45 mins",
+			],
+			menu_item_serving_size: [
+				"serves 1",
+				"serves 1-2",
+				"serves 2",
+				"serves 2-3",
+				"serves 4-5",
+				"serves 5+",
+			],
 			menu_item_status: ["active", "archived"],
 			order_item_status: [
 				"placed",

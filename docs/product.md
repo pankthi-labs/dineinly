@@ -55,11 +55,11 @@ Permissions are defined precisely in RBAC below; this is persona context only.
 
 Organized into restaurant-defined categories; every item belongs to exactly one. Text-only — no images, no allergen data.
 
-**Required:** Name, Description, Price, Prep time (display-only, not used for timing/calculation), Serving size, Diet (Veg / Non-Veg only), Category.
+**Required:** Name, Description, Price, Prep time (display-only, not used for timing/calculation — one of `5-10 mins` / `10-15 mins` / `15-20 mins` / `20-30 mins` / `30-45 mins`), Serving size (one of `Serves 1` / `Serves 1-2` / `Serves 2` / `Serves 2-3` / `Serves 4-5` / `Serves 5+`), Diet (Veg / Non-Veg only), Category.
 
-**Optional:** Labels (e.g. Chef Recommended, Seasonal — zero or more), Spice (Mild / Regular / Extra Spice), Salt (Less Salt / Regular), Ice (No Ice / Less Ice / Regular — **drinks only**).
+**Optional:** Label (at most one, picked from the restaurant's own label list — Owner/Manager adds new labels from Menu Desk, e.g. Chef Recommended, Seasonal), Spice, Salt, Ice (each a plain checkbox — offered or not, shown for every dish).
 
-Spice, Salt, Ice are the only guest-selectable option groups in the MVP; an item exposes one only if that field is set. Preferences never change price.
+Spice, Salt, Ice are the only guest-selectable option groups in the MVP. At item creation the Owner/Manager only toggles whether each applies to the dish — the values themselves (Spice: Mild / Regular / Extra Spice; Salt: Less Salt / Regular; Ice: No Ice / Less Ice / Regular) are fixed per preference and chosen by the guest at order time, never during dish creation. Preferences never change price.
 
 **Availability:** `Available` or `Sold Out (86'd)`. Manual only — set by Waiter, Kitchen, or Manager. Changes affect future orders only, never existing ones.
 

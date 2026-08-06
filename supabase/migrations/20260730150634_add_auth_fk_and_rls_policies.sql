@@ -29,6 +29,7 @@ alter table "restaurant_tables" enable row level security;
 alter table "table_sessions" enable row level security;
 alter table "menu_categories" enable row level security;
 alter table "menu_items" enable row level security;
+alter table "menu_labels" enable row level security;
 alter table "cart_items" enable row level security;
 alter table "orders" enable row level security;
 alter table "order_items" enable row level security;
@@ -317,6 +318,7 @@ grant select, insert, update, delete on public.restaurant_tables to authenticate
 grant select, insert, update, delete on public.table_sessions to authenticated;
 grant select, insert, update, delete on public.menu_categories to authenticated;
 grant select, insert, update, delete on public.menu_items to authenticated;
+grant select, insert, update, delete on public.menu_labels to authenticated;
 grant select, insert, update, delete on public.cart_items to authenticated;
 grant select, insert, update, delete on public.orders to authenticated;
 grant select, insert, update, delete on public.order_items to authenticated;
@@ -348,6 +350,11 @@ create policy "admin_all_menu_categories" on public.menu_categories
 	with check (public.is_dineinly_admin());
 
 create policy "admin_all_menu_items" on public.menu_items
+	for all to authenticated
+	using (public.is_dineinly_admin())
+	with check (public.is_dineinly_admin());
+
+create policy "admin_all_menu_labels" on public.menu_labels
 	for all to authenticated
 	using (public.is_dineinly_admin())
 	with check (public.is_dineinly_admin());
@@ -437,3 +444,54 @@ revoke execute on function public.admin_create_restaurant(
 grant execute on function public.admin_create_restaurant(
 	text, text, text, text, text, text, numeric, text, text, text
 ) to authenticated;
+
+-- ============================================================================
+-- 6. Menu Desk: reorder_menu_categories
+-- ============================================================================
+-- Drag-and-drop category reordering (Menu Desk) writes every category's
+-- `sort` in one statement instead of one UPDATE per row from application
+-- code — a partial failure mid-drag would otherwise leave categories with
+-- duplicate or gapped sort values. Same hardening as every other function in
+-- this file: `set search_path = ''` with fully schema-qualified references,
+-- `execute` revoked from `public` and granted only to `authenticated`, and
+-- an explicit `is_dineinly_admin()` check as the first statement.
+
+create or replace function public.reorder_menu_categories(
+	p_restaurant_id uuid,
+	p_category_ids uuid[]
+)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+	v_updated integer;
+begin
+	if not public.is_dineinly_admin() then
+		raise exception 'Only Dineinly Admin may reorder menu categories';
+	end if;
+
+	if (
+		select count(*) from public.menu_categories where restaurant_id = p_restaurant_id
+	) <> coalesce(array_length(p_category_ids, 1), 0) then
+		raise exception 'Category list does not match this restaurant''s categories';
+	end if;
+
+	update public.menu_categories as mc
+	set sort = reordered.sort
+	from (
+		select id, ordinality - 1 as sort
+		from unnest(p_category_ids) with ordinality as t(id, ordinality)
+	) as reordered
+	where mc.id = reordered.id and mc.restaurant_id = p_restaurant_id;
+
+	get diagnostics v_updated = row_count;
+	if v_updated <> array_length(p_category_ids, 1) then
+		raise exception 'One or more categories do not belong to this restaurant';
+	end if;
+end;
+$$;
+
+revoke execute on function public.reorder_menu_categories(uuid, uuid[]) from public;
+grant execute on function public.reorder_menu_categories(uuid, uuid[]) to authenticated;

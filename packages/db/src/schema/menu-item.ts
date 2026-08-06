@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+	boolean,
 	check,
 	foreignKey,
 	index,
@@ -13,17 +14,18 @@ import {
 import {
 	availability,
 	diet,
-	ice,
+	menuItemPrepTime,
+	menuItemServingSize,
 	menuItemStatus,
-	salt,
-	spice,
 } from "./enums.js";
 import { createdAt, id, updatedAt } from "./helpers.js";
 import { menuCategories } from "./menu-category.js";
 import { restaurants } from "./restaurant.js";
 
-// Sellable catalog item. Labels and option groups folded as arrays/columns —
-// no child tables. Option fields (spice/salt/ice) only apply when set; never
+// Sellable catalog item. Labels folded as an array column — no child tables.
+// offers_spice/offers_salt/offers_ice only gate whether the guest sees that
+// preference at order time; the actual value (mild/regular/extra spicy, etc.)
+// is a guest choice recorded on Cart Item / Order Item, never here. Never
 // affect price. `availability` (temporary 86'd) and `status` (soft-delete)
 // are separate axes — sold-out is not deleted.
 export const menuItems = pgTable(
@@ -38,15 +40,16 @@ export const menuItems = pgTable(
 		categoryId: uuid("category_id").notNull(),
 		name: text("name").notNull(),
 		description: text("description").notNull(),
+		sort: integer("sort").notNull().default(0),
 		price: numeric("price", { precision: 12, scale: 2 }).notNull(),
-		prepTime: integer("prep_time").notNull(),
-		servingSize: text("serving_size").notNull(),
+		prepTime: menuItemPrepTime("prep_time").notNull(),
+		servingSize: menuItemServingSize("serving_size").notNull(),
 		diet: diet("diet").notNull(),
 		availability: availability("availability").notNull().default("available"),
 		labels: text("labels").array().notNull().default([]),
-		spice: spice("spice"),
-		salt: salt("salt"),
-		ice: ice("ice"),
+		offersSpice: boolean("offers_spice").notNull().default(false),
+		offersSalt: boolean("offers_salt").notNull().default(false),
+		offersIce: boolean("offers_ice").notNull().default(false),
 		status: menuItemStatus("status").notNull().default("active"),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
@@ -67,6 +70,5 @@ export const menuItems = pgTable(
 			name: "menu_items_restaurant_id_category_id_fkey",
 		}),
 		check("menu_items_price_check", sql`${table.price} >= 0`),
-		check("menu_items_prep_time_check", sql`${table.prepTime} > 0`),
 	],
 );

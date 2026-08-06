@@ -30,16 +30,16 @@ export function AddCategoryPanel({
 		if (
 			!Number.isFinite(parsedTaxRate) ||
 			parsedTaxRate < 0 ||
-			parsedTaxRate > 1
+			parsedTaxRate > 100
 		) {
-			setFormError("Enter a tax rate from 0.000 to 1.000.");
+			setFormError("Enter a tax rate from 0 to 100%.");
 			return;
 		}
 
 		createCategory.mutate({
 			restaurantId,
 			name,
-			taxRate: parsedTaxRate,
+			taxRate: parsedTaxRate / 100,
 		});
 	}
 
@@ -83,19 +83,15 @@ export function AddCategoryPanel({
 							onChange={(event) => setName(event.target.value)}
 						/>
 					</Field>
-					<Field
-						label="Tax rate"
-						required
-						hint="Enter a value from 0.000 to 1.000. For example, 0.050 is 5%."
-					>
+					<Field label="Tax rate (%)" required hint="For example, 5 is 5%.">
 						<input
 							required
 							type="number"
 							min="0"
-							max="1"
-							step="0.001"
+							max="100"
+							step="0.1"
 							value={taxRate}
-							placeholder="e.g. 0.050"
+							placeholder="e.g. 5"
 							onChange={(event) => setTaxRate(event.target.value)}
 						/>
 					</Field>

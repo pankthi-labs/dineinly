@@ -3,6 +3,7 @@ import { bills } from "./bill.js";
 import { cartItems } from "./cart-item.js";
 import { menuCategories } from "./menu-category.js";
 import { menuItems } from "./menu-item.js";
+import { menuLabels } from "./menu-label.js";
 import { orders } from "./order.js";
 import { orderItems } from "./order-item.js";
 import { restaurants } from "./restaurant.js";
@@ -16,6 +17,7 @@ export const restaurantsRelations = relations(restaurants, ({ many }) => ({
 	restaurantTables: many(restaurantTables),
 	menuCategories: many(menuCategories),
 	menuItems: many(menuItems),
+	menuLabels: many(menuLabels),
 	cartItems: many(cartItems),
 	orders: many(orders),
 	orderItems: many(orderItems),
@@ -82,6 +84,13 @@ export const menuItemsRelations = relations(menuItems, ({ one }) => ({
 	category: one(menuCategories, {
 		fields: [menuItems.categoryId],
 		references: [menuCategories.id],
+	}),
+}));
+
+export const menuLabelsRelations = relations(menuLabels, ({ one }) => ({
+	restaurant: one(restaurants, {
+		fields: [menuLabels.restaurantId],
+		references: [restaurants.id],
 	}),
 }));
 
