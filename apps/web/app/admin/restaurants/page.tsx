@@ -1,9 +1,11 @@
 "use client";
 
-import { Plus, Search, UtensilsCrossed } from "lucide-react";
+import { Plus, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
+import { CollapsibleSearch } from "@/components/collapsible-search";
+import { getPageRange } from "@/lib/pagination";
 import { trpc } from "@/lib/trpc-client";
 import { AdminHeaderActions } from "../admin-header-actions";
 import type { PauseTarget } from "./pause-confirm-dialog";
@@ -21,7 +23,6 @@ export default function RestaurantsDirectoryPage() {
 	const [page, setPage] = useState(1);
 	const [searchInput, setSearchInput] = useState("");
 	const [search, setSearch] = useState("");
-	const [searchOpen, setSearchOpen] = useState(false);
 	const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 	const [sheetMode, setSheetMode] = useState<"closed" | "create" | "edit">(
 		"closed",
@@ -162,39 +163,11 @@ export default function RestaurantsDirectoryPage() {
 					</div>
 
 					<div className="flex items-center gap-3">
-						{searchOpen ? (
-							<div className="relative w-full sm:max-w-xs">
-								<Search
-									className="icon-sm pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted"
-									strokeWidth={1.5}
-									aria-hidden="true"
-								/>
-								<input
-									type="search"
-									value={searchInput}
-									onChange={(e) => setSearchInput(e.target.value)}
-									onBlur={() => {
-										if (!searchInput) setSearchOpen(false);
-									}}
-									placeholder="Search restaurants"
-									aria-label="Search restaurants"
-									className="h-12 w-full appearance-none rounded-sm border border-divider bg-surface pr-4 pl-12 text-primary text-sm transition-colors duration-(--duration-base) ease-out placeholder:text-muted focus:border-accent focus:outline-none [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
-								/>
-							</div>
-						) : (
-							<button
-								type="button"
-								onClick={() => setSearchOpen(true)}
-								aria-label="Search restaurants"
-								className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm border border-divider text-secondary transition-colors duration-(--duration-base) ease-out hover:border-accent/40 hover:text-primary"
-							>
-								<Search
-									className="icon-sm"
-									strokeWidth={1.5}
-									aria-hidden="true"
-								/>
-							</button>
-						)}
+						<CollapsibleSearch
+							value={searchInput}
+							onChange={setSearchInput}
+							label="Search restaurants"
+						/>
 						<button
 							type="button"
 							onClick={openCreateSheet}
@@ -298,21 +271,32 @@ export default function RestaurantsDirectoryPage() {
 						>
 							‹
 						</button>
-						{Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-							<button
-								key={p}
-								type="button"
-								onClick={() => setPage(p)}
-								aria-current={p === page ? "page" : undefined}
-								className={`h-10 w-10 rounded-md font-medium text-sm ${
-									p === page
-										? "bg-accent text-background"
-										: "border border-divider text-secondary hover:border-accent/40 hover:text-primary"
-								}`}
-							>
-								{p}
-							</button>
-						))}
+						{getPageRange(page, totalPages).map((entry, index) =>
+							entry === "ellipsis" ? (
+								<span
+									// biome-ignore lint/suspicious/noArrayIndexKey: ellipsis markers never reorder within a static range.
+									key={`ellipsis-${index}`}
+									aria-hidden="true"
+									className="flex h-10 w-10 items-center justify-center text-muted"
+								>
+									…
+								</span>
+							) : (
+								<button
+									key={entry}
+									type="button"
+									onClick={() => setPage(entry)}
+									aria-current={entry === page ? "page" : undefined}
+									className={`h-10 w-10 rounded-md font-medium text-sm ${
+										entry === page
+											? "bg-accent text-background"
+											: "border border-divider text-secondary hover:border-accent/40 hover:text-primary"
+									}`}
+								>
+									{entry}
+								</button>
+							),
+						)}
 						<button
 							type="button"
 							onClick={() => setPage((p) => Math.min(totalPages, p + 1))}

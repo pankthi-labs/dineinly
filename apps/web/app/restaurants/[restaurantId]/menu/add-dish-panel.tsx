@@ -11,6 +11,7 @@ import {
 	PreferenceFields,
 } from "@/components/form-sheet";
 import { titleCase } from "@/lib/format";
+import { firstFormError, menuItemInputSchema } from "@/lib/menu-item-schema";
 import {
 	PREP_TIME_OPTIONS,
 	SERVING_SIZE_LABELS,
@@ -86,38 +87,20 @@ export function AddDishPanel({
 	function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setFormError(null);
-		const price = Number(form.price);
-		if (!form.categoryId) {
-			setFormError("Choose a category.");
-			return;
-		}
-		if (!form.diet) {
-			setFormError("Choose a dietary type.");
-			return;
-		}
-		if (!form.prepTime) {
-			setFormError("Choose a preparation time.");
-			return;
-		}
-		if (!form.servingSize) {
-			setFormError("Choose a serving size.");
-			return;
-		}
+		// displayStatus is a form-only concept (it folds status+availability
+		// into one dropdown) — not part of the shared schema, so it's checked
+		// separately from the safeParse below.
 		if (!form.displayStatus) {
 			setFormError("Choose a status.");
 			return;
 		}
-		if (!Number.isFinite(price) || price < 0) {
-			setFormError("Enter a valid non-negative price.");
-			return;
-		}
 
-		createItem.mutate({
+		const parsed = menuItemInputSchema.safeParse({
 			restaurantId,
 			categoryId: form.categoryId,
 			name: form.name,
 			description: form.description,
-			price,
+			price: Number(form.price),
 			prepTime: form.prepTime,
 			servingSize: form.servingSize,
 			diet: form.diet,
@@ -129,6 +112,12 @@ export function AddDishPanel({
 			offersSalt: form.offersSalt,
 			offersIce: form.offersIce,
 		});
+		if (!parsed.success) {
+			setFormError(firstFormError(parsed.error));
+			return;
+		}
+
+		createItem.mutate(parsed.data);
 	}
 
 	return (

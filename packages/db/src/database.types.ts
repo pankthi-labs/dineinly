@@ -227,7 +227,6 @@ export type Database = {
 					price: number;
 					restaurant_id: string;
 					serving_size: Database["public"]["Enums"]["menu_item_serving_size"];
-					sort: number;
 					status: Database["public"]["Enums"]["menu_item_status"];
 					updated_at: string;
 				};
@@ -247,7 +246,6 @@ export type Database = {
 					price: number;
 					restaurant_id: string;
 					serving_size: Database["public"]["Enums"]["menu_item_serving_size"];
-					sort?: number;
 					status?: Database["public"]["Enums"]["menu_item_status"];
 					updated_at?: string;
 				};
@@ -267,7 +265,6 @@ export type Database = {
 					price?: number;
 					restaurant_id?: string;
 					serving_size?: Database["public"]["Enums"]["menu_item_serving_size"];
-					sort?: number;
 					status?: Database["public"]["Enums"]["menu_item_status"];
 					updated_at?: string;
 				};

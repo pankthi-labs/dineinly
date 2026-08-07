@@ -70,7 +70,6 @@ CREATE TABLE "menu_items" (
 	"category_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"description" text NOT NULL,
-	"sort" integer DEFAULT 0 NOT NULL,
 	"price" numeric(12, 2) NOT NULL,
 	"prep_time" "menu_item_prep_time" NOT NULL,
 	"serving_size" "menu_item_serving_size" NOT NULL,

@@ -11,6 +11,7 @@ import {
 	PreferenceFields,
 } from "@/components/form-sheet";
 import { titleCase } from "@/lib/format";
+import { firstFormError, menuItemInputSchema } from "@/lib/menu-item-schema";
 import {
 	PREP_TIME_OPTIONS,
 	SERVING_SIZE_LABELS,
@@ -134,19 +135,13 @@ export function EditDishPanel({
 	function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setFormError(null);
-		const price = Number(form.price);
-		if (!Number.isFinite(price) || price < 0) {
-			setFormError("Enter a valid non-negative price.");
-			return;
-		}
 
-		updateItem.mutate({
+		const parsed = menuItemInputSchema.safeParse({
 			restaurantId,
-			itemId: item.id,
 			categoryId: form.categoryId,
 			name: form.name,
 			description: form.description,
-			price,
+			price: Number(form.price),
 			prepTime: form.prepTime,
 			servingSize: form.servingSize,
 			diet: form.diet,
@@ -157,6 +152,12 @@ export function EditDishPanel({
 			offersSalt: form.offersSalt,
 			offersIce: form.offersIce,
 		});
+		if (!parsed.success) {
+			setFormError(firstFormError(parsed.error));
+			return;
+		}
+
+		updateItem.mutate({ ...parsed.data, itemId: item.id });
 	}
 
 	return (

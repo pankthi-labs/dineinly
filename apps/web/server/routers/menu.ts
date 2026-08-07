@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { PREP_TIME_OPTIONS, SERVING_SIZE_OPTIONS } from "@/lib/menu-options";
+import { menuItemInputSchema } from "@/lib/menu-item-schema";
 import type { Context } from "../trpc/context";
 import { adminProcedure, router } from "../trpc/init";
 
@@ -51,22 +51,6 @@ const menuCategoryReorderInputSchema = z.object({
 	restaurantId: restaurantIdSchema,
 	categoryIds: z.array(z.string().uuid()).min(1),
 });
-export const menuItemInputSchema = z.object({
-	restaurantId: restaurantIdSchema,
-	categoryId: z.string().uuid(),
-	name: z.string().trim().min(1),
-	description: z.string().trim().min(1),
-	price: z.number().finite().nonnegative(),
-	prepTime: z.enum(PREP_TIME_OPTIONS),
-	servingSize: z.enum(SERVING_SIZE_OPTIONS),
-	diet: z.enum(["veg", "non_veg"]),
-	availability: z.enum(["available", "sold_out"]),
-	labels: z.array(z.string().trim().min(1)).max(1),
-	offersSpice: z.boolean(),
-	offersSalt: z.boolean(),
-	offersIce: z.boolean(),
-	status: z.enum(["active", "archived"]),
-});
 const menuItemUpdateSchema = menuItemInputSchema.extend({
 	itemId: z.string().uuid(),
 });
@@ -99,10 +83,15 @@ export const menuRouter = router({
 					ctx.supabase
 						.from("menu_items")
 						.select(
-							"id, category_id, name, description, sort, price, prep_time, serving_size, diet, availability, labels, offers_spice, offers_salt, offers_ice, status",
+							"id, category_id, name, description, price, prep_time, serving_size, diet, availability, labels, offers_spice, offers_salt, offers_ice, status",
 						)
 						.eq("restaurant_id", input.restaurantId)
-						.order("sort", { ascending: true })
+						// status/availability declared active-before-archived and
+						// available-before-sold_out (packages/db/src/schema/enums.ts),
+						// so ascending sorts live+available items first, sold-out
+						// next, hidden last — within each, name breaks ties.
+						.order("status", { ascending: true })
+						.order("availability", { ascending: true })
 						.order("name", { ascending: true }),
 					ctx.supabase
 						.from("menu_labels")
@@ -289,26 +278,6 @@ export const menuRouter = router({
 
 			await assertKnownLabels(ctx.supabase, input.restaurantId, input.labels);
 
-			// ponytail: read-then-insert sort, two concurrent creates in the same
-			// category can compute the same value. Display order only, no
-			// constraint violated — atomic RPC (like reorder_menu_categories) if
-			// it ever matters.
-			const { data: lastItem, error: lastItemError } = await ctx.supabase
-				.from("menu_items")
-				.select("sort")
-				.eq("category_id", input.categoryId)
-				.order("sort", { ascending: false })
-				.limit(1)
-				.maybeSingle();
-
-			if (lastItemError) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Unable to prepare the new dish.",
-					cause: lastItemError,
-				});
-			}
-
 			const { data, error } = await ctx.supabase
 				.from("menu_items")
 				.insert({
@@ -316,7 +285,6 @@ export const menuRouter = router({
 					category_id: input.categoryId,
 					name: input.name,
 					description: input.description,
-					sort: (lastItem?.sort ?? -1) + 1,
 					price: input.price,
 					prep_time: input.prepTime,
 					serving_size: input.servingSize,

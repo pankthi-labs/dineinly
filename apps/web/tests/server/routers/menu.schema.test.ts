@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { menuItemInputSchema } from "@/server/routers/menu";
+import { menuItemInputSchema } from "@/lib/menu-item-schema";
 
 const validItem = {
 	restaurantId: "10000000-0000-4000-8000-000000000001",

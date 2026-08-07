@@ -1,3 +1,4 @@
+import type { PostgrestError } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, router } from "../trpc/init";
 import {
@@ -6,6 +7,19 @@ import {
 	setRestaurantStatusInput,
 	updateRestaurantInput,
 } from "./restaurants.schema";
+
+// Never surface a raw Postgres/RPC error string to the admin — it can leak
+// column/constraint names and other schema detail. `cause` keeps the
+// original error attached for server-side logs without exposing it
+// client-side; the client only ever sees `message`.
+function toTRPCError(error: PostgrestError, fallback: string): TRPCError {
+	return new TRPCError({
+		code: "INTERNAL_SERVER_ERROR",
+		message:
+			error.code === "23505" ? "That value is already in use." : fallback,
+		cause: error,
+	});
+}
 
 type PrimaryOwnerRow = {
 	id: string;
@@ -55,10 +69,7 @@ export const restaurantsRouter = router({
 			const { data, error, count } = await query;
 
 			if (error) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: error.message,
-				});
+				throw toTRPCError(error, "Unable to load restaurants.");
 			}
 
 			return {
@@ -114,10 +125,7 @@ export const restaurantsRouter = router({
 			});
 
 			if (error) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: error.message,
-				});
+				throw toTRPCError(error, "Unable to create the restaurant.");
 			}
 
 			return data[0];
@@ -147,10 +155,7 @@ export const restaurantsRouter = router({
 			});
 
 			if (error) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: error.message,
-				});
+				throw toTRPCError(error, "Unable to save the restaurant.");
 			}
 
 			return { id: data };
@@ -165,10 +170,7 @@ export const restaurantsRouter = router({
 				.eq("id", input.id);
 
 			if (error) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: error.message,
-				});
+				throw toTRPCError(error, "Unable to update the restaurant status.");
 			}
 
 			return { id: input.id, status: input.status };

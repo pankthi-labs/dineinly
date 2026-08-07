@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { CollapsibleSearch } from "@/components/collapsible-search";
 import { titleCase } from "@/lib/format";
 import {
 	type PREP_TIME_OPTIONS,
@@ -53,6 +54,7 @@ export default function RestaurantMenuPage() {
 		new Set(),
 	);
 	const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+	const [search, setSearch] = useState("");
 	const [isAddingCategory, setIsAddingCategory] = useState(false);
 	const [isAddingLabel, setIsAddingLabel] = useState(false);
 	const [isAddingDish, setIsAddingDish] = useState(false);
@@ -125,6 +127,20 @@ export default function RestaurantMenuPage() {
 	}
 
 	const categories = menu.data.categories;
+	const normalizedSearch = search.trim().toLowerCase();
+	// Category order is the stored `sort`; a filtered list isn't that order, so
+	// reordering stays disabled while a search is active.
+	const isSearching = normalizedSearch.length > 0;
+	const visibleCategories = isSearching
+		? categories
+				.map((category) => ({
+					...category,
+					items: category.items.filter((item) =>
+						item.name.toLowerCase().includes(normalizedSearch),
+					),
+				}))
+				.filter((category) => category.items.length > 0)
+		: categories;
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
@@ -134,7 +150,16 @@ export default function RestaurantMenuPage() {
 			/>
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
-				<RestaurantBreadcrumb />
+				<div className="flex items-center gap-4">
+					<RestaurantBreadcrumb />
+					<div className="ml-auto">
+						<CollapsibleSearch
+							value={search}
+							onChange={setSearch}
+							label="Search dishes"
+						/>
+					</div>
+				</div>
 				<div className="mt-4 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
 					<div>
 						<h1 className="text-3xl text-primary lg:text-4xl">Menu Desk</h1>
@@ -143,7 +168,7 @@ export default function RestaurantMenuPage() {
 							{menu.data.restaurant.name}.
 						</p>
 					</div>
-					<div className="flex flex-wrap gap-3">
+					<div className="flex flex-wrap items-center gap-3">
 						<button
 							type="button"
 							onClick={() => setIsAddingCategory(true)}
@@ -183,9 +208,11 @@ export default function RestaurantMenuPage() {
 
 				{categories.length === 0 ? (
 					<EmptyMenu />
+				) : visibleCategories.length === 0 ? (
+					<NoSearchMatches search={search} onClear={() => setSearch("")} />
 				) : (
 					<div className="mt-12 flex flex-col gap-12">
-						{categories.map((category, index) => {
+						{visibleCategories.map((category, index) => {
 							const isCollapsed = collapsedCategoryIds.has(category.id);
 							return (
 								<section
@@ -209,12 +236,13 @@ export default function RestaurantMenuPage() {
 										<div className="flex shrink-0 items-center gap-1">
 											<button
 												type="button"
-												draggable
+												draggable={!isSearching}
+												disabled={isSearching}
 												tabIndex={-1}
 												aria-label={`Drag to reorder ${titleCase(category.name)}`}
 												onDragStart={() => setDraggedCategoryId(category.id)}
 												onDragEnd={() => setDraggedCategoryId(null)}
-												className="icon-tap-target flex cursor-grab items-center justify-center text-muted transition-colors duration-(--duration-base) ease-out hover:text-secondary active:cursor-grabbing"
+												className="icon-tap-target flex cursor-grab items-center justify-center text-muted transition-colors duration-(--duration-base) ease-out hover:text-secondary active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30"
 											>
 												<GripVertical
 													className="icon-sm"
@@ -226,7 +254,11 @@ export default function RestaurantMenuPage() {
 												<button
 													type="button"
 													aria-label={`Move ${titleCase(category.name)} up`}
-													disabled={index === 0 || reorderCategories.isPending}
+													disabled={
+														isSearching ||
+														index === 0 ||
+														reorderCategories.isPending
+													}
 													onClick={() => moveCategory(category.id, "up")}
 													className="icon-tap-target flex items-center justify-center text-muted transition-colors duration-(--duration-base) ease-out hover:text-secondary disabled:cursor-not-allowed disabled:opacity-30"
 												>
@@ -240,7 +272,8 @@ export default function RestaurantMenuPage() {
 													type="button"
 													aria-label={`Move ${titleCase(category.name)} down`}
 													disabled={
-														index === categories.length - 1 ||
+														isSearching ||
+														index === visibleCategories.length - 1 ||
 														reorderCategories.isPending
 													}
 													onClick={() => moveCategory(category.id, "down")}
@@ -537,6 +570,26 @@ function EmptyMenu() {
 			<p className="prose mt-3 text-secondary">
 				Create a category, then add the restaurant’s first dish.
 			</p>
+		</section>
+	);
+}
+function NoSearchMatches({
+	search,
+	onClear,
+}: {
+	search: string;
+	onClear: () => void;
+}) {
+	return (
+		<section className="mt-12 rounded-xl border border-divider bg-surface p-6">
+			<p className="text-caps text-muted">No dishes match "{search}"</p>
+			<button
+				type="button"
+				onClick={onClear}
+				className="mt-3 text-accent text-caps hover:text-accent-hover"
+			>
+				Clear search
+			</button>
 		</section>
 	);
 }

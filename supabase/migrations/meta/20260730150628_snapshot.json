@@ -505,13 +505,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "sort": {
-          "name": "sort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "price": {
           "name": "price",
           "type": "numeric(12, 2)",
