@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CollapsibleSearch } from "@/components/collapsible-search";
+import { PageHeader } from "@/components/page-header";
 import { getPageRange } from "@/lib/pagination";
 import { trpc } from "@/lib/trpc-client";
 import { AdminHeaderActions } from "../admin-header-actions";
@@ -143,31 +144,30 @@ export default function RestaurantsDirectoryPage() {
 
 	return (
 		<div className="mx-auto flex min-h-dvh max-w-7xl flex-col px-4 py-8 sm:px-6 sm:py-12 lg:px-12 lg:py-16">
-			<header className="mb-10 flex flex-col gap-8 sm:mb-16 sm:gap-12">
-				<div className="flex items-center justify-between gap-4">
-					<BrandLogo height={31} priority />
-					<AdminHeaderActions />
-				</div>
+			<div className="mb-10 flex items-center justify-between gap-4 sm:mb-16">
+				<BrandLogo height={31} priority />
+				<AdminHeaderActions />
+			</div>
 
-				<div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-					<div>
+			<div className="mb-10 sm:mb-16">
+				<PageHeader
+					breadcrumb={
 						<Link
 							href="/admin"
 							className="text-caps text-secondary no-underline hover:text-primary"
 						>
 							← Admin
 						</Link>
-						<h1 className="mt-4 text-2xl text-primary sm:text-3xl lg:text-4xl">
-							Restaurants Directory
-						</h1>
-					</div>
-
-					<div className="flex items-center gap-3">
+					}
+					search={
 						<CollapsibleSearch
 							value={searchInput}
 							onChange={setSearchInput}
 							label="Search restaurants"
 						/>
+					}
+					title="Restaurants Directory"
+					actions={
 						<button
 							type="button"
 							onClick={openCreateSheet}
@@ -176,9 +176,9 @@ export default function RestaurantsDirectoryPage() {
 							<Plus className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 							Create Restaurant
 						</button>
-					</div>
-				</div>
-			</header>
+					}
+				/>
+			</div>
 
 			<main className="flex-1 space-y-4">
 				{listQuery.isPending ? (

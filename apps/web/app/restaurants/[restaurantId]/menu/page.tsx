@@ -13,6 +13,7 @@ import {
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { CollapsibleSearch } from "@/components/collapsible-search";
+import { PageHeader } from "@/components/page-header";
 import { titleCase } from "@/lib/format";
 import {
 	type PREP_TIME_OPTIONS,
@@ -150,61 +151,65 @@ export default function RestaurantMenuPage() {
 			/>
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
-				<div className="flex items-center gap-4">
-					<RestaurantBreadcrumb />
-					<div className="ml-auto">
+				<PageHeader
+					breadcrumb={<RestaurantBreadcrumb />}
+					search={
 						<CollapsibleSearch
 							value={search}
 							onChange={setSearch}
 							label="Search dishes"
 						/>
-					</div>
-				</div>
-				<div className="mt-4 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-					<div>
-						<h1 className="text-3xl text-primary lg:text-4xl">Menu Desk</h1>
-						<p className="prose mt-3 text-base text-secondary">
+					}
+					title="Menu Desk"
+					description={
+						<>
 							Review menu availability and item details for{" "}
 							{menu.data.restaurant.name}.
-						</p>
-					</div>
-					<div className="flex flex-wrap items-center gap-3">
-						<button
-							type="button"
-							onClick={() => setIsAddingCategory(true)}
-							className="flex items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
-						>
-							<FolderPlus
-								className="icon-sm"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-							Add category
-						</button>
-						<button
-							type="button"
-							onClick={() => setIsAddingLabel(true)}
-							className="flex items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
-						>
-							<Tag className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
-							Add label
-						</button>
-						<button
-							type="button"
-							onClick={() => setIsAddingDish(true)}
-							disabled={menu.data.categories.length === 0}
-							title={
-								menu.data.categories.length === 0
-									? "Create a category before adding a dish."
-									: undefined
-							}
-							className="flex items-center gap-2 rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted"
-						>
-							<Plus className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
-							Add dish
-						</button>
-					</div>
-				</div>
+						</>
+					}
+					actions={
+						<>
+							<button
+								type="button"
+								onClick={() => setIsAddingCategory(true)}
+								className="flex items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
+							>
+								<FolderPlus
+									className="icon-sm"
+									strokeWidth={1.5}
+									aria-hidden="true"
+								/>
+								Add category
+							</button>
+							<button
+								type="button"
+								onClick={() => setIsAddingLabel(true)}
+								className="flex items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
+							>
+								<Tag className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
+								Add label
+							</button>
+							<button
+								type="button"
+								onClick={() => setIsAddingDish(true)}
+								disabled={menu.data.categories.length === 0}
+								title={
+									menu.data.categories.length === 0
+										? "Create a category before adding a dish."
+										: undefined
+								}
+								className="flex items-center gap-2 rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted"
+							>
+								<Plus
+									className="icon-sm"
+									strokeWidth={1.5}
+									aria-hidden="true"
+								/>
+								Add dish
+							</button>
+						</>
+					}
+				/>
 
 				{categories.length === 0 ? (
 					<EmptyMenu />
