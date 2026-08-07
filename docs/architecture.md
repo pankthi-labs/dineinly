@@ -28,13 +28,27 @@ FastAPI/Python is post-MVP (see `tech-stack.md`). When introduced it must preser
 
 ## Authentication
 
-Role-specific and passwordless.
+Role-specific. Owners, Managers, and Guests are passwordless; station accounts (below) are the one exception, since a shared device has no inbox to receive an OTP.
 
 - **Owners & Managers:** Supabase Email OTP only (no magic links).
-- **Kitchen displays & shared floor tablets:** per-restaurant station account with a persistent Supabase session — the auth/DB boundary, representing the trusted device. On floor tablets, individual staff identify via an application-level PIN used only for attribution/RBAC/audit/UI — it is not a Supabase auth factor and grants no DB access.
+- **Kitchen displays & shared floor tablets:** per-restaurant station account with a persistent Supabase session — the auth/DB boundary, representing the trusted device. On floor tablets, individual staff identify via an application-level PIN used only for attribution/RBAC/audit/UI — it is not a Supabase auth factor and grants no DB access. Provisioning is device pairing, not a shared password — see "Station Account Provisioning" below.
 - **Guests:** short-lived scoped token (see below); never create accounts.
 
 Restaurant identity is always server-derived. No NFC badges, no WebAuthn/passkeys — station account + PIN only.
+
+### Station Account Provisioning
+
+A station account is a `Staff` row with `role = kitchen` or `role = waiter`, backed by one Supabase Auth identity (`auth.users` row) per restaurant per role. That identity is not a real person's inbox: its email is a synthetic, unroutable address (`kitchen-<restaurant_id>@stations.dineinly.internal`, `waiter-<restaurant_id>@stations.dineinly.internal`) that exists only to satisfy Supabase Auth's unique-email requirement. Nothing is ever sent to it.
+
+Every kitchen display in a restaurant shares the same `kitchen` identity; every floor tablet shares the same `waiter` identity. What's per-device is the pairing, not the identity:
+
+1. **Pairing code.** An Owner or Manager, from Staff Roster settings, generates a one-time pairing code (6 digits, ~10-minute TTL) scoped to their restaurant and a station type (kitchen or waiter). The server mints this code; it is never derived from or equal to any password.
+2. **Device entry.** On first boot, the kitchen display or floor tablet shows an "Enter pairing code" screen. The Manager types the code into the device (or the device scans a QR encoding it). No password is ever typed on the device.
+3. **Session issuance.** The server validates the code, exchanges it for a session on that restaurant's station identity, and issues the device its own long-lived refresh token — kiosk-style, no re-login expected. The pairing code is single-use and burns immediately on redemption or at TTL expiry, whichever comes first.
+4. **Per-device revocation.** Each physical device gets its own device record and refresh token, even though all devices for a station type share the same underlying `auth.users` identity. A lost or stolen tablet is revoked individually from Staff Roster settings — this invalidates only that device's session, not the station identity itself, so every other kitchen display or floor tablet keeps working unaffected.
+5. **Attribution stays separate.** Once a device is paired, individual staff identify via PIN (`Staff.pin_hash`) as already described above — attribution/audit/UI only, no DB auth power, no relationship to pairing.
+
+Not yet built — no migration, router, or UI exists for pairing-code issuance, redemption, or per-device session tracking. This section is the agreed design to build against, not a description of shipped code.
 
 - **Invited staff can sign in.** Dineinly Admin's Restaurants Directory creates a restaurant's owner as a Staff row (`role = owner, status = invited, user_id = null`); `/sign-in` (`apps/web/app/sign-in/page.tsx`) then gets them from that invitation to a live session in two steps, both backed by `supabase/migrations/20260803042459_add_staff_auth_flow.sql` and wrapped by `server/routers/auth.ts`:
   1. Before calling `signInWithOtp`, the client calls `auth.resolveSignIn`, which runs `resolve_staff_signin(email)` — a `SECURITY DEFINER` function (the caller has no session yet, so no other way to read `auth.users`) that returns whether the email belongs to an existing `auth.users` row (`shouldCreateUser: false`) or an `invited` Staff row with none yet (`shouldCreateUser: true`), or neither (reject before ever calling Supabase). Unconditional `shouldCreateUser: true` would make sign-in open self-registration; this pre-check is what keeps it invite-only.
