@@ -45,7 +45,7 @@ Every table below carries `restaurant_id` (tenant scope, RLS precondition). Soft
 | Would-be table | Folded into | Why |
 |---|---|---|
 | Restaurant Settings | Restaurant (columns) | 1:1, read every request — no benefit joining. |
-| QR Code | Restaurant Table (`qr_token` column) | Static 1:1, never queried on its own. |
+| QR Code | Restaurant Table (`qr_token` column) | 1:1, never queried on its own. Rotatable in place (regenerate overwrites `qr_token`) — not append-only, no history kept. |
 | Cart | Cart Item (`session_id` FK directly) | 1:1 with session, no fields of its own. |
 | Bill Line Item | Order Item (already a snapshot) | Duplicate data — Order Item already has name/qty/price frozen. |
 | Guest Session | JWT claims only, no row | Guest identity is the signed token itself (`restaurant_id`, `table_session_id`); RLS checks `session.status = active`. No DB row needed. |

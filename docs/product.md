@@ -44,7 +44,7 @@ Permissions are defined precisely in RBAC below; this is persona context only.
 
 ## Onboarding & Setup
 
-- **QR codes:** Owner/Manager generates and downloads one QR per restaurant table.
+- **QR codes:** Owner/Manager generates and downloads one QR per restaurant table, from the Table Roster. Each table's QR can be regenerated (rotates the token — the old printed QR stops working immediately; any active session on the table is unaffected). Download is per-table or all-at-once for the restaurant.
 - **Staff invites:** Owner/Manager invites by email; invitee verifies via Email OTP. Managers may invite Managers, Waiters, Kitchen — never Owners.
 - **Daily auth** follows the role model (see `architecture.md` → Authentication).
 - **Menu** is created manually via Manage Menu — no import in MVP.
