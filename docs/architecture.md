@@ -91,6 +91,24 @@ Four route trees under `apps/web/app/`, one per identity type above, plus one re
 
 `qr_token` is rotatable: Owner/Manager regenerates it from the Table Roster (RBAC: "Manage Tables & QR Codes" in `product.md`), which overwrites the column in place — no history, no old-token grace period. The old value stops resolving at this route immediately. Rotation never touches `session_id`, so a table's active session (and everyone already seated at it) is unaffected; only a *new* scan of the stale printed QR fails to resolve.
 
+### Table QR Generation
+
+`qr_token` is `text().notNull().unique()` (`packages/db/src/schema/restaurant-table.ts`) — a table can never exist without one, so "Generate QR" on the Table Roster is a view/download/regenerate action, never a create-from-scratch one. Token value is `crypto.randomUUID()`, minted server-side at table insert and again on regenerate.
+
+Three RBAC-gated procedures (Owner/Manager/Dineinly Admin only — "Manage Tables & QR Codes"):
+
+1. **`regenerateTableQr({ tableId })`** — mutation. Rotates `qr_token` in place, returns the updated row. See rotation behavior above.
+2. **`downloadTableQrPdf({ tableId })`** — query. Returns a single-page PDF: QR code + table label.
+3. **`downloadAllTableQrPdf({ restaurantId })`** — query. Returns one multi-page PDF, one page per table in the restaurant.
+
+Rendering is split by purpose, not duplicated by accident: the Table Roster row's inline QR thumbnail renders client-side straight from `qr_token` (canvas-based, e.g. `qrcode.react`) — no round-trip, since the list query the roster already needs returns `qr_token` and RLS already scopes that query to the caller's tenant, so nothing new is exposed. Anything that leaves the app as a printable artifact (both PDF procedures) renders fully server-side instead — QR as SVG (`qrcode` npm package) composed into a PDF (`pdf-lib` or `@react-pdf/renderer`), one shared layout path for both the single-table and bulk procedures (bulk loops the same page-builder once per table) — this keeps print output consistent regardless of the admin's browser and keeps "tRPC is the only data layer" intact, since the client never fabricates a QR for anything meant for print.
+
+Table Roster row behavior: click the thumbnail to open a modal (enlarged QR, table label, "Copy Link", "Download PDF"). Row actions are "Download PDF" and "Regenerate" (confirm dialog first — warns the old printed QR stops working immediately on confirm). Page header carries one "Download All QR Codes" action for the whole restaurant.
+
+Error handling: a failed regenerate leaves the token/thumbnail unchanged (no optimistic update before the mutation succeeds). A failed PDF generation returns no partial file. Two regenerate calls racing on the same table is last-write-wins — no locking, since it's a single-admin, low-stakes action with no data corruption possible.
+
+Not yet built — no migration change needed (`qr_token` already exists), but no router, PDF rendering, or Table Roster UI exists yet for any of this. This section is the agreed design to build against, not a description of shipped code. Two dependencies this design assumes but doesn't itself build: the Table Roster page (table create/list/edit), and this route's not-yet-built invalid/stale-token UX for a guest who scans a QR after it's been regenerated.
+
 Reuse rules:
 - **New platform-only page** (no restaurant context, admin-only — e.g. the Dineinly Staff or Dineinly Settings cards on `/admin`): put it under `app/admin/`. The existing `admin/layout.tsx` gates the whole tree — never add a redirect/auth check to the page itself.
 - **New restaurant-scoped page** (menu, staff, billing, etc.), reachable by both that restaurant's own staff and Dineinly Admin viewing it: put it under `app/restaurants/[restaurantId]/`. One `restaurants/[restaurantId]/layout.tsx` calling `requireRestaurantAccess(restaurantId)` gates the whole tree, same rule. Staff and Admin share this tree because they share the *same credential* (Supabase Auth cookie) — `requireRestaurantAccess` is one function branching on claim vs. Staff row, not two pages. It currently only admits Dineinly Admin; the staff half isn't implemented (Staff can sign in and link its `user_id` — see Authentication above — but has no RLS of its own yet, so there's nothing for `requireRestaurantAccess` to query — see the "Every staff-side policy" note in `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql`). Add that check to `requireRestaurantAccess` once staff RLS lands — don't invent it ahead of that.

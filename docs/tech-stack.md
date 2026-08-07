@@ -35,6 +35,9 @@
 | Breakpoint mechanism | `postcss-custom-media` — sanctioned choice, MIT license, dev dependency. Defines the 4 breakpoint tokens once; see `design-system.md` §10. `var()` cannot be used in `@media`, this is the mechanism instead of raw duplicated values |
 | Client State | Zustand |
 | Server State | TanStack Query (via tRPC) |
+| QR rendering (inline preview) | `qrcode.react` — client-side canvas, renders straight from `qr_token`, no server round-trip. See `architecture.md` § Table QR Generation |
+| QR rendering (print/PDF) | `qrcode` (npm) — server-side SVG generation, composed into PDF output. Not for the inline preview above — kept separate so print output stays consistent across browsers |
+| PDF generation | `pdf-lib` or `@react-pdf/renderer` — server-side, single shared layout path for both single-table and bulk (all-tables) QR downloads |
 
 ---
 
