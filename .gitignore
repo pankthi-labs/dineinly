@@ -47,3 +47,7 @@ next-env.d.ts
 
 # graphify
 graphify-out/
+.claude/settings.json.graphify-bak
+
+# claude code local overrides (personal, never shared)
+.claude/settings.local.json
