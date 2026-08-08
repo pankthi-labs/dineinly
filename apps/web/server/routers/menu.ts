@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { menuItemInputSchema } from "@/lib/menu-item-schema";
 import type { Context } from "../trpc/context";
-import { adminProcedure, router } from "../trpc/init";
+import { authedProcedure, router } from "../trpc/init";
 
 // Labels are a restaurant-managed vocabulary (see menu_labels), not a fixed
 // enum — this is the runtime check a zod schema can't express.
@@ -61,10 +61,18 @@ const menuItemStateInputSchema = z.object({
 });
 
 // The management view intentionally includes archived categories and items so
-// an administrator can see the complete restaurant catalog. Guest-facing menu
-// queries remain limited by their separate active-only RLS policies.
+// an administrator (or this restaurant's own staff) can see the complete
+// restaurant catalog. Guest-facing menu queries remain limited by their
+// separate active-only RLS policies.
+//
+// authedProcedure, not adminProcedure — every procedure here is reachable by
+// this restaurant's own staff, not just Dineinly Admin. staff_all_menu_*
+// RLS (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql
+// § 5) is what actually keeps a staff caller scoped to their own
+// restaurant_id; a role-level split (e.g. Waiter/Kitchen view-only) isn't
+// modeled yet — see Tbd.md "Feature-level staff permissions".
 export const menuRouter = router({
-	listForManagement: adminProcedure
+	listForManagement: authedProcedure
 		.input(z.object({ restaurantId: restaurantIdSchema }))
 		.query(async ({ ctx, input }) => {
 			const [restaurantResult, categoriesResult, itemsResult, labelsResult] =
@@ -131,7 +139,7 @@ export const menuRouter = router({
 				})),
 			};
 		}),
-	createCategory: adminProcedure
+	createCategory: authedProcedure
 		.input(menuCategoryInputSchema)
 		.mutation(async ({ ctx, input }) => {
 			const [restaurantResult, lastCategoryResult] = await Promise.all([
@@ -185,7 +193,7 @@ export const menuRouter = router({
 
 			return data;
 		}),
-	reorderCategories: adminProcedure
+	reorderCategories: authedProcedure
 		.input(menuCategoryReorderInputSchema)
 		.mutation(async ({ ctx, input }) => {
 			const { data: existing, error: existingError } = await ctx.supabase
@@ -228,7 +236,7 @@ export const menuRouter = router({
 
 			return { success: true };
 		}),
-	createLabel: adminProcedure
+	createLabel: authedProcedure
 		.input(menuLabelInputSchema)
 		.mutation(async ({ ctx, input }) => {
 			const { data, error } = await ctx.supabase
@@ -251,7 +259,7 @@ export const menuRouter = router({
 
 			return data;
 		}),
-	createItem: adminProcedure
+	createItem: authedProcedure
 		.input(menuItemInputSchema)
 		.mutation(async ({ ctx, input }) => {
 			const { data: category, error: categoryError } = await ctx.supabase
@@ -309,7 +317,7 @@ export const menuRouter = router({
 
 			return data;
 		}),
-	updateItem: adminProcedure
+	updateItem: authedProcedure
 		.input(menuItemUpdateSchema)
 		.mutation(async ({ ctx, input }) => {
 			const { data: category, error: categoryError } = await ctx.supabase
@@ -376,7 +384,7 @@ export const menuRouter = router({
 
 			return data;
 		}),
-	updateItemState: adminProcedure
+	updateItemState: authedProcedure
 		.input(menuItemStateInputSchema)
 		.mutation(async ({ ctx, input }) => {
 			const changes =

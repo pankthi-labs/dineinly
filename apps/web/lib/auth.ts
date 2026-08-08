@@ -56,26 +56,44 @@ export async function requireAdmin(): Promise<Viewer> {
 
 /**
  * Viewer, redirecting to /sign-in unless they may view restaurant
- * `restaurantId` — pages under app/restaurants/[restaurantId] (menu,
- * staff, etc.), reachable by both that restaurant's own staff and
- * Dineinly Admin viewing any restaurant. Dineinly Admin always passes.
+ * `restaurantId` — pages under app/restaurants/[restaurantId] (Home,
+ * Menu Desk, etc.), reachable by both that restaurant's own active staff
+ * (any role) and Dineinly Admin viewing any restaurant. Dineinly Admin
+ * always passes.
  *
- * Staff access is not implemented yet — an invited Staff row can now link
- * to a real session and reach status = "active" (see
- * supabase/migrations/20260803042459_add_staff_auth_flow.sql), but Staff
- * still has no RLS of its own (see supabase/migrations/
- * 20260730150634_add_auth_fk_and_rls_policies.sql: "Every staff-side
- * policy: lands with the staff auth flow"), so there's no query this
- * function could run yet. Add the check here — viewer's Staff row has
- * restaurant_id === restaurantId and status === "active" — once that
- * RLS exists.
+ * This grants page-level access only — every staff role reaches the same
+ * pages once past this gate. Feature-level gating within a page (e.g. a
+ * waiter reaching Venue Settings) isn't implemented yet; see Tbd.md
+ * "Feature-level staff permissions".
  */
 export async function requireRestaurantAccess(
-	// Unused until the staff-side check above lands — kept named in the
-	// signature (not dropped) so callers already pass the real id.
-	_restaurantId: string,
+	restaurantId: string,
 ): Promise<Viewer> {
-	// Delegates rather than repeating requireAdmin's check — until the
-	// staff-side branch above lands, this function IS "must be admin."
-	return requireAdmin();
+	const viewer = await getViewer();
+
+	if (!viewer) {
+		redirect("/sign-in");
+	}
+
+	if (viewer.isAdmin) {
+		return viewer;
+	}
+
+	// RLS-scoped to the signed-in user's own session (staff_select_own_row,
+	// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql §
+	// 5) — this can only ever see the caller's own Staff row(s), so a match
+	// here means an active Staff row at this restaurant, not anyone else's.
+	const supabase = await createClient();
+	const { data: staffRow } = await supabase
+		.from("staff")
+		.select("id")
+		.eq("restaurant_id", restaurantId)
+		.eq("status", "active")
+		.maybeSingle();
+
+	if (!staffRow) {
+		redirect("/sign-in");
+	}
+
+	return viewer;
 }

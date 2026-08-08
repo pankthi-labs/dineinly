@@ -1,7 +1,12 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
+import {
+	MutationCache,
+	QueryCache,
+	QueryClient,
+	QueryClientProvider,
+} from "@tanstack/react-query";
+import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { useState } from "react";
 import type { AppRouter } from "@/server/routers/_app";
@@ -14,8 +19,26 @@ function getBaseUrl() {
 	return "http://127.0.0.1:3000";
 }
 
+// A session that's expired or been signed out elsewhere surfaces as
+// UNAUTHORIZED on the next call, from any query or mutation, on any page —
+// one global handler here beats a "sign in again" link on every page's own
+// error state.
+function redirectToSignInOnAuthError(error: unknown) {
+	if (error instanceof TRPCClientError && error.data?.code === "UNAUTHORIZED") {
+		window.location.href = "/sign-in";
+	}
+}
+
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
-	const [queryClient] = useState(() => new QueryClient());
+	const [queryClient] = useState(
+		() =>
+			new QueryClient({
+				queryCache: new QueryCache({ onError: redirectToSignInOnAuthError }),
+				mutationCache: new MutationCache({
+					onError: redirectToSignInOnAuthError,
+				}),
+			}),
+	);
 	const [trpcClient] = useState(() =>
 		trpc.createClient({
 			links: [httpBatchLink({ url: `${getBaseUrl()}/api/trpc` })],

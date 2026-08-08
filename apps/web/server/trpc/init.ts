@@ -48,3 +48,26 @@ export const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
 
 	return next({ ctx });
 });
+
+/**
+ * Requires any signed-in session (Dineinly Admin or restaurant staff), no
+ * role check — for restaurant-scoped reads where RLS does the real
+ * per-restaurant scoping (e.g. restaurants.getById, admitted by both
+ * admin_all_restaurants and staff_select_own_restaurant). Mirrors
+ * apps/web/lib/auth.ts's requireRestaurantAccess() at the page-gate level;
+ * this is the tRPC-procedure equivalent for client-component calls.
+ */
+export const authedProcedure = publicProcedure.use(async ({ ctx, next }) => {
+	const {
+		data: { user },
+	} = await ctx.auth.auth.getUser();
+
+	if (!user) {
+		throw new TRPCError({
+			code: "UNAUTHORIZED",
+			message: "Sign-in required.",
+		});
+	}
+
+	return next({ ctx });
+});

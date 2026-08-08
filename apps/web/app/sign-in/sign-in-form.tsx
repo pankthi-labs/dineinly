@@ -102,12 +102,14 @@ export function SignInForm() {
 	// here is a Staff-row linkage problem, not a sign-in problem, so it must
 	// not be presented as "try your code again". A no-op result (seeded
 	// Dineinly Admin, no matching invited Staff row) isn't an error and
-	// resolves the same way as a successful link.
+	// resolves the same way as a successful link — landing on /admin, since
+	// an empty `linked` array means this session has no Staff row at all.
 	async function attemptLink() {
 		setLinkError(null);
 		try {
-			await linkStaffAccount.mutateAsync();
-			router.replace("/admin");
+			const { linked } = await linkStaffAccount.mutateAsync();
+			const restaurantId = linked[0]?.restaurantId;
+			router.replace(restaurantId ? `/restaurants/${restaurantId}` : "/admin");
 		} catch {
 			setLinkError(
 				"You're signed in, but we couldn't finish setting up your account.",

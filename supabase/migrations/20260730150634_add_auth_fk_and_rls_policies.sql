@@ -380,7 +380,73 @@ create policy "admin_all_bills" on public.bills
 	with check (public.is_dineinly_admin());
 
 -- ============================================================================
--- 5. Dineinly Admin restaurant management: atomic multi-table writes
+-- 5. Staff RLS: own-restaurant, own-row access
+-- ============================================================================
+-- Lets a linked Owner/Manager/Kitchen/Floor staff member reach their own
+-- restaurant's pages (Home, Menu Desk) — own row / own restaurant only,
+-- same read-write reach as Dineinly Admin has on these tables, just scoped
+-- to the one restaurant. Feature-level permission gating within a page
+-- (e.g. a waiter reaching Venue Settings, or editing vs. only viewing the
+-- menu) is a separate, later concern — see Tbd.md "Feature-level staff
+-- permissions".
+--
+-- Same hardening as every other function in this file: `set search_path =
+-- ''`, schema-qualified references, `execute` revoked from `public` and
+-- granted only to `authenticated`.
+
+create or replace function public.is_active_staff_for_restaurant(
+	p_restaurant_id uuid
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+	select exists (
+		select 1
+		from public.staff s
+		where s.restaurant_id = p_restaurant_id
+			and s.user_id = auth.uid()
+			and s.status = 'active'
+	);
+$$;
+
+revoke execute on function public.is_active_staff_for_restaurant(uuid) from public;
+grant execute on function public.is_active_staff_for_restaurant(uuid) to authenticated;
+
+create policy "staff_select_own_row" on public.staff
+	for select
+	to authenticated
+	using (user_id = auth.uid());
+
+create policy "staff_select_own_restaurant" on public.restaurants
+	for select
+	to authenticated
+	using (public.is_active_staff_for_restaurant(id));
+
+-- Menu Desk: any active staff member of the restaurant, not just Owner/
+-- Manager — a role-level split (Waiter/Kitchen view-only) is the deferred
+-- feature-level gating noted above, not modeled here yet.
+create policy "staff_all_menu_categories" on public.menu_categories
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
+create policy "staff_all_menu_items" on public.menu_items
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
+create policy "staff_all_menu_labels" on public.menu_labels
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
+-- ============================================================================
+-- 6. Dineinly Admin restaurant management: atomic multi-table writes
 -- ============================================================================
 -- Both functions run as SECURITY INVOKER (the default) — Dineinly Admin
 -- already has full read/write grants and RLS access on restaurants/staff
@@ -446,7 +512,7 @@ grant execute on function public.admin_create_restaurant(
 ) to authenticated;
 
 -- ============================================================================
--- 6. Menu Desk: reorder_menu_categories
+-- 7. Menu Desk: reorder_menu_categories
 -- ============================================================================
 -- Drag-and-drop category reordering (Menu Desk) writes every category's
 -- `sort` in one statement instead of one UPDATE per row from application
@@ -454,7 +520,9 @@ grant execute on function public.admin_create_restaurant(
 -- duplicate or gapped sort values. Same hardening as every other function in
 -- this file: `set search_path = ''` with fully schema-qualified references,
 -- `execute` revoked from `public` and granted only to `authenticated`, and
--- an explicit `is_dineinly_admin()` check as the first statement.
+-- an explicit admin-or-own-restaurant-staff check as the first statement —
+-- RLS on menu_categories (§ 5 above) would also block a stranger's write,
+-- but failing fast here gives a clear error instead of a silent no-op.
 
 create or replace function public.reorder_menu_categories(
 	p_restaurant_id uuid,
@@ -468,8 +536,11 @@ as $$
 declare
 	v_updated integer;
 begin
-	if not public.is_dineinly_admin() then
-		raise exception 'Only Dineinly Admin may reorder menu categories';
+	if not (
+		public.is_dineinly_admin()
+		or public.is_active_staff_for_restaurant(p_restaurant_id)
+	) then
+		raise exception 'Only Dineinly Admin or this restaurant''s staff may reorder menu categories';
 	end if;
 
 	if (

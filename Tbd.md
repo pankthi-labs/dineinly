@@ -12,14 +12,6 @@ Not implemented. Only Owner/Manager email OTP exists (`apps/web/app/sign-in/`). 
 
 ---
 
-## Post-login redirect is hardcoded to /admin
-
-`apps/web/app/sign-in/sign-in-form.tsx`'s `attemptLink()` sends every successful sign-in to `/admin` regardless of role. `linkStaffAccount`'s `linked` result (restaurant/staff/role) is available but unused for routing.
-
-**Pick up:** once a restaurant home page exists, branch the redirect off `linkStaffAccount`'s result — Dineinly Admin to `/admin`, linked Owner/Manager to their restaurant.
-
----
-
 ## No app-level OTP rate limiting
 
 No lockout after N failed OTP attempts, no app-level throttling on `resolveSignIn` or `verifyOtp` (`apps/web/server/routers/auth.ts`). Relies entirely on Supabase GoTrue's own defaults.
@@ -36,11 +28,11 @@ An `invited` Staff row never expires (`packages/db/src/schema/staff.ts`). Sign-i
 
 ---
 
-## Staff RLS not implemented
+## Feature-level staff permissions
 
-`requireRestaurantAccess` (`apps/web/lib/auth.ts`) is a stub that just delegates to `requireAdmin` — there's no RLS yet for a linked Staff row to reach its own restaurant. Noted in the function's own doc comment.
+Every active Staff role (Owner/Manager/Kitchen/Floor) can now reach every restaurant page and every Menu Desk action once signed in (`requireRestaurantAccess`, `staff_all_menu_*` RLS — `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 5). There's no role-level split yet — a Waiter can open Venue Settings, a Kitchen account can edit dishes, same as an Owner.
 
-**Pick up:** implement alongside Staff Roster functionality — this is the same effort as owner reassignment (`docs/core-data-model.md`: "Reassigning the primary owner ... is a Staff Roster capability (not yet built)").
+**Pick up:** design the actual RBAC matrix per `docs/product.md` (which role may do what) alongside Staff Roster, then gate individual pages/mutations by `staff.role`, not just restaurant membership.
 
 ---
 

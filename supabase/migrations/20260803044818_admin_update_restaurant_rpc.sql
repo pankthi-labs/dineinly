@@ -4,7 +4,7 @@
 -- 7. Dineinly Admin restaurant management: admin_update_restaurant
 -- ============================================================================
 -- Second sibling to admin_create_restaurant
--- (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql §5).
+-- (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql §6).
 -- The restaurants.update tRPC procedure previously did this restaurant +
 -- staff write as two separate Supabase calls from application code, with a
 -- select in between to enforce "the primary owner's details are immutable
@@ -12,7 +12,7 @@
 -- leave the restaurant and its owner-contact row inconsistent, and the
 -- lock rule was enforced only in that one call site, not the database.
 -- Folding it into one SECURITY INVOKER function gives the same atomicity
--- §5's other function already has, and moves the rule next to the data it
+-- §6's other function already has, and moves the rule next to the data it
 -- protects.
 --
 -- Same hardening as every other function in that section: `set

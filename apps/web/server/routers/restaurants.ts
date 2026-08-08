@@ -1,8 +1,9 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
-import { adminProcedure, router } from "../trpc/init";
+import { adminProcedure, authedProcedure, router } from "../trpc/init";
 import {
 	createRestaurantInput,
+	getRestaurantInput,
 	listRestaurantsInput,
 	setRestaurantStatusInput,
 	updateRestaurantInput,
@@ -102,6 +103,33 @@ export const restaurantsRouter = router({
 				page,
 				pageSize,
 			};
+		}),
+
+	// Restaurant name for the restaurant home page's header. authedProcedure,
+	// not adminProcedure — every restaurant's own staff needs this too;
+	// staff_select_own_restaurant RLS (supabase/migrations/
+	// 20260730150634_add_auth_fk_and_rls_policies.sql § 5) is what actually
+	// keeps a staff caller from reading another restaurant's row.
+	getById: authedProcedure
+		.input(getRestaurantInput)
+		.query(async ({ ctx, input }) => {
+			const { data, error } = await ctx.auth
+				.from("restaurants")
+				.select("id, name, status")
+				.eq("id", input.id)
+				.maybeSingle();
+
+			if (error) {
+				throw toTRPCError(error, "Unable to load the restaurant.");
+			}
+			if (!data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Restaurant not found.",
+				});
+			}
+
+			return data;
 		}),
 
 	create: adminProcedure

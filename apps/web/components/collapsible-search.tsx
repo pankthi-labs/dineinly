@@ -33,7 +33,7 @@ export function CollapsibleSearch({
 	}
 
 	return (
-		<div className="relative w-full sm:max-w-xs">
+		<div className="relative w-64 shrink-0">
 			<Search
 				className="icon-sm pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted"
 				strokeWidth={1.5}

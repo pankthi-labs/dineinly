@@ -3,6 +3,7 @@ import { Settings, UserCog, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand-logo";
 import { getViewer } from "@/lib/auth";
+import { getGreeting } from "@/lib/greeting";
 import { AdminHeaderActions } from "./admin-header-actions";
 
 const navCards: Array<{
@@ -46,7 +47,7 @@ export default async function AdminDashboardPage() {
 				</div>
 
 				<h1 className="font-medium text-3xl text-primary sm:text-4xl lg:text-5xl">
-					Good Evening, {viewer?.displayName ?? "Admin"}.
+					{getGreeting()}, {viewer?.displayName ?? "Admin"}.
 				</h1>
 			</header>
 

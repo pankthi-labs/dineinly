@@ -44,6 +44,10 @@ export const setRestaurantStatusInput = z.object({
 	status: z.enum(["active", "archived"]),
 });
 
+export const getRestaurantInput = z.object({
+	id: z.string().uuid(),
+});
+
 export const listRestaurantsInput = z.object({
 	page: z.number().int().min(1).default(1),
 	pageSize: z.number().int().min(1).max(50).default(10),

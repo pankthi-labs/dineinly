@@ -22,10 +22,7 @@ import {
 } from "@/lib/menu-options";
 import { moveId, moveIdTo } from "@/lib/reorder";
 import { trpc } from "@/lib/trpc-client";
-import {
-	RestaurantBreadcrumb,
-	RestaurantNavHeader,
-} from "../restaurant-nav-header";
+import { RestaurantNavHeader } from "../restaurant-nav-header";
 import { AddCategoryPanel } from "./add-category-panel";
 import { AddDishPanel } from "./add-dish-panel";
 import { AddLabelPanel } from "./add-label-panel";
@@ -146,13 +143,13 @@ export default function RestaurantMenuPage() {
 	return (
 		<div className="min-h-dvh bg-background text-primary">
 			<RestaurantNavHeader
+				restaurantId={restaurantId}
 				restaurantName={menu.data.restaurant.name}
 				active="Menu Desk"
 			/>
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
-					breadcrumb={<RestaurantBreadcrumb />}
 					search={
 						<CollapsibleSearch
 							value={search}
@@ -172,7 +169,7 @@ export default function RestaurantMenuPage() {
 							<button
 								type="button"
 								onClick={() => setIsAddingCategory(true)}
-								className="flex items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
+								className="flex shrink-0 items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
 							>
 								<FolderPlus
 									className="icon-sm"
@@ -184,7 +181,7 @@ export default function RestaurantMenuPage() {
 							<button
 								type="button"
 								onClick={() => setIsAddingLabel(true)}
-								className="flex items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
+								className="flex shrink-0 items-center gap-2 rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary"
 							>
 								<Tag className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 								Add label
@@ -198,7 +195,7 @@ export default function RestaurantMenuPage() {
 										? "Create a category before adding a dish."
 										: undefined
 								}
-								className="flex items-center gap-2 rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted"
+								className="flex shrink-0 items-center gap-2 rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted"
 							>
 								<Plus
 									className="icon-sm"

@@ -90,7 +90,7 @@ export function RestaurantRow({
 
 					<div className="flex items-center gap-6 pt-6">
 						<Link
-							href={`/restaurants/${restaurant.id}/menu`}
+							href={`/restaurants/${restaurant.id}`}
 							className="text-accent text-caps no-underline hover:opacity-80"
 						>
 							Open
