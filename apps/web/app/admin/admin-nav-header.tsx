@@ -5,14 +5,17 @@ import { BrandLogo } from "@/components/brand-logo";
 import { AdminHeaderActions } from "./admin-header-actions";
 
 const NAV_ITEMS = [
+	"Admin Home",
 	"Restaurants Directory",
 	"Dineinly Staff",
 	"Dineinly Settings",
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Only Restaurants Directory is built so far — the rest render inert.
+// Only Admin Home and Restaurants Directory are built so far — the rest
+// render inert.
 const NAV_ROUTES: Partial<Record<NavItem, string>> = {
+	"Admin Home": "/admin",
 	"Restaurants Directory": "/admin/restaurants",
 };
 

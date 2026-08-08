@@ -330,6 +330,17 @@ Usage in components:
 - **Tap target:** any interactive icon sits inside a minimum 44px wrapper regardless of glyph size.
 - **Restraint:** one icon per action or status, never doubled up. An icon clarifies meaning already conveyed by text — it does not replace text, and it does not decorate.
 
+**Icon placement by role — pick the tier, don't decide per-component:**
+
+| Tier | Examples | Icon? | Text case |
+|---|---|---|---|
+| Primary section nav (tabs) | Home, Menu Desk, Table Matrix, Admin Home, Restaurants Directory (admin header tab) | No | `text-sm`, sentence case. State shown by the gold active underline, not a glyph. |
+| Exit/utility strip | Directory link (restaurant header → admin), Log out, Profile | Yes, icon + text | `.text-caps` (ALL CAPS). Deliberately separate visual weight from primary nav — these are session-level actions, not content navigation. |
+| Primary CTA / action buttons | Add dish, Create Restaurant, Add category | Yes, icon + text | Sentence case. |
+| Quick actions inside rows/cards | Edit, Hide dish, Mark sold out, Open restaurant, Mark inactive | No | Sentence case. Packed, read linearly — an icon per action clutters without adding clarity. |
+
+A tab bar with 4+ items never gets icons — that many glyphs in a row is decorative, not clarifying, and violates the restraint rule above.
+
 ---
 
 # 12 — Shadow

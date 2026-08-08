@@ -83,9 +83,7 @@ export function RestaurantNavHeader({
 }
 
 // Dineinly Admin only — a restaurant's own staff has no "directory" to
-// leave to. Icon-only: this is a frequent, glance-only control, not a
-// deliberate one, so it reads by shape (leave here) rather than by naming
-// the destination.
+// leave to.
 export function DirectoryLink() {
 	const isAdmin = useIsAdmin();
 	if (!isAdmin) return null;
@@ -93,15 +91,14 @@ export function DirectoryLink() {
 	return (
 		<Link
 			href="/admin/restaurants"
-			aria-label="Restaurants Directory"
-			title="Restaurants Directory"
-			className="icon-tap-target flex items-center justify-center text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
+			className="icon-tap-target flex items-center gap-2 text-caps text-secondary no-underline transition-colors duration-(--duration-base) ease-out hover:text-primary focus-visible:text-primary"
 		>
 			<ArrowLeftFromLine
 				className="icon-sm"
 				strokeWidth={1.5}
 				aria-hidden="true"
 			/>
+			Restaurants Directory
 		</Link>
 	);
 }

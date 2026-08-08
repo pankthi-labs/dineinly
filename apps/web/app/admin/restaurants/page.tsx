@@ -155,6 +155,7 @@ export default function RestaurantsDirectoryPage() {
 							/>
 						}
 						title="Restaurants Directory"
+						description="Manage restaurant accounts, details, and status across Dineinly."
 						actions={
 							<button
 								type="button"
