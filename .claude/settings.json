@@ -10,5 +10,27 @@
     "frontend-design@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "agent-browser@agent-browser": false
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/puneeth/.pyenv/versions/3.14.5/bin/graphify hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/puneeth/.pyenv/versions/3.14.5/bin/graphify hook-guard read"
+          }
+        ]
+      }
+    ]
   }
 }
