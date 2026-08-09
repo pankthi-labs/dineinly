@@ -73,7 +73,7 @@ export function RestaurantHome({
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<div>
 						<p className="text-2xl text-primary">{restaurant.data.name}</p>
-						<PoweredByDineinly className="mt-1.5" />
+						<PoweredByDineinly className="mt-1" />
 					</div>
 
 					<div className="flex items-center gap-4">

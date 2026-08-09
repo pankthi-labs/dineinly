@@ -7,6 +7,7 @@ import { mintGuestToken, verifyGuestToken } from "@/lib/guest-token";
 const claims = {
 	restaurant_id: "9c858f5b-0d64-4d8a-9a1e-9f3c1a2b3c4d",
 	table_session_id: "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+	table_label: "12",
 	app_role: "guest" as const,
 };
 

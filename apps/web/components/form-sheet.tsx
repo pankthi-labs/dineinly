@@ -33,6 +33,7 @@ export function FormSheet({
 	children,
 	footer,
 	isSubmitting = false,
+	hideHeader = false,
 }: {
 	title: string;
 	onClose: () => void;
@@ -41,6 +42,11 @@ export function FormSheet({
 	/** Blocks Escape/backdrop/× dismissal while a mutation is in flight, so a
 	 * stray tap can't unmount the panel mid-submit and swallow the result. */
 	isSubmitting?: boolean;
+	/** Skips the bordered title bar + × button for content that supplies its
+	 * own heading inline (e.g. a dish name sitting next to its price) — the
+	 * bar would duplicate it. `title` still labels the dialog via
+	 * `aria-label`. Dismissal falls back to backdrop tap / Escape. */
+	hideHeader?: boolean;
 }) {
 	const [isVisible, setIsVisible] = useState(false);
 	const [isClosing, setIsClosing] = useState(false);
@@ -74,7 +80,8 @@ export function FormSheet({
 				ref={containerRef}
 				role="dialog"
 				aria-modal="true"
-				aria-labelledby={titleId}
+				aria-labelledby={hideHeader ? undefined : titleId}
+				aria-label={hideHeader ? title : undefined}
 				onClick={(event) => event.stopPropagation()}
 				className={`fixed inset-x-0 bottom-0 z-(--z-modal) flex max-h-[85dvh] w-full flex-col rounded-t-3xl border-divider border-t bg-surface-elevated shadow-lg transition-transform md:inset-x-auto md:inset-y-0 md:right-0 md:bottom-auto md:h-full md:max-h-none md:w-full md:max-w-xl md:rounded-t-none md:rounded-l-3xl md:border-t-0 md:border-l ${
 					isClosing ? CLOSE_MOTION : OPEN_MOTION
@@ -88,20 +95,22 @@ export function FormSheet({
 					className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-divider md:hidden"
 					aria-hidden="true"
 				/>
-				<div className="flex w-full items-center justify-between border-divider border-b px-6 py-5">
-					<h2 id={titleId} className="text-2xl text-primary">
-						{title}
-					</h2>
-					<button
-						type="button"
-						onClick={handleClose}
-						disabled={isSubmitting}
-						className="icon-tap-target rounded-full text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary disabled:cursor-not-allowed disabled:text-muted"
-					>
-						<X className="icon-md" strokeWidth={1.5} aria-hidden="true" />
-						<span className="sr-only">Close</span>
-					</button>
-				</div>
+				{hideHeader ? null : (
+					<div className="flex w-full items-center justify-between border-divider border-b px-6 py-5">
+						<h2 id={titleId} className="text-2xl text-primary">
+							{title}
+						</h2>
+						<button
+							type="button"
+							onClick={handleClose}
+							disabled={isSubmitting}
+							className="icon-tap-target rounded-full text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary disabled:cursor-not-allowed disabled:text-muted"
+						>
+							<X className="icon-md" strokeWidth={1.5} aria-hidden="true" />
+							<span className="sr-only">Close</span>
+						</button>
+					</div>
+				)}
 
 				<div className="flex-1 overflow-y-auto px-6 py-8">{children}</div>
 

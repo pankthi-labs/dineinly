@@ -38,7 +38,7 @@ export function RestaurantNavHeader({
 			<div className="flex flex-col gap-6 px-4 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-16 xl:px-24">
 				<div>
 					<p className="text-2xl text-primary">{restaurantName}</p>
-					<PoweredByDineinly className="mt-1.5" />
+					<PoweredByDineinly className="mt-1" />
 				</div>
 				<div className="flex items-center gap-6 overflow-x-auto lg:gap-8">
 					<nav aria-label="Restaurant navigation">

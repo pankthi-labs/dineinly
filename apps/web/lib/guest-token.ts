@@ -29,11 +29,18 @@ import { env } from "./env";
 //    a guest session apart from a staff one.
 
 const GUEST_TOKEN_ALG = "RS256";
-const GUEST_TOKEN_MIN_TTL_SECONDS = 12 * 60 * 60; // architecture.md: "≥12h, longer for events"
+/** architecture.md: "≥12h, longer for events". Also the max-age of the
+ *  cookie the token is set in, so the two expire together. */
+export const GUEST_TOKEN_MIN_TTL_SECONDS = 12 * 60 * 60;
 
 export const guestClaimsSchema = z.object({
 	restaurant_id: z.uuid(),
 	table_session_id: z.uuid(),
+	// Display-only — the scanned table's label at mint time. Not re-checked
+	// by RLS (restaurant_id/table_session_id are the only claims policies
+	// scope on), so a merge after minting can leave this stale until the
+	// guest's next scan; acceptable since it's UI copy, not an access grant.
+	table_label: z.string(),
 	app_role: z.literal("guest"),
 });
 

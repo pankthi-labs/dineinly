@@ -19,12 +19,19 @@ function getBaseUrl() {
 	return "http://127.0.0.1:3000";
 }
 
-// A session that's expired or been signed out elsewhere surfaces as
-// UNAUTHORIZED on the next call, from any query or mutation, on any page —
-// one global handler here beats a "sign in again" link on every page's own
-// error state.
+// A staff session that's expired or been signed out elsewhere surfaces as
+// UNAUTHORIZED on the next call, from any query or mutation, on any staff
+// page — one global handler here beats a "sign in again" link on every
+// page's own error state. Guest procedures throw the same UNAUTHORIZED for
+// "no/expired guest cookie", which is never an error for a guest page
+// (docs/architecture.md) — those are excluded so the page's own empty
+// state renders instead of bouncing a guest to the staff sign-in.
 function redirectToSignInOnAuthError(error: unknown) {
-	if (error instanceof TRPCClientError && error.data?.code === "UNAUTHORIZED") {
+	if (
+		error instanceof TRPCClientError &&
+		error.data?.code === "UNAUTHORIZED" &&
+		!error.data?.path?.startsWith("guest.")
+	) {
 		window.location.href = "/sign-in";
 	}
 }

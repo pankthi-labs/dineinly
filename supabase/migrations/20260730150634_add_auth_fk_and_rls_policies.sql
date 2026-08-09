@@ -566,3 +566,77 @@ $$;
 
 revoke execute on function public.reorder_menu_categories(uuid, uuid[]) from public;
 grant execute on function public.reorder_menu_categories(uuid, uuid[]) to authenticated;
+
+-- ============================================================================
+-- 8. Guest onboarding: resolve_qr_token
+-- ============================================================================
+-- Called from apps/web/app/qr/[qrToken]/route.ts before any guest JWT
+-- exists, so the caller is Postgres role `anon` (same "no session yet"
+-- situation as resolve_staff_signin above) — reading restaurant_tables by
+-- qr_token, and writing table_sessions/restaurant_tables to join-or-create
+-- the active session, both need elevated privilege no unauthenticated role
+-- has, hence SECURITY DEFINER.
+--
+-- `for update` row-locks the matched restaurant_tables row so two guests
+-- scanning the same physical QR at the same moment serialize onto the same
+-- session instead of racing into two. Doubles as the "free the table" step
+-- from docs/core-data-model.md's Close Session lifecycle: a session_id left
+-- over from a closed session is treated the same as no session at all and
+-- is replaced here, on next scan, rather than being cleared eagerly at close.
+--
+-- Same hardening as every other function in this file: `set search_path =
+-- ''` with fully schema-qualified references, `execute` revoked from
+-- `public`.
+
+create or replace function public.resolve_qr_token(p_qr_token text)
+returns table (
+	restaurant_id uuid,
+	table_session_id uuid,
+	table_label text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_table_id uuid;
+	v_restaurant_id uuid;
+	v_label text;
+	v_session_id uuid;
+	v_session_status public.session_status;
+begin
+	select rt.id, rt.restaurant_id, rt.label, rt.session_id
+	into v_table_id, v_restaurant_id, v_label, v_session_id
+	from public.restaurant_tables rt
+	where rt.qr_token = p_qr_token
+	for update;
+
+	if v_table_id is null then
+		raise exception 'Invalid QR code';
+	end if;
+
+	if v_session_id is not null then
+		select ts.status into v_session_status
+		from public.table_sessions ts
+		where ts.id = v_session_id;
+	end if;
+
+	if v_session_id is null or v_session_status <> 'active' then
+		insert into public.table_sessions (restaurant_id)
+		values (v_restaurant_id)
+		returning id into v_session_id;
+
+		update public.restaurant_tables
+		set session_id = v_session_id
+		where id = v_table_id;
+	end if;
+
+	return query select v_restaurant_id, v_session_id, v_label;
+end;
+$$;
+
+revoke execute on function public.resolve_qr_token(text) from public;
+-- Called pre-auth (no guest JWT minted yet), so the request arrives as
+-- `anon`; also grant `authenticated` for the same leftover-session-cookie
+-- reason as resolve_staff_signin above.
+grant execute on function public.resolve_qr_token(text) to anon, authenticated;

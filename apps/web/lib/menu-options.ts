@@ -19,10 +19,25 @@ export const SERVING_SIZE_LABELS: Record<
 	(typeof SERVING_SIZE_OPTIONS)[number],
 	string
 > = {
-	"serves 1": "Individual (Serves 1)",
-	"serves 1-2": "Ideal for Two (Serves 1–2)",
-	"serves 2": "For Two (Serves 2)",
-	"serves 2-3": "Perfect for Sharing (Serves 2–3)",
-	"serves 4-5": "Family Size (Serves 4–5)",
-	"serves 5+": "Party Size (Serves 5+)",
+	"serves 1": "Individual\n(1 person)",
+	"serves 1-2": "Ideal for Two\n(1–2 persons)",
+	"serves 2": "For Two\n(2 persons)",
+	"serves 2-3": "Perfect for Sharing\n(2–3 persons)",
+	"serves 4-5": "Family Size\n(4–5 persons)",
+	"serves 5+": "Party Size\n(5+ persons)",
+};
+
+// Guest-selectable preference values (docs/product.md: fixed per preference,
+// chosen by the guest at order time — never at dish creation, which only
+// toggles offers_spice/offers_salt/offers_ice).
+export const SPICE_OPTIONS = ["mild", "regular", "extra spicy"] as const;
+export const SALT_OPTIONS = ["less salt", "regular"] as const;
+export const ICE_OPTIONS = ["none", "less", "regular"] as const;
+
+// "none"/"less" read as bare words without their noun — titleCase alone
+// isn't enough here, unlike spice/salt where titleCase(value) is legible.
+export const ICE_LABELS: Record<(typeof ICE_OPTIONS)[number], string> = {
+	none: "No Ice",
+	less: "Less Ice",
+	regular: "Regular",
 };

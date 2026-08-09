@@ -13,8 +13,10 @@ import {
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { CollapsibleSearch } from "@/components/collapsible-search";
+import { Detail } from "@/components/detail";
+import { DietMark } from "@/components/diet-mark";
 import { PageHeader } from "@/components/page-header";
-import { titleCase } from "@/lib/format";
+import { formatPrice, titleCase } from "@/lib/format";
 import {
 	type PREP_TIME_OPTIONS,
 	SERVING_SIZE_LABELS,
@@ -607,44 +609,4 @@ function Preference({ label, offered }: { label: string; offered: boolean }) {
 			<span className={offered ? "text-primary" : "text-muted"}>{label}</span>
 		</span>
 	);
-}
-/**
- * FSSAI mark: veg is a green square with a green dot; non-veg is a brown
- * square with a brown triangle — the shapes, not just the color, carry the
- * meaning.
- */
-function DietMark({ diet }: { diet: MenuItem["diet"] }) {
-	const label = diet === "veg" ? "Vegetarian" : "Non-vegetarian";
-	return (
-		<span
-			role="img"
-			aria-label={label}
-			className={`flex size-4 items-center justify-center rounded-xs border ${diet === "veg" ? "border-success" : "border-error"}`}
-		>
-			{diet === "veg" ? (
-				<span aria-hidden="true" className="size-1 rounded-full bg-success" />
-			) : (
-				<span
-					aria-hidden="true"
-					className="size-1 bg-error"
-					style={{ clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)" }}
-				/>
-			)}
-		</span>
-	);
-}
-function Detail({ label, value }: { label: string; value: string }) {
-	return (
-		<div>
-			<p className="text-caps text-muted">{label}</p>
-			<p className="mt-3 text-primary text-sm">{value}</p>
-		</div>
-	);
-}
-function formatPrice(price: number) {
-	return new Intl.NumberFormat("en-IN", {
-		style: "currency",
-		currency: "INR",
-		maximumFractionDigits: 0,
-	}).format(price);
 }

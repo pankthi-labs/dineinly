@@ -642,6 +642,10 @@ export type Database = {
 				Args: { p_restaurant_id: string; p_session_id: string };
 				Returns: boolean;
 			};
+			is_active_staff_for_restaurant: {
+				Args: { p_restaurant_id: string };
+				Returns: boolean;
+			};
 			is_dineinly_admin: { Args: never; Returns: boolean };
 			jwt_is_guest_for_restaurant: {
 				Args: { p_restaurant_id: string };
@@ -663,6 +667,14 @@ export type Database = {
 			reorder_menu_categories: {
 				Args: { p_category_ids: string[]; p_restaurant_id: string };
 				Returns: undefined;
+			};
+			resolve_qr_token: {
+				Args: { p_qr_token: string };
+				Returns: {
+					restaurant_id: string;
+					table_label: string;
+					table_session_id: string;
+				}[];
 			};
 			resolve_staff_signin: { Args: { p_email: string }; Returns: string };
 		};
