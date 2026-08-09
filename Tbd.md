@@ -132,6 +132,14 @@ RLS read access to `orders`/`order_items` is already in place for guests, no UI 
 
 ---
 
+## Kitchen queue not wired to realtime
+
+`apps/web/app/restaurants/[restaurantId]/kitchen/page.tsx` polls `kitchen.listQueue` on an 8s interval instead of subscribing to the `restaurant:{id}` topic (`docs/realtime.md`) — no Broadcast-from-Database trigger, `realtime.messages` RLS policy, or client channel subscription exists anywhere in the app yet (same gap as "Guest side not wired to realtime" above). `docs/architecture.md`/`docs/realtime.md` mandate no polling; this is the interim, same tradeoff already accepted for the guest cart.
+
+**Pick up:** build the `restaurant:{id}` Broadcast infra (trigger functions on `orders` INSERT and `order_items` status UPDATE, `realtime.messages` RLS keyed on staff/admin restaurant membership, `realtime.topic()`-based authorization) once it's built for one table — likely worth doing once for every table in `docs/realtime.md`'s Publish Side table rather than per-feature. Swapping the Kitchen Display's polling for a channel subscription only touches the `refetchInterval` call in `page.tsx`, not the query shape.
+
+---
+
 ## Tax/service/rounding formula — TBD in docs
 
 Marked `TBD` in `docs/core-data-model.md`. Blocks real order/bill totals.

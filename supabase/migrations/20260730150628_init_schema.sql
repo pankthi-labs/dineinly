@@ -119,6 +119,8 @@ CREATE TABLE "order_items" (
 	"salt" "salt",
 	"ice" "ice",
 	"status" "order_item_status" DEFAULT 'placed' NOT NULL,
+	"preparing_at" timestamp with time zone,
+	"ready_at" timestamp with time zone,
 	"menu_item_id" uuid,
 	CONSTRAINT "order_items_quantity_check" CHECK ("order_items"."quantity" > 0 AND "order_items"."quantity" <= 99),
 	CONSTRAINT "order_items_unit_price_check" CHECK ("order_items"."unit_price" >= 0),

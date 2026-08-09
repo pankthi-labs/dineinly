@@ -1,6 +1,7 @@
 import { publicProcedure, router } from "../trpc/init";
 import { authRouter } from "./auth";
 import { guestRouter } from "./guest";
+import { kitchenRouter } from "./kitchen";
 import { menuRouter } from "./menu";
 import { restaurantsRouter } from "./restaurants";
 
@@ -15,6 +16,7 @@ export const appRouter = router({
 	}),
 	auth: authRouter,
 	guest: guestRouter,
+	kitchen: kitchenRouter,
 	menu: menuRouter,
 	restaurants: restaurantsRouter,
 });

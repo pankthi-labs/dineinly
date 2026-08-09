@@ -445,6 +445,33 @@ create policy "staff_all_menu_labels" on public.menu_labels
 	using (public.is_active_staff_for_restaurant(restaurant_id))
 	with check (public.is_active_staff_for_restaurant(restaurant_id));
 
+-- Kitchen Display: any active staff member reads and advances this
+-- restaurant's order queue (docs/core-data-model.md "Kitchen advances
+-- status only, never cancels" is enforced app-side, in
+-- apps/web/server/routers/kitchen.ts — RLS here only scopes rows to the
+-- caller's own restaurant, same reach as staff_all_menu_* above).
+create policy "staff_all_orders" on public.orders
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
+create policy "staff_all_order_items" on public.order_items
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
+-- Table labels: read by Kitchen Display (table chips on each batch card)
+-- and, eventually, Table Matrix. No staff policy existed on this table at
+-- all before — only admin_all_restaurant_tables — so no non-admin staff
+-- session could ever see a table's own label, only Dineinly Admin.
+create policy "staff_all_restaurant_tables" on public.restaurant_tables
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
 -- ============================================================================
 -- 6. Dineinly Admin restaurant management: atomic multi-table writes
 -- ============================================================================

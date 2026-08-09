@@ -9,6 +9,7 @@ import { useIsAdmin } from "./viewer-context";
 const NAV_ITEMS = [
 	"Home",
 	"Menu Desk",
+	"Kitchen",
 	"Table Matrix",
 	"Staff Roster",
 	"Venue Settings",
@@ -16,10 +17,11 @@ const NAV_ITEMS = [
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Only Home and Menu Desk are built so far — the rest render inert.
+// Only Home, Menu Desk, and Kitchen are built so far — the rest render inert.
 const NAV_ROUTES: Partial<Record<NavItem, (restaurantId: string) => string>> = {
 	Home: (restaurantId) => `/restaurants/${restaurantId}`,
 	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
+	Kitchen: (restaurantId) => `/restaurants/${restaurantId}/kitchen`,
 };
 
 export function RestaurantNavHeader({

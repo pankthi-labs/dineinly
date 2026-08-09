@@ -1,7 +1,14 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, LayoutGrid, Receipt, Store, Users } from "lucide-react";
+import {
+	BookOpen,
+	ChefHat,
+	LayoutGrid,
+	Receipt,
+	Store,
+	Users,
+} from "lucide-react";
 import Link from "next/link";
 import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
@@ -22,6 +29,12 @@ const navCards: Array<{
 		description: "Updates & specials",
 		icon: BookOpen,
 		href: "menu",
+	},
+	{
+		title: "Kitchen",
+		description: "Live order queue",
+		icon: ChefHat,
+		href: "kitchen",
 	},
 	{
 		title: "Table Matrix",

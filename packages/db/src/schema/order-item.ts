@@ -7,6 +7,7 @@ import {
 	numeric,
 	pgTable,
 	text,
+	timestamp,
 	uuid,
 } from "drizzle-orm/pg-core";
 import { diet, ice, orderItemStatus, salt, spice } from "./enums.js";
@@ -39,6 +40,15 @@ export const orderItems = pgTable(
 		salt: salt("salt"),
 		ice: ice("ice"),
 		status: orderItemStatus("status").notNull().default("placed"),
+		// Set by the kitchen when it advances status (Kitchen Display) — null
+		// until that transition happens. Lets elapsed-time displays report
+		// time-in-preparation and time-awaiting-pickup separately, rather than
+		// approximating both from the order's placedAt.
+		preparingAt: timestamp("preparing_at", {
+			withTimezone: true,
+			mode: "string",
+		}),
+		readyAt: timestamp("ready_at", { withTimezone: true, mode: "string" }),
 		// Plain column — the real constraint is the composite FK below, so
 		// menu_item_id can never name an item from another restaurant.
 		menuItemId: uuid("menu_item_id"),

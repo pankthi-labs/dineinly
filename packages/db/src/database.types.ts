@@ -319,7 +319,9 @@ export type Database = {
 					item_name: string;
 					menu_item_id: string | null;
 					order_id: string;
+					preparing_at: string | null;
 					quantity: number;
+					ready_at: string | null;
 					restaurant_id: string;
 					salt: Database["public"]["Enums"]["salt"] | null;
 					spice: Database["public"]["Enums"]["spice"] | null;
@@ -334,7 +336,9 @@ export type Database = {
 					item_name: string;
 					menu_item_id?: string | null;
 					order_id: string;
+					preparing_at?: string | null;
 					quantity: number;
+					ready_at?: string | null;
 					restaurant_id: string;
 					salt?: Database["public"]["Enums"]["salt"] | null;
 					spice?: Database["public"]["Enums"]["spice"] | null;
@@ -349,7 +353,9 @@ export type Database = {
 					item_name?: string;
 					menu_item_id?: string | null;
 					order_id?: string;
+					preparing_at?: string | null;
 					quantity?: number;
+					ready_at?: string | null;
 					restaurant_id?: string;
 					salt?: Database["public"]["Enums"]["salt"] | null;
 					spice?: Database["public"]["Enums"]["spice"] | null;

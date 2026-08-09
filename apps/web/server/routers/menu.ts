@@ -7,13 +7,13 @@ import { authedProcedure, router } from "../trpc/init";
 // Labels are a restaurant-managed vocabulary (see menu_labels), not a fixed
 // enum — this is the runtime check a zod schema can't express.
 async function assertKnownLabels(
-	supabase: Context["supabase"],
+	auth: Context["auth"],
 	restaurantId: string,
 	labels: string[],
 ) {
 	if (labels.length === 0) return;
 
-	const { data, error } = await supabase
+	const { data, error } = await auth
 		.from("menu_labels")
 		.select("name")
 		.eq("restaurant_id", restaurantId)
@@ -77,18 +77,18 @@ export const menuRouter = router({
 		.query(async ({ ctx, input }) => {
 			const [restaurantResult, categoriesResult, itemsResult, labelsResult] =
 				await Promise.all([
-					ctx.supabase
+					ctx.auth
 						.from("restaurants")
 						.select("id, name")
 						.eq("id", input.restaurantId)
 						.maybeSingle(),
-					ctx.supabase
+					ctx.auth
 						.from("menu_categories")
 						.select("id, name, sort, status")
 						.eq("restaurant_id", input.restaurantId)
 						.order("sort", { ascending: true })
 						.order("name", { ascending: true }),
-					ctx.supabase
+					ctx.auth
 						.from("menu_items")
 						.select(
 							"id, category_id, name, description, price, prep_time, serving_size, diet, availability, labels, offers_spice, offers_salt, offers_ice, status",
@@ -101,7 +101,7 @@ export const menuRouter = router({
 						.order("status", { ascending: true })
 						.order("availability", { ascending: true })
 						.order("name", { ascending: true }),
-					ctx.supabase
+					ctx.auth
 						.from("menu_labels")
 						.select("id, name")
 						.eq("restaurant_id", input.restaurantId)
@@ -143,12 +143,12 @@ export const menuRouter = router({
 		.input(menuCategoryInputSchema)
 		.mutation(async ({ ctx, input }) => {
 			const [restaurantResult, lastCategoryResult] = await Promise.all([
-				ctx.supabase
+				ctx.auth
 					.from("restaurants")
 					.select("id")
 					.eq("id", input.restaurantId)
 					.maybeSingle(),
-				ctx.supabase
+				ctx.auth
 					.from("menu_categories")
 					.select("sort")
 					.eq("restaurant_id", input.restaurantId)
@@ -172,7 +172,7 @@ export const menuRouter = router({
 				});
 			}
 
-			const { data, error } = await ctx.supabase
+			const { data, error } = await ctx.auth
 				.from("menu_categories")
 				.insert({
 					restaurant_id: input.restaurantId,
@@ -196,7 +196,7 @@ export const menuRouter = router({
 	reorderCategories: authedProcedure
 		.input(menuCategoryReorderInputSchema)
 		.mutation(async ({ ctx, input }) => {
-			const { data: existing, error: existingError } = await ctx.supabase
+			const { data: existing, error: existingError } = await ctx.auth
 				.from("menu_categories")
 				.select("id")
 				.eq("restaurant_id", input.restaurantId);
@@ -221,7 +221,7 @@ export const menuRouter = router({
 				});
 			}
 
-			const { error } = await ctx.supabase.rpc("reorder_menu_categories", {
+			const { error } = await ctx.auth.rpc("reorder_menu_categories", {
 				p_restaurant_id: input.restaurantId,
 				p_category_ids: input.categoryIds,
 			});
@@ -239,7 +239,7 @@ export const menuRouter = router({
 	createLabel: authedProcedure
 		.input(menuLabelInputSchema)
 		.mutation(async ({ ctx, input }) => {
-			const { data, error } = await ctx.supabase
+			const { data, error } = await ctx.auth
 				.from("menu_labels")
 				.insert({ restaurant_id: input.restaurantId, name: input.name })
 				.select("id, name")
@@ -262,7 +262,7 @@ export const menuRouter = router({
 	createItem: authedProcedure
 		.input(menuItemInputSchema)
 		.mutation(async ({ ctx, input }) => {
-			const { data: category, error: categoryError } = await ctx.supabase
+			const { data: category, error: categoryError } = await ctx.auth
 				.from("menu_categories")
 				.select("id")
 				.eq("id", input.categoryId)
@@ -284,9 +284,9 @@ export const menuRouter = router({
 				});
 			}
 
-			await assertKnownLabels(ctx.supabase, input.restaurantId, input.labels);
+			await assertKnownLabels(ctx.auth, input.restaurantId, input.labels);
 
-			const { data, error } = await ctx.supabase
+			const { data, error } = await ctx.auth
 				.from("menu_items")
 				.insert({
 					restaurant_id: input.restaurantId,
@@ -320,7 +320,7 @@ export const menuRouter = router({
 	updateItem: authedProcedure
 		.input(menuItemUpdateSchema)
 		.mutation(async ({ ctx, input }) => {
-			const { data: category, error: categoryError } = await ctx.supabase
+			const { data: category, error: categoryError } = await ctx.auth
 				.from("menu_categories")
 				.select("id")
 				.eq("id", input.categoryId)
@@ -342,9 +342,9 @@ export const menuRouter = router({
 				});
 			}
 
-			await assertKnownLabels(ctx.supabase, input.restaurantId, input.labels);
+			await assertKnownLabels(ctx.auth, input.restaurantId, input.labels);
 
-			const { data, error } = await ctx.supabase
+			const { data, error } = await ctx.auth
 				.from("menu_items")
 				.update({
 					category_id: input.categoryId,
@@ -401,7 +401,7 @@ export const menuRouter = router({
 			const isAvailabilityAction =
 				input.action === "mark_sold_out" || input.action === "mark_available";
 
-			let query = ctx.supabase
+			let query = ctx.auth
 				.from("menu_items")
 				.update({ ...changes, updated_at: new Date().toISOString() })
 				.eq("id", input.itemId)
