@@ -23,7 +23,7 @@ export function AddLabelPanel({
 
 	function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
-		createLabel.mutate({ restaurantId, name: name.trim() });
+		createLabel.mutate({ restaurantId, name });
 	}
 
 	return (
