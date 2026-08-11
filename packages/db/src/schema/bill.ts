@@ -39,9 +39,7 @@ export const bills = pgTable(
 		// by construction rather than random-with-retry.
 		billNumber: text("bill_number")
 			.notNull()
-			.default(
-				sql`encode_bill_number(nextval('bill_number_seq'::regclass))`,
-			),
+			.default(sql`encode_bill_number(nextval('bill_number_seq'::regclass))`),
 		status: billStatus("status").notNull().default("open"),
 		// Snapshotted at request/settle time — restaurant-level rate can change later.
 		serviceChargeRate: numeric("service_charge_rate", {
