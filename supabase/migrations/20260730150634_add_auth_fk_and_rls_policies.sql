@@ -667,3 +667,125 @@ revoke execute on function public.resolve_qr_token(text) from public;
 -- `anon`; also grant `authenticated` for the same leftover-session-cookie
 -- reason as resolve_staff_signin above.
 grant execute on function public.resolve_qr_token(text) to anon, authenticated;
+
+-- ============================================================================
+-- 9. Guest ordering: submit_order
+-- ============================================================================
+-- Confirm Order: atomically turns the guest's shared cart into an Order +
+-- Order Items, then clears those cart_items (docs/core-data-model.md § Cart
+-- Item / Order lifecycle). SECURITY DEFINER because orders/order_items grant
+-- guests select-only (see § 3 above) — the insert side needs elevated
+-- privilege no guest role has directly.
+--
+-- Tenancy and session come only from `auth.jwt()` claims, never from
+-- arguments — a guest cannot name another session's cart. Prices/tax rates
+-- are read fresh from menu_items/menu_categories here, never trusted from
+-- the client.
+--
+-- Idempotency (docs/architecture.md § Authorization & Idempotency): the
+-- caller supplies `p_idempotency_key`; a retry of the same key (duplicate
+-- tap, network retry) returns the order already created for it instead of
+-- creating a second one. `orders.idempotency_key` is globally unique, so a
+-- lookup by key alone is enough — no restaurant/session scoping needed on
+-- that lookup.
+--
+-- Same hardening as every other function in this file: `set search_path =
+-- ''` with fully schema-qualified references, `execute` revoked from
+-- `public`.
+
+create or replace function public.submit_order(p_idempotency_key text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid;
+	v_session_id uuid;
+	v_order_id uuid;
+begin
+	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
+	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
+
+	if not public.jwt_is_guest_for_session(v_restaurant_id, v_session_id) then
+		raise exception 'Guest session required';
+	end if;
+
+	if not public.is_active_guest_session(v_session_id, v_restaurant_id) then
+		raise exception 'Table session is not active';
+	end if;
+
+	-- Idempotent retry: a prior call with this key already succeeded.
+	select id into v_order_id
+	from public.orders
+	where idempotency_key = p_idempotency_key;
+
+	if v_order_id is not null then
+		return v_order_id;
+	end if;
+
+	-- Serialize concurrent Confirm Order taps on the same shared session
+	-- (docs/product.md: "any participant edits freely"). Without this lock,
+	-- two guests confirming near-simultaneously with different idempotency
+	-- keys would each see the same non-empty cart and each copy it into a
+	-- full duplicate order before either DELETE below runs.
+	perform 1 from public.table_sessions where id = v_session_id for update;
+
+	if not exists (
+		select 1 from public.cart_items
+		where restaurant_id = v_restaurant_id and session_id = v_session_id
+	) then
+		raise exception 'Cart is empty';
+	end if;
+
+	-- Block rather than silently drop: an item the guest added has since
+	-- gone sold-out or been removed from the menu. The guest edits the cart
+	-- and retries — never guess which items to submit anyway.
+	if exists (
+		select 1
+		from public.cart_items ci
+		join public.menu_items mi
+			on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id
+		where ci.restaurant_id = v_restaurant_id
+			and ci.session_id = v_session_id
+			and (mi.availability = 'sold_out' or mi.status <> 'active')
+	) then
+		raise exception 'One or more items in your cart are no longer available';
+	end if;
+
+	insert into public.orders (restaurant_id, session_id, placed_by_type, idempotency_key)
+	values (v_restaurant_id, v_session_id, 'guest', p_idempotency_key)
+	on conflict (idempotency_key) do nothing
+	returning id into v_order_id;
+
+	if v_order_id is null then
+		-- Lost the race to a concurrent retry with the same key.
+		select id into v_order_id
+		from public.orders
+		where idempotency_key = p_idempotency_key;
+		return v_order_id;
+	end if;
+
+	insert into public.order_items (
+		restaurant_id, order_id, item_name, unit_price, tax_rate, diet,
+		quantity, spice, salt, ice, menu_item_id
+	)
+	select
+		ci.restaurant_id, v_order_id, mi.name, mi.price, mc.tax_rate, mi.diet,
+		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id
+	from public.cart_items ci
+	join public.menu_items mi
+		on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id
+	join public.menu_categories mc
+		on mc.restaurant_id = mi.restaurant_id and mc.id = mi.category_id
+	where ci.restaurant_id = v_restaurant_id and ci.session_id = v_session_id;
+
+	delete from public.cart_items
+	where restaurant_id = v_restaurant_id and session_id = v_session_id;
+
+	return v_order_id;
+end;
+$$;
+
+revoke execute on function public.submit_order(text) from public;
+grant execute on function public.submit_order(text) to authenticated;

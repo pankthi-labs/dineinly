@@ -1,12 +1,19 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PoweredByDineinly } from "@/components/brand-logo";
 import { CollapsibleSearch } from "@/components/collapsible-search";
 import { Detail } from "@/components/detail";
 import { DietMark } from "@/components/diet-mark";
 import { FormSheet } from "@/components/form-sheet";
+import {
+	GuestError,
+	GuestLoading,
+	NoGuestSession,
+} from "@/components/guest-page-states";
+import { QuantityPill } from "@/components/quantity-pill";
 import { formatPrice, titleCase } from "@/lib/format";
 import {
 	ICE_LABELS,
@@ -58,7 +65,47 @@ function labelKicker(label: string): string {
 // redirects here). Phone-only — docs/design-system.md § 10: guest-facing
 // ordering flows never assume anything above --breakpoint-sm.
 export default function GuestMenuPage() {
+	const router = useRouter();
 	const menu = trpc.guest.menu.useQuery(undefined, { retry: false });
+	const utils = trpc.useUtils();
+	const cart = trpc.guest.cart.list.useQuery(undefined, {
+		enabled: menu.isSuccess,
+		// Shared cart — another guest at the table can add/edit lines this
+		// device never mutated. No realtime wiring yet (same interim tradeoff
+		// as the kitchen queue), so poll instead.
+		refetchInterval: 8_000,
+	});
+	const addItem = trpc.guest.cart.addItem.useMutation({
+		onSuccess: () => utils.guest.cart.list.invalidate(),
+	});
+	const setQuantity = trpc.guest.cart.setQuantity.useMutation({
+		onSuccess: () => utils.guest.cart.list.invalidate(),
+	});
+	const orders = trpc.guest.orders.list.useQuery(undefined, {
+		enabled: menu.isSuccess,
+	});
+	const hasOrders = (orders.data?.length ?? 0) > 0;
+
+	// Card quick-add/stepper writes/edits the *last* cart line for a menu
+	// item — for an item with no preferences there's only ever one line, so
+	// this is just "the line"; for one with preferences, this reuses
+	// whichever spice/salt/ice combo the guest most recently chose in the
+	// drawer rather than asking again on every tap.
+	const cartRowsByMenuItem = useMemo(() => {
+		const map = new Map<string, NonNullable<typeof cart.data>>();
+		for (const row of cart.data ?? []) {
+			const list = map.get(row.menuItemId) ?? [];
+			list.push(row);
+			map.set(row.menuItemId, list);
+		}
+		return map;
+	}, [cart.data]);
+
+	const cartCount = (cart.data ?? []).reduce(
+		(sum, row) => sum + row.quantity,
+		0,
+	);
+
 	const [search, setSearch] = useState("");
 	const [activeDiets, setActiveDiets] = useState<Array<"veg" | "non_veg">>([]);
 	const [expressOnly, setExpressOnly] = useState(false);
@@ -129,9 +176,15 @@ export default function GuestMenuPage() {
 			?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 
-	if (menu.isLoading) return <GuestMenuLoading />;
+	if (menu.isLoading) return <GuestLoading message="Loading menu…" />;
 	if (menu.error?.data?.code === "UNAUTHORIZED") return <NoGuestSession />;
-	if (menu.error) return <GuestMenuError onRetry={() => menu.refetch()} />;
+	if (menu.error)
+		return (
+			<GuestError
+				message="We couldn't load this menu."
+				onRetry={() => menu.refetch()}
+			/>
+		);
 	if (!menu.data) return <RestaurantUnavailable />;
 
 	const defaultCategoryId = menu.data.categories[0]?.id;
@@ -140,16 +193,19 @@ export default function GuestMenuPage() {
 		<div className="min-h-dvh bg-background text-primary">
 			<div
 				ref={stickyRef}
-				className="sticky top-0 z-(--z-sticky) bg-background"
+				className="sticky top-0 z-(--z-sticky) bg-background will-change-transform"
 			>
-				<header className="flex items-center gap-4 px-5 pt-6 pb-4">
+				{/* The table label and the search button form one tight right-hand
+				cluster (gap-1) so the restaurant name — the longest, most variable
+				string here — keeps the rest of the row. */}
+				<header className="flex items-center gap-1 px-5 pt-6 pb-4">
 					{searchOpen ? null : (
 						<>
-							<div className="min-w-0">
+							<div className="min-w-0 flex-1">
 								<h1 className="text-2xl">{menu.data.restaurant.name}</h1>
 								<PoweredByDineinly className="mt-1" />
 							</div>
-							<p className="ml-auto shrink-0 text-secondary text-sm">
+							<p className="shrink-0 rounded-pill border border-divider px-3 py-1 text-caps text-secondary">
 								Table {menu.data.tableLabel}
 							</p>
 						</>
@@ -165,7 +221,7 @@ export default function GuestMenuPage() {
 				{menu.data.categories.length > 1 ? (
 					<nav
 						aria-label="Menu categories"
-						className="flex flex-nowrap gap-6 overflow-x-auto px-5 pb-4"
+						className="no-scrollbar flex flex-nowrap gap-6 overflow-x-auto px-5 pb-4"
 					>
 						{menu.data.categories.map((category) => (
 							<button
@@ -184,7 +240,7 @@ export default function GuestMenuPage() {
 					</nav>
 				) : null}
 
-				<div className="flex flex-nowrap gap-3 overflow-x-auto px-5 pb-4">
+				<div className="no-scrollbar flex flex-nowrap gap-3 overflow-x-auto px-5 pb-4">
 					<FilterPill
 						active={activeDiets.includes("veg")}
 						onClick={() => toggleDiet("veg")}
@@ -212,7 +268,9 @@ export default function GuestMenuPage() {
 				</div>
 			</div>
 
-			<main className="px-5 pt-2 pb-16">
+			<main
+				className={`px-5 pt-2 ${cartCount > 0 || hasOrders ? "pb-24" : "pb-16"}`}
+			>
 				{visibleCategories.length === 0 ? (
 					<NoMatches hasFilters={hasFilters} onClear={clearFilters} />
 				) : (
@@ -223,17 +281,51 @@ export default function GuestMenuPage() {
 							className="pt-8 first:pt-2"
 							style={{ scrollMarginTop: stickyHeight }}
 						>
-							<h2 className="text-secondary text-sm">
+							<h2 className="font-semibold text-primary text-sm">
 								{titleCase(category.name)}
 							</h2>
 							<div className="mt-4 flex flex-col gap-4">
-								{category.items.map((item) => (
-									<MenuItemCard
-										key={item.id}
-										item={item}
-										onOpen={() => setOpenItem(item)}
-									/>
-								))}
+								{category.items.map((item) => {
+									const rows = cartRowsByMenuItem.get(item.id) ?? [];
+									const cartQuantity = rows.reduce(
+										(sum, row) => sum + row.quantity,
+										0,
+									);
+									const lastRow = rows[rows.length - 1];
+									return (
+										<MenuItemCard
+											key={item.id}
+											item={item}
+											onOpen={() => setOpenItem(item)}
+											cartQuantity={cartQuantity}
+											onAdd={() =>
+												addItem.mutate({
+													menuItemId: item.id,
+													quantity: 1,
+													spice:
+														(lastRow?.spice as
+															| (typeof SPICE_OPTIONS)[number]
+															| null) ?? undefined,
+													salt:
+														(lastRow?.salt as
+															| (typeof SALT_OPTIONS)[number]
+															| null) ?? undefined,
+													ice:
+														(lastRow?.ice as
+															| (typeof ICE_OPTIONS)[number]
+															| null) ?? undefined,
+												})
+											}
+											onDecrement={() => {
+												if (!lastRow) return;
+												setQuantity.mutate({
+													cartItemId: lastRow.id,
+													quantity: lastRow.quantity - 1,
+												});
+											}}
+										/>
+									);
+								})}
 							</div>
 						</section>
 					))
@@ -245,7 +337,37 @@ export default function GuestMenuPage() {
 					key={openItem.id}
 					item={openItem}
 					onClose={() => setOpenItem(null)}
+					onAddToOrder={(input) =>
+						addItem.mutateAsync({ menuItemId: openItem.id, ...input })
+					}
 				/>
+			) : null}
+
+			{cartCount > 0 || hasOrders ? (
+				<div className="fixed inset-x-0 bottom-0 z-(--z-sticky) border-divider border-t bg-surface-elevated px-5 py-4">
+					<div
+						className={`flex items-center gap-4 ${cartCount === 0 ? "justify-center" : ""}`}
+					>
+						{hasOrders ? (
+							<button
+								type="button"
+								onClick={() => router.push("/guest/orders")}
+								className="font-semibold text-accent text-sm"
+							>
+								My Orders
+							</button>
+						) : null}
+						{cartCount > 0 ? (
+							<button
+								type="button"
+								onClick={() => router.push("/guest/cart")}
+								className="ml-auto rounded-md bg-accent px-6 py-4 font-medium text-background text-sm"
+							>
+								Review Order ({cartCount})
+							</button>
+						) : null}
+					</div>
+				</div>
 			) : null}
 		</div>
 	);
@@ -254,41 +376,102 @@ export default function GuestMenuPage() {
 function MenuItemCard({
 	item,
 	onOpen,
+	cartQuantity,
+	onAdd,
+	onDecrement,
 }: {
 	item: MenuItem;
 	onOpen: () => void;
+	cartQuantity: number;
+	onAdd: () => void;
+	onDecrement: () => void;
 }) {
 	const soldOut = item.availability === "sold_out";
 	const kicker = item.labels[0] ? labelKicker(item.labels[0]) : null;
 	return (
 		<div
-			className={`flex items-start justify-between gap-4 rounded-xl border border-divider bg-surface p-5 ${soldOut ? "opacity-60" : ""}`}
+			className={`rounded-xl border border-divider bg-surface p-5 ${soldOut ? "opacity-60" : ""}`}
 		>
-			<button
-				type="button"
-				onClick={onOpen}
-				className="min-w-0 flex-1 text-left"
+			{kicker ? (
+				<p className="text-accent-secondary text-caps">{kicker}</p>
+			) : null}
+			{/* Two rows — name/price, then description/action — shared across
+			both columns: the text button spans both and re-uses the card
+			grid's rows (grid-rows-subgrid), so the price always sits on the
+			name's first line and the pill always sits on the description's
+			first line no matter how many lines the name wraps to. */}
+			<div
+				className={`grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 ${kicker ? "mt-1" : ""}`}
 			>
-				{kicker ? (
-					<p className="text-accent-secondary text-caps">{kicker}</p>
-				) : null}
-				<div className="mt-1 flex flex-wrap items-center gap-2">
-					<DietMark diet={item.diet} />
-					<h3 className="text-lg text-primary">{titleCase(item.name)}</h3>
-				</div>
-				<p className="prose mt-2 text-secondary text-sm">{item.description}</p>
-			</button>
-			<div className="flex shrink-0 flex-col items-end gap-2">
-				<span className="text-accent text-lg">{formatPrice(item.price)}</span>
+				<button
+					type="button"
+					onClick={onOpen}
+					className="row-span-2 grid min-w-0 grid-rows-subgrid text-left"
+				>
+					{/* Diet mark rides the heading's first line as an inline box,
+					so a wrapped name can't drag it to the block's center. */}
+					<h3 className="min-w-0 text-lg text-primary">
+						<span className="mr-2 inline-block align-middle">
+							<DietMark diet={item.diet} />
+						</span>
+						{titleCase(item.name)}
+					</h3>
+					<p className="prose text-secondary text-sm">{item.description}</p>
+				</button>
+				<span className="self-start justify-self-end whitespace-nowrap text-lg text-primary">
+					{formatPrice(item.price)}
+				</span>
 				{soldOut ? (
-					<span className="text-caps text-muted">Sold out</span>
+					<span className="self-start justify-self-end text-caps text-muted">
+						Sold out
+					</span>
 				) : (
-					// Visual only — no cart mutation exists yet.
-					<button type="button" className="font-medium text-accent text-sm">
-						+ Add
-					</button>
+					// One control for both states — at quantity 0 it renders
+					// "Add" itself, so tapping it can never resize the row.
+					<div className="self-start justify-self-end">
+						<QuantityPill
+							value={cartQuantity}
+							onDecrement={onDecrement}
+							onIncrement={onAdd}
+						/>
+					</div>
 				)}
 			</div>
+		</div>
+	);
+}
+
+function QuantityStepper({
+	value,
+	onDecrement,
+	onIncrement,
+	disableDecrement = false,
+}: {
+	value: number;
+	onDecrement: () => void;
+	onIncrement: () => void;
+	disableDecrement?: boolean;
+}) {
+	return (
+		<div className="flex shrink-0 items-center gap-2 rounded-pill border border-accent px-2 py-1">
+			<button
+				type="button"
+				aria-label="Decrease quantity"
+				disabled={disableDecrement}
+				onClick={onDecrement}
+				className="icon-tap-target text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary disabled:cursor-not-allowed disabled:text-muted"
+			>
+				<Minus className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
+			</button>
+			<span className="w-4 text-center text-accent text-base">{value}</span>
+			<button
+				type="button"
+				aria-label="Increase quantity"
+				onClick={onIncrement}
+				className="icon-tap-target text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
+			>
+				<Plus className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
+			</button>
 		</div>
 	);
 }
@@ -296,9 +479,16 @@ function MenuItemCard({
 function MenuItemDrawer({
 	item,
 	onClose,
+	onAddToOrder,
 }: {
 	item: MenuItem;
 	onClose: () => void;
+	onAddToOrder: (input: {
+		quantity: number;
+		spice?: (typeof SPICE_OPTIONS)[number];
+		salt?: (typeof SALT_OPTIONS)[number];
+		ice?: (typeof ICE_OPTIONS)[number];
+	}) => Promise<unknown>;
 }) {
 	const soldOut = item.availability === "sold_out";
 	const kicker = item.labels[0] ? labelKicker(item.labels[0]) : null;
@@ -306,59 +496,62 @@ function MenuItemDrawer({
 	const [spice, setSpice] = useState<(typeof SPICE_OPTIONS)[number]>("regular");
 	const [salt, setSalt] = useState<(typeof SALT_OPTIONS)[number]>("regular");
 	const [ice, setIce] = useState<(typeof ICE_OPTIONS)[number]>("regular");
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const hasPreferences =
 		item.offers_spice || item.offers_salt || item.offers_ice;
+
+	async function handleAddToOrder() {
+		setIsSubmitting(true);
+		setError(null);
+		try {
+			await onAddToOrder({
+				quantity,
+				spice: item.offers_spice ? spice : undefined,
+				salt: item.offers_salt ? salt : undefined,
+				ice: item.offers_ice ? ice : undefined,
+			});
+			onClose();
+		} catch {
+			setError("Couldn't add this to your order. Try again.");
+			setIsSubmitting(false);
+		}
+	}
 
 	return (
 		<FormSheet
 			title={titleCase(item.name)}
 			onClose={onClose}
 			hideHeader
+			isSubmitting={isSubmitting}
 			footer={
 				soldOut ? (
 					<p className="text-center text-caps text-muted">
 						Currently unavailable
 					</p>
 				) : (
-					<div className="flex items-center gap-4">
-						<div className="flex shrink-0 items-center gap-2 rounded-pill border border-divider px-2 py-1">
+					<div className="flex flex-col gap-3">
+						{error ? (
+							<p className="text-center text-error text-sm">{error}</p>
+						) : null}
+						<div className="flex items-center gap-4">
+							<QuantityStepper
+								value={quantity}
+								disableDecrement={quantity <= 1}
+								onDecrement={() =>
+									setQuantity((value) => Math.max(1, value - 1))
+								}
+								onIncrement={() => setQuantity((value) => value + 1)}
+							/>
 							<button
 								type="button"
-								aria-label="Decrease quantity"
-								disabled={quantity <= 1}
-								onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-								className="icon-tap-target text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary disabled:cursor-not-allowed disabled:text-muted"
+								onClick={handleAddToOrder}
+								disabled={isSubmitting}
+								className="flex-1 rounded-md bg-accent px-6 py-4 font-medium text-background text-sm disabled:cursor-not-allowed disabled:opacity-60"
 							>
-								<Minus
-									className="icon-sm"
-									strokeWidth={1.5}
-									aria-hidden="true"
-								/>
-							</button>
-							<span className="w-4 text-center text-accent text-base">
-								{quantity}
-							</span>
-							<button
-								type="button"
-								aria-label="Increase quantity"
-								onClick={() => setQuantity((value) => value + 1)}
-								className="icon-tap-target text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
-							>
-								<Plus
-									className="icon-sm"
-									strokeWidth={1.5}
-									aria-hidden="true"
-								/>
+								{isSubmitting ? "Adding…" : "Add to Cart"}
 							</button>
 						</div>
-						{/* Visual only — no cart/order mutation exists yet. */}
-						<button
-							type="button"
-							onClick={onClose}
-							className="flex-1 rounded-pill bg-accent px-6 py-4 text-background text-caps"
-						>
-							Add to Order
-						</button>
 					</div>
 				)
 			}
@@ -378,7 +571,7 @@ function MenuItemDrawer({
 
 				<p className="prose text-base text-secondary">{item.description}</p>
 
-				<div className="border-glass-border border-t" aria-hidden="true" />
+				<div className="border-divider border-t" aria-hidden="true" />
 
 				<div className="grid grid-cols-3 gap-4">
 					<Detail label="Ready in" value={titleCase(item.prep_time)} />
@@ -394,7 +587,7 @@ function MenuItemDrawer({
 
 				{hasPreferences ? (
 					<>
-						<div className="border-glass-border border-t" aria-hidden="true" />
+						<div className="border-divider border-t" aria-hidden="true" />
 						<div className="flex flex-col gap-6">
 							{item.offers_spice ? (
 								<PreferencePicker
@@ -482,35 +675,14 @@ function FilterPill({
 			type="button"
 			onClick={onClick}
 			aria-pressed={active}
-			className={`shrink-0 rounded-pill border px-4 py-2 text-caps transition-colors duration-(--duration-base) ease-out ${
+			className={`shrink-0 rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
 				active
-					? "border-accent-secondary text-primary"
+					? "border-accent text-primary"
 					: "border-divider text-secondary hover:text-primary"
 			}`}
 		>
 			{children}
 		</button>
-	);
-}
-
-function GuestMenuLoading() {
-	return (
-		<main className="flex min-h-dvh items-center justify-center bg-background px-5 text-primary">
-			<p className="text-muted">Loading menu…</p>
-		</main>
-	);
-}
-
-function NoGuestSession() {
-	return (
-		<main className="flex min-h-dvh items-center justify-center bg-background px-5 text-center text-primary">
-			<div>
-				<p className="text-caps text-muted">No table selected</p>
-				<h1 className="mt-3 text-2xl">
-					Scan your table's QR code to view the menu.
-				</h1>
-			</div>
-		</main>
 	);
 }
 
@@ -522,24 +694,6 @@ function RestaurantUnavailable() {
 				<h1 className="mt-3 text-2xl">
 					This restaurant's menu isn't available right now.
 				</h1>
-			</div>
-		</main>
-	);
-}
-
-function GuestMenuError({ onRetry }: { onRetry: () => void }) {
-	return (
-		<main className="flex min-h-dvh items-center justify-center bg-background px-5 text-center text-primary">
-			<div>
-				<p className="text-caps text-muted">Something went wrong</p>
-				<h1 className="mt-3 text-2xl">We couldn't load this menu.</h1>
-				<button
-					type="button"
-					onClick={onRetry}
-					className="mt-6 rounded-md bg-accent px-6 py-3 font-medium text-background text-sm"
-				>
-					Try again
-				</button>
 			</div>
 		</main>
 	);

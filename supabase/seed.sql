@@ -700,7 +700,7 @@ insert into cart_items (id, restaurant_id, session_id, menu_item_id, quantity, s
 	('70000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000006', '40000000-0000-4000-8000-0000000000ec', 1, null, null, null, 'staff', '20000000-0000-4000-8000-00000000000c')
 on conflict (id) do nothing;
 
--- 75 orders (rounds) — 1 to 6 completed rounds per active table,
+-- 76 orders (rounds) — 1 to 6 completed rounds per active table,
 -- plus one live 'current round' per table feeding the rush-hour kitchen
 -- queue below. Distinct idempotency_key per order (globally unique column).
 insert into orders (id, restaurant_id, session_id, placed_at, placed_by_type, placed_by_staff_id, idempotency_key) values
@@ -778,10 +778,11 @@ insert into orders (id, restaurant_id, session_id, placed_at, placed_by_type, pl
 	('80000000-0000-4000-8000-00000000004a', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000013', now() - interval '8 minutes', 'staff', '20000000-0000-4000-8000-00000000000d', 'arbor-order-72'),
 	('80000000-0000-4000-8000-00000000004b', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-00000000000f', now() - interval '10 minutes', 'staff', '20000000-0000-4000-8000-000000000009', 'arbor-order-73'),
 	('80000000-0000-4000-8000-00000000004c', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-00000000000c', now() - interval '10 minutes', 'staff', '20000000-0000-4000-8000-00000000000e', 'arbor-order-74'),
-	('80000000-0000-4000-8000-00000000004d', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000017', now() - interval '14 minutes', 'guest', null, 'arbor-order-75')
+	('80000000-0000-4000-8000-00000000004d', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000017', now() - interval '14 minutes', 'guest', null, 'arbor-order-75'),
+	('80000000-0000-4000-8000-00000000004e', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000008', now() - interval '14 minutes', 'guest', null, 'arbor-order-76')
 on conflict (id) do nothing;
 
--- 176 order items. Rush-hour queue: 10 distinct dishes at
+-- 178 order items. Rush-hour queue: 10 distinct dishes at
 -- 'placed', 8 at 'preparing' (2 deliberately over the 8-minute overdue
 -- threshold), 7 at 'ready' — each dish batch fed by 1-4 different tables,
 -- so the kitchen display shows the same dish arriving from multiple tables
@@ -962,7 +963,9 @@ insert into order_items (id, restaurant_id, order_id, item_name, unit_price, tax
 	('90000000-0000-4000-8000-0000000000b2', '10000000-0000-4000-8000-000000000002', '80000000-0000-4000-8000-000000000040', 'Peri-Peri Paneer', 480.00, 0.0500, 'veg', 1, 'preparing', now() - interval '4 minutes', null, '40000000-0000-4000-8000-000000000028'),
 	('90000000-0000-4000-8000-0000000000b3', '10000000-0000-4000-8000-000000000002', '80000000-0000-4000-8000-00000000004d', 'Bangalore Bliss (500ml)', 320.00, 0.1800, 'veg', 1, 'served', null, null, '40000000-0000-4000-8000-00000000005d'),
 	('90000000-0000-4000-8000-0000000000b4', '10000000-0000-4000-8000-000000000002', '80000000-0000-4000-8000-00000000004d', 'Beachshack (500ml)', 320.00, 0.1800, 'veg', 1, 'served', null, null, '40000000-0000-4000-8000-000000000060'),
-	('90000000-0000-4000-8000-0000000000b5', '10000000-0000-4000-8000-000000000002', '80000000-0000-4000-8000-00000000004d', 'Fresh Lime Soda', 120.00, 0.1800, 'veg', 1, 'served', null, null, '40000000-0000-4000-8000-00000000009d')
+	('90000000-0000-4000-8000-0000000000b5', '10000000-0000-4000-8000-000000000002', '80000000-0000-4000-8000-00000000004d', 'Fresh Lime Soda', 120.00, 0.1800, 'veg', 1, 'served', null, null, '40000000-0000-4000-8000-00000000009d'),
+	('90000000-0000-4000-8000-0000000000b6', '10000000-0000-4000-8000-000000000002', '80000000-0000-4000-8000-00000000004e', 'Beer Battered Onion Rings', 260.00, 0.0500, 'veg', 2, 'served', null, null, '40000000-0000-4000-8000-00000000000f'),
+	('90000000-0000-4000-8000-0000000000b7', '10000000-0000-4000-8000-000000000002', '80000000-0000-4000-8000-00000000004e', 'Turkish Lamb Kebab', 460.00, 0.0500, 'non_veg', 1, 'preparing', now() - interval '6 minutes', null, '40000000-0000-4000-8000-000000000044')
 on conflict (id) do nothing;
 
 -- 25 bills — 22 open/requested on the active

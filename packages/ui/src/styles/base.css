@@ -134,6 +134,20 @@
 	}
 
 	/*
+	 * Horizontally-scrollable chip/tab rows (category nav, filter pills):
+	 * the global thin scrollbar (above) reads as a stray bar wedged between
+	 * two tightly-stacked rows. Swipe/drag still scrolls — only the
+	 * persistent bar is hidden.
+	 */
+	.no-scrollbar {
+		scrollbar-width: none;
+	}
+
+	.no-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+
+	/*
 	 * §05 Skeleton/Shimmer: duration and easing were documented
 	 * (--duration-skeleton, --ease-in-out); the gradient itself wasn't.
 	 * Built from the existing surface tokens — no new color introduced.

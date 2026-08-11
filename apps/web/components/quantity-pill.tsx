@@ -1,0 +1,63 @@
+"use client";
+
+// Compact quantity control shared by the guest menu card and the review-order
+// screen (docs/design-system.md §11: quick actions inside rows/cards skip
+// icons — "packed, read linearly"). At value 0 it renders "Add" instead of
+// the stepper: both states are this one element with one SHELL class string,
+// so the control cannot change size when a guest taps it. Fixed h-8/w-12
+// (32x48px) keeps it inside the price column's width and stops the row from
+// reflowing on every add; the label carries no "+" because the shell is the
+// affordance and the glyph only crowds it. Gold border, no fill — same
+// active-state border color as the preference pickers in the item drawer, so
+// every bordered pill in the guest flow reads as one family. Gold label while
+// it's still an invitation to act (§ accent = actions); once there's a
+// quantity the control is state, not a call to action, so its contents drop
+// to primary text and only the border stays gold.
+const SHELL =
+	"flex h-8 w-12 shrink-0 items-center justify-center rounded-pill border border-accent";
+
+export function QuantityPill({
+	value,
+	onDecrement,
+	onIncrement,
+}: {
+	value: number;
+	onDecrement: () => void;
+	onIncrement: () => void;
+}) {
+	if (value === 0) {
+		return (
+			<button
+				type="button"
+				onClick={onIncrement}
+				className={`${SHELL} font-medium text-accent text-sm`}
+			>
+				Add
+			</button>
+		);
+	}
+
+	return (
+		<div className={`${SHELL} gap-1`}>
+			<button
+				type="button"
+				aria-label="Decrease quantity"
+				onClick={onDecrement}
+				className="flex h-full flex-1 items-center justify-center text-primary text-sm leading-none transition-colors duration-(--duration-base) ease-out hover:text-accent"
+			>
+				−
+			</button>
+			<span className="text-center text-primary text-sm tabular-nums">
+				{value}
+			</span>
+			<button
+				type="button"
+				aria-label="Increase quantity"
+				onClick={onIncrement}
+				className="flex h-full flex-1 items-center justify-center text-primary text-sm leading-none transition-colors duration-(--duration-base) ease-out hover:text-accent"
+			>
+				+
+			</button>
+		</div>
+	);
+}

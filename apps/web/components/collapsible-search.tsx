@@ -39,7 +39,15 @@ export function CollapsibleSearch({
 				type="button"
 				onClick={open}
 				aria-label={label}
-				className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm border border-divider text-secondary transition-colors duration-(--duration-base) ease-out hover:border-accent/40 hover:text-primary"
+				// icon-tap-target's 44px hit box is bigger than the 16px glyph it
+				// wraps (§11's minimum tap target) — without a visible border to
+				// justify that padding (removed above), the box's true right edge
+				// reads as a stray gap before the page margin. Negative margin
+				// pulls the glyph flush to the same edge as the text above/below
+				// it while keeping the full tap area (it just extends inward).
+				// -mr-4, not the exact 14px half-difference, because globals.css's
+				// 8px grid has no registered step between 12px and 16px.
+				className="icon-tap-target -mr-4 shrink-0 text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
 			>
 				<Search className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 			</button>

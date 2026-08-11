@@ -330,6 +330,8 @@ Usage in components:
 - **Tap target:** any interactive icon sits inside a minimum 44px wrapper regardless of glyph size.
 - **Restraint:** one icon per action or status, never doubled up. An icon clarifies meaning already conveyed by text — it does not replace text, and it does not decorate.
 
+This 44px rule governs icons. A fixed-width text-glyph control packed into a row or price column (e.g. the quantity stepper) is exempt by scope, not by exception — it has no icon to wrap. Its footprint must still stay fixed (no growth on tap, so the row never reflows), so grow the tap area inside that footprint via flex (each glyph's button takes `flex-1 h-full` of the shell) rather than padding out to 44px.
+
 **Icon placement by role — pick the tier, don't decide per-component:**
 
 | Tier | Examples | Icon? | Text case |

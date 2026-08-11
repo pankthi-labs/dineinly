@@ -21,6 +21,11 @@ loadEnvConfig(
 const nextConfig: NextConfig = {
 	allowedDevOrigins: ["127.0.0.1"],
 	transpilePackages: ["@workspace/ui", "@workspace/db"],
+	// The dev-only floating build indicator has a known pointer-capture bug
+	// (uncaught NotFoundError on releasePointerCapture during ordinary
+	// clicks/scrolls) that can swallow clicks elsewhere on the page. Dev-only
+	// setting — no effect on production builds.
+	devIndicators: false,
 };
 
 export default nextConfig;

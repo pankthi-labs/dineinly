@@ -857,6 +857,16 @@ drinks_order = current_order(drinks_session, "guest", None)
 for name in ["Bangalore Bliss (500ml)", "Beachshack (500ml)", "Fresh Lime Soda"]:
     add_order_item(drinks_order, by_name[name], random.randint(1, 2), "served")
 
+# guarantee (not left to random luck) a "partially served" order: floor staff
+# already served one item while the kitchen is still working the other, so
+# the guest-facing order status (docs/product.md) has a real example to show.
+partial_served_session = SESSIONS[5]["id"]
+partial_served_order = new_order(partial_served_session, 14, "guest", None)
+add_order_item(partial_served_order, by_name["Beer Battered Onion Rings"], 2, "served")
+add_order_item(
+    partial_served_order, by_name["Turkish Lamb Kebab"], 1, "preparing", preparing_min=6
+)
+
 # ---------------------------------------------------------------------------
 # Cart items (uncommitted, pre-confirm) — a few sessions mid-browse
 # ---------------------------------------------------------------------------
