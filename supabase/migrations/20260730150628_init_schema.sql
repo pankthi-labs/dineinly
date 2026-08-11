@@ -14,11 +14,41 @@ CREATE TYPE "public"."session_status" AS ENUM('active', 'closed');--> statement-
 CREATE TYPE "public"."spice" AS ENUM('mild', 'regular', 'extra spicy');--> statement-breakpoint
 CREATE TYPE "public"."staff_role" AS ENUM('waiter', 'kitchen', 'manager', 'owner');--> statement-breakpoint
 CREATE TYPE "public"."staff_status" AS ENUM('invited', 'active', 'removed');--> statement-breakpoint
+-- Backs bills.bill_number's default: one counter shared by every restaurant,
+-- fed through encode_bill_number() below to produce the human-facing code.
+CREATE SEQUENCE "public"."bill_number_seq" AS bigint;--> statement-breakpoint
+-- Deterministic, collision-free bigint -> 8-char code. Alphabet is A-Z minus
+-- I/O plus digits 2-9 (32 chars, no ambiguous glyphs), giving 32^8 (~1.1
+-- trillion) codes. c_multiplier is odd, hence coprime with the alphabet-size
+-- power of two, so multiplying by it mod 32^8 is a bijection on that range —
+-- every sequence value up to 32^8 gets a distinct code with no retry needed.
+-- Reversible in principle (not a security boundary), just not sequential-looking.
+CREATE FUNCTION "public"."encode_bill_number"(v_seq bigint) RETURNS text
+LANGUAGE plpgsql IMMUTABLE
+SET search_path = ''
+AS $$
+declare
+	c_alphabet constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+	c_base constant int := 32;
+	c_length constant int := 8;
+	c_modulus constant bigint := 1099511627776; -- 32^8
+	c_multiplier constant bigint := 47055833459; -- odd, coprime with c_modulus
+	v_value bigint;
+	v_result text := '';
+begin
+	v_value := ((v_seq::numeric * c_multiplier) % c_modulus)::bigint;
+	for i in 1..c_length loop
+		v_result := substr(c_alphabet, (v_value % c_base)::int + 1, 1) || v_result;
+		v_value := v_value / c_base;
+	end loop;
+	return v_result;
+end;
+$$;--> statement-breakpoint
 CREATE TABLE "bills" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"restaurant_id" uuid NOT NULL,
 	"session_id" uuid NOT NULL,
-	"bill_number" integer NOT NULL,
+	"bill_number" text DEFAULT encode_bill_number(nextval('bill_number_seq'::regclass)) NOT NULL,
 	"status" "bill_status" DEFAULT 'open' NOT NULL,
 	"service_charge_rate" numeric(5, 4),
 	"subtotal" numeric(12, 2),
@@ -30,7 +60,7 @@ CREATE TABLE "bills" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "bills_session_id_unique" UNIQUE("session_id"),
-	CONSTRAINT "bills_restaurant_id_bill_number_key" UNIQUE("restaurant_id","bill_number"),
+	CONSTRAINT "bills_bill_number_key" UNIQUE("bill_number"),
 	CONSTRAINT "bills_service_charge_rate_check" CHECK ("bills"."service_charge_rate" between 0 and 1),
 	CONSTRAINT "bills_subtotal_check" CHECK ("bills"."subtotal" >= 0),
 	CONSTRAINT "bills_tax_amount_check" CHECK ("bills"."tax_amount" >= 0),

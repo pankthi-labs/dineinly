@@ -29,9 +29,10 @@
         },
         "bill_number": {
           "name": "bill_number",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "encode_bill_number(nextval('bill_number_seq'::regclass))"
         },
         "status": {
           "name": "status",
@@ -169,11 +170,10 @@
             "session_id"
           ]
         },
-        "bills_restaurant_id_bill_number_key": {
-          "name": "bills_restaurant_id_bill_number_key",
+        "bills_bill_number_key": {
+          "name": "bills_bill_number_key",
           "nullsNotDistinct": false,
           "columns": [
-            "restaurant_id",
             "bill_number"
           ]
         }

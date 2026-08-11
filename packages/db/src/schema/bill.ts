@@ -3,9 +3,9 @@ import {
 	check,
 	foreignKey,
 	index,
-	integer,
 	numeric,
 	pgTable,
+	text,
 	timestamp,
 	unique,
 	uuid,
@@ -32,12 +32,16 @@ export const bills = pgTable(
 		// constraint is the composite FK below, so session_id can never name
 		// a session from another restaurant.
 		sessionId: uuid("session_id").notNull().unique(),
-		// Human-facing bill identifier — random, not sequential (doesn't reveal
-		// order/volume to guests), assigned once at first request_bill() (never
-		// on the id/uuid, which stays internal). A 9-digit value always fits
-		// integer's range, keeping the space large enough that per-restaurant
-		// collisions stay negligible.
-		billNumber: integer("bill_number").notNull(),
+		// Human-facing bill identifier — an 8-character code (A-Z minus I/O,
+		// digits 2-9: 32 chars, ~1.1 trillion values), assigned once at first
+		// request_bill() (never on the id/uuid, which stays internal) via the
+		// bill_number_seq -> encode_bill_number() default, so it's collision-free
+		// by construction rather than random-with-retry.
+		billNumber: text("bill_number")
+			.notNull()
+			.default(
+				sql`encode_bill_number(nextval('bill_number_seq'::regclass))`,
+			),
 		status: billStatus("status").notNull().default("open"),
 		// Snapshotted at request/settle time — restaurant-level rate can change later.
 		serviceChargeRate: numeric("service_charge_rate", {
@@ -66,12 +70,9 @@ export const bills = pgTable(
 		// other than the bill_number uniqueness below — so this stays its own
 		// tenant index.
 		index("bills_restaurant_id_idx").on(table.restaurantId),
-		// Human-facing bill number is unique per restaurant, not globally —
-		// two restaurants can both have bill #1.
-		unique("bills_restaurant_id_bill_number_key").on(
-			table.restaurantId,
-			table.billNumber,
-		),
+		// Globally unique: bill_number_seq is one counter shared by every
+		// restaurant, so uniqueness never needs restaurant_id in the constraint.
+		unique("bills_bill_number_key").on(table.billNumber),
 		foreignKey({
 			columns: [table.restaurantId, table.sessionId],
 			foreignColumns: [tableSessions.restaurantId, tableSessions.id],

@@ -968,14 +968,10 @@ grant execute on function public.link_staff_account() to authenticated;
 --
 -- bill_number is assigned once, only on the row's first insert: the update
 -- branch below runs first and handles every later poll, so a number is only
--- drawn on a session's first Request Bill. It's a random 9-digit number, not
--- a counter, retried on collision against bills_restaurant_id_bill_number_key
--- (unique per restaurant): the insert is attempted inside its own
--- begin/exception block, and a unique_violation there redraws and retries,
--- up to v_max_attempts. Any unique_violation caught here must be the
--- bill_number constraint, not session_id — the ON CONFLICT (session_id) DO
--- UPDATE below already absorbs a concurrent first-request for the same
--- session without raising.
+-- drawn on a session's first Request Bill. Its value comes from the
+-- bill_number column's own default (bill_number_seq -> encode_bill_number(),
+-- see init migration) — collision-free by construction, so no retry loop is
+-- needed here.
 create or replace function public.request_bill()
 returns uuid
 language plpgsql
@@ -987,9 +983,6 @@ declare
 	v_session_id uuid;
 	v_service_charge_rate numeric;
 	v_bill_id uuid;
-	v_bill_number integer;
-	v_attempts int := 0;
-	v_max_attempts constant int := 20;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
 	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
@@ -1017,35 +1010,21 @@ begin
 	returning id into v_bill_id;
 
 	if v_bill_id is null then
-		loop
-			v_attempts := v_attempts + 1;
-			if v_attempts > v_max_attempts then
-				raise exception 'Could not generate a unique bill number';
-			end if;
-
-			v_bill_number := floor(random() * 900000000 + 100000000)::integer;
-
-			begin
-				insert into public.bills
-					(restaurant_id, session_id, bill_number, status, service_charge_rate)
-				values
-					(v_restaurant_id, v_session_id, v_bill_number, 'requested', v_service_charge_rate)
-				on conflict (session_id) do update
-				set
-					status = case
-						when public.bills.status = 'settled' then public.bills.status
-						else 'requested'
-					end,
-					service_charge_rate = case
-						when public.bills.status = 'settled' then public.bills.service_charge_rate
-						else excluded.service_charge_rate
-					end
-				returning id into v_bill_id;
-				exit;
-			exception when unique_violation then
-				continue;
-			end;
-		end loop;
+		insert into public.bills
+			(restaurant_id, session_id, status, service_charge_rate)
+		values
+			(v_restaurant_id, v_session_id, 'requested', v_service_charge_rate)
+		on conflict (session_id) do update
+		set
+			status = case
+				when public.bills.status = 'settled' then public.bills.status
+				else 'requested'
+			end,
+			service_charge_rate = case
+				when public.bills.status = 'settled' then public.bills.service_charge_rate
+				else excluded.service_charge_rate
+			end
+		returning id into v_bill_id;
 	end if;
 
 	return v_bill_id;

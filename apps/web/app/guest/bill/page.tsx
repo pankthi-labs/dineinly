@@ -85,13 +85,13 @@ export default function GuestBillPage() {
 										</th>
 										<th
 											scope="col"
-											className="pb-3 text-right text-caps text-secondary"
+											className="pb-3 pl-3 text-right text-caps text-secondary"
 										>
 											Rate
 										</th>
 										<th
 											scope="col"
-											className="pb-3 text-right text-caps text-secondary"
+											className="pb-3 pl-3 text-right text-caps text-secondary"
 										>
 											Amount
 										</th>
@@ -106,10 +106,10 @@ export default function GuestBillPage() {
 												</span>
 												{titleCase(line.name)}
 											</td>
-											<td className="py-1.5 text-right align-top text-secondary text-sm">
+											<td className="py-1.5 pl-3 text-right align-top text-secondary text-sm">
 												{formatBillAmount(line.unitPrice)}
 											</td>
-											<td className="py-1.5 text-right align-top text-base text-primary">
+											<td className="py-1.5 pl-3 text-right align-top text-base text-primary">
 												{formatBillAmount(line.amount)}
 											</td>
 										</tr>
