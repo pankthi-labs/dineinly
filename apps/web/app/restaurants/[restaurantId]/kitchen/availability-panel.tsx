@@ -44,10 +44,10 @@ export function AvailabilityPanel({
 	}
 
 	// allSettled, not all: one dish failing (e.g. hidden by another tab mid-
-	// selection) must not swallow the others as an unhandled rejection — that
-	// crashed with Next's dev overlay instead of showing the inline error
-	// below. Succeeded dishes commit either way; only the failed ones stay
-	// selected so retrying is a single tap.
+	// selection) must not swallow the others as an unhandled rejection — an
+	// unhandled rejection here bypasses the inline error UI below. Succeeded
+	// dishes commit either way; only the failed ones stay selected so
+	// retrying is a single tap.
 	async function handleConfirm() {
 		const ids = [...selected];
 		const results = await Promise.allSettled(

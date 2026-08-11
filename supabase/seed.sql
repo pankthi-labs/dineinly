@@ -117,7 +117,7 @@ on conflict (id) do nothing;
 -- Email OTP -> link_staff_account flow) plus a 5th, Meera Iyer, still
 -- 'invited' with no user_id and no auth.users row of her own: the
 -- pre-link state, fixture for testing resolve_staff_signin's 'invited'
--- branch (see supabase/migrations/20260803042459_add_staff_auth_flow.sql)
+-- branch (see supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 10)
 -- and the admin restaurants directory's "invited" status badge.
 --
 -- is_primary_owner is set only on the owner row, matching what
@@ -260,8 +260,8 @@ on conflict (id) do nothing;
 
 -- Staff auth identities (Email OTP dev fixtures — same individual-account
 -- pattern as the existing seed; docs/architecture.md's shared kitchen/waiter
--- 'station account' design is agreed but not yet built, so this mirrors what
--- actually ships today, not the future pairing-code flow).
+-- 'station account' design isn't built yet, so this mirrors what actually
+-- ships today, not the future pairing-code flow).
 insert into auth.users (
 	id, instance_id, aud, role, email, email_confirmed_at,
 	confirmation_token, recovery_token, email_change_token_new, email_change,
@@ -692,7 +692,7 @@ on conflict (id) do nothing;
 
 -- Uncommitted cart items — guests/waiter mid-browse, next round not yet
 -- confirmed. Includes one staff-added line (waiter ordering on a guest's
--- behalf) as an added_by_type edge case the original fixture didn't cover.
+-- behalf), covering the added_by_type = staff case.
 insert into cart_items (id, restaurant_id, session_id, menu_item_id, quantity, spice, salt, ice, added_by_type, added_by_staff_id) values
 	('70000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000011', '40000000-0000-4000-8000-00000000005a', 2, null, null, null, 'guest', null),
 	('70000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000011', '40000000-0000-4000-8000-00000000001b', 1, null, null, null, 'guest', null),

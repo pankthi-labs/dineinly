@@ -36,6 +36,8 @@ Non-negotiable regardless of which doc you're reading:
 
 Write comments as if authoring the code for the first time — describe what's true now, never the decision process that got here. No "user-confirmed", "pinned value here", "the doc gives a range so we picked X", or any other narration of a discussion, review, or choice. State the constraint and the value plainly; if the reader needs to know a value was chosen from a range, say the range and the value, not that it was confirmed/decided/agreed.
 
+This also rules out narrating what the code used to do or the bug that motivated a change: no "previously did X as two calls", "unlike the original version", "before this column existed", "that crashed with...instead of", "X wasn't covered", or "X is agreed but not yet built". State the current behavior and its reason; git history is where the old version and the bug report belong.
+
 ## Unresolved — Stop and Ask
 
 Marked `TBD` in the docs — do not guess these, flag and ask:

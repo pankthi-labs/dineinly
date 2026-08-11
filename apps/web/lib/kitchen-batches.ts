@@ -35,8 +35,7 @@ const STAGGER_CAP = 3;
 // timestamp that exists), how long it's actually been in the pan
 // (Preparing — preparingAt, stamped when the kitchen started it), how long
 // it's sat waiting for a waiter to collect it (Ready — readyAt). Falls back
-// to placedAt only for rows that reached preparing/ready before this column
-// existed.
+// to placedAt for any row missing its preparingAt/readyAt timestamp.
 function referenceTimestamp(item: KitchenQueueItem): string | null {
 	if (item.status === "ready") return item.readyAt ?? item.placedAt;
 	if (item.status === "preparing") return item.preparingAt ?? item.placedAt;

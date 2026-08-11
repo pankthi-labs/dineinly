@@ -173,11 +173,11 @@ create policy "guest_select_own_active_session" on public.table_sessions
 -- cart (docs/product.md: "any participant edits freely" — not scoped to
 -- rows the guest personally added). Insert/update are pinned to
 -- `added_by_type = 'guest'` / `added_by_staff_id is null` so a guest can
--- never attribute a cart edit to staff. Unlike the original version of
--- this policy, no separate `exists (select 1 from menu_items ...)` check
--- is needed here: `cart_items.menu_item_id` now carries a composite FK to
+-- never attribute a cart edit to staff. No separate
+-- `exists (select 1 from menu_items ...)` check is needed here:
+-- `cart_items.menu_item_id` carries a composite FK to
 -- `menu_items (restaurant_id, id)` (packages/db/src/schema/cart-item.ts),
--- so a cart item can no longer reference another restaurant's menu item at
+-- so a cart item can never reference another restaurant's menu item at
 -- all — the database enforces it, not this policy.
 grant select, insert, update, delete on public.cart_items to authenticated;
 
@@ -538,6 +538,78 @@ grant execute on function public.admin_create_restaurant(
 	text, text, text, text, text, text, numeric, text, text, text
 ) to authenticated;
 
+-- admin_update_restaurant: updates the restaurant and its owner-contact row
+-- in one transaction. Once the primary owner has signed in, their
+-- name/email/mobile are immutable through this function — reassigning who
+-- holds the role is the only way to change them; p_owner_* is simply
+-- ignored in that case.
+create or replace function public.admin_update_restaurant(
+	p_id uuid,
+	p_name text,
+	p_address text,
+	p_city text,
+	p_gst_number text,
+	p_state text,
+	p_pincode text,
+	p_service_charge_rate numeric,
+	p_owner_name text,
+	p_owner_email text,
+	p_owner_mobile text
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+	v_primary_owner_id uuid;
+	v_primary_owner_status public.staff_status;
+begin
+	if not public.is_dineinly_admin() then
+		raise exception 'Only Dineinly Admin may update restaurants';
+	end if;
+
+	if not exists (select 1 from public.restaurants where id = p_id) then
+		raise exception 'Restaurant not found';
+	end if;
+
+	select id, status
+	into v_primary_owner_id, v_primary_owner_status
+	from public.staff
+	where restaurant_id = p_id and is_primary_owner = true
+	limit 1;
+
+	update public.restaurants
+	set
+		name = p_name,
+		address = p_address,
+		city = p_city,
+		gst_number = p_gst_number,
+		state = p_state,
+		pincode = p_pincode,
+		service_charge_rate = p_service_charge_rate
+	where id = p_id;
+
+	if v_primary_owner_id is null then
+		insert into public.staff (restaurant_id, email, name, mobile, role, status, is_primary_owner)
+		values (p_id, p_owner_email, p_owner_name, p_owner_mobile, 'owner', 'invited', true);
+	elsif v_primary_owner_status <> 'active' then
+		update public.staff
+		set name = p_owner_name, email = p_owner_email, mobile = p_owner_mobile
+		where id = v_primary_owner_id;
+	end if;
+
+	return p_id;
+end;
+$$;
+
+revoke execute on function public.admin_update_restaurant(
+	uuid, text, text, text, text, text, text, numeric, text, text, text
+) from public;
+grant execute on function public.admin_update_restaurant(
+	uuid, text, text, text, text, text, text, numeric, text, text, text
+) to authenticated;
+
 -- ============================================================================
 -- 7. Menu Desk: reorder_menu_categories
 -- ============================================================================
@@ -789,3 +861,86 @@ $$;
 
 revoke execute on function public.submit_order(text) from public;
 grant execute on function public.submit_order(text) to authenticated;
+
+-- ============================================================================
+-- 10. Staff auth: sign-in gate + post-verify linking
+-- ============================================================================
+-- Closes the invite-only sign-in gap flagged in apps/web/lib/auth.ts. Two
+-- functions:
+--
+--   - resolve_staff_signin: called from apps/web/sign-in before
+--     signInWithOtp, by an unauthenticated request (Postgres role `anon`
+--     — there's no session yet). Decides whether GoTrue should be allowed
+--     to create the auth.users row on first OTP verify (an email that
+--     matches an invited Staff row with no user_id yet) or must not (any
+--     other email) — unconditionally allowing it would turn sign-in into
+--     open self-signup, breaking the invite-only model. Reading auth.users
+--     needs elevated privilege no Postgres role but the table owner has,
+--     hence SECURITY DEFINER.
+--
+--   - link_staff_account: called right after verifyOtp() succeeds, by the
+--     now-authenticated user, to set staff.user_id/status on their own
+--     invited row(s) (one person can be invited at more than one
+--     restaurant) and hand back their name for the display_name copy the
+--     caller makes via auth.updateUser(). Staff has no self-service RLS
+--     policy (see § 5 above), so this too is SECURITY DEFINER — but it
+--     only ever matches rows against the caller's own auth.uid()/email,
+--     never a caller-supplied id, so it can't link an arbitrary Staff row.
+--
+-- Same hardening as every other function in this file: `set search_path =
+-- ''` with fully schema-qualified references, and `execute` revoked from
+-- `public`.
+
+create or replace function public.resolve_staff_signin(p_email text)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+	select case
+		when exists (
+			select 1 from auth.users where lower(email) = lower(p_email)
+		) then 'existing'
+		when exists (
+			select 1 from public.staff
+			where lower(email) = lower(p_email) and status = 'invited'
+		) then 'invited'
+		else 'unknown'
+	end;
+$$;
+
+revoke execute on function public.resolve_staff_signin(text) from public;
+-- Called from /sign-in before signInWithOtp — usually anon (no session yet),
+-- but a still-valid leftover session cookie makes the same request arrive
+-- as `authenticated` (e.g. a signed-in user reloading /sign-in, or a token
+-- that hasn't expired despite the app treating the user as logged out).
+-- Grant both; the check itself doesn't depend on the caller's identity.
+grant execute on function public.resolve_staff_signin(text) to anon, authenticated;
+
+create or replace function public.link_staff_account()
+returns table (restaurant_id uuid, staff_id uuid, name text, role public.staff_role)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_uid uuid := auth.uid();
+	v_email text := auth.jwt() ->> 'email';
+begin
+	if v_uid is null or v_email is null then
+		raise exception 'link_staff_account requires an authenticated session';
+	end if;
+
+	return query
+		update public.staff
+		set user_id = v_uid, status = 'active'
+		where lower(staff.email) = lower(v_email)
+			and staff.status = 'invited'
+			and staff.user_id is null
+		returning staff.restaurant_id, staff.id, staff.name, staff.role;
+end;
+$$;
+
+revoke execute on function public.link_staff_account() from public;
+grant execute on function public.link_staff_account() to authenticated;

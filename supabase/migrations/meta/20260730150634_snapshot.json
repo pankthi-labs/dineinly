@@ -947,6 +947,18 @@
           "notNull": true,
           "default": "'placed'"
         },
+        "preparing_at": {
+          "name": "preparing_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ready_at": {
+          "name": "ready_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "menu_item_id": {
           "name": "menu_item_id",
           "type": "uuid",

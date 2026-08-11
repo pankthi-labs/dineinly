@@ -163,7 +163,7 @@ export const restaurantsRouter = router({
 		.input(updateRestaurantInput)
 		.mutation(async ({ ctx, input }) => {
 			// Atomic — see admin_update_restaurant (supabase/migrations/
-			// 20260803044818_admin_update_restaurant_rpc.sql) for the
+			// 20260730150634_add_auth_fk_and_rls_policies.sql § 6) for the
 			// restaurant+staff write and the "primary owner locked once active"
 			// rule, same pattern as create above.
 			const { data, error } = await ctx.auth.rpc("admin_update_restaurant", {

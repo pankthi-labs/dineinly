@@ -4,7 +4,7 @@ import { resolveSignInInput } from "./auth.schema";
 
 // Staff auth flow: the sign-in gate (before OTP is sent) and the
 // post-verify link-up (right after it's confirmed). See
-// supabase/migrations/20260803042459_add_staff_auth_flow.sql for the two
+// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 10 for the two
 // Postgres functions this router wraps — both SECURITY DEFINER, since an
 // unauthenticated sign-in check and a not-yet-linked Staff row are exactly
 // the cases Staff RLS (deferred, see AGENTS.md guardrails) can't cover yet.

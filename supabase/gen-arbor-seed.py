@@ -962,8 +962,8 @@ w("")
 # --- auth.users + identities for linked staff ---
 w("-- Staff auth identities (Email OTP dev fixtures — same individual-account")
 w("-- pattern as the existing seed; docs/architecture.md's shared kitchen/waiter")
-w("-- 'station account' design is agreed but not yet built, so this mirrors what")
-w("-- actually ships today, not the future pairing-code flow).")
+w("-- 'station account' design isn't built yet, so this mirrors what actually")
+w("-- ships today, not the future pairing-code flow).")
 w("insert into auth.users (")
 w("\tid, instance_id, aud, role, email, email_confirmed_at,")
 w("\tconfirmation_token, recovery_token, email_change_token_new, email_change,")
@@ -1097,7 +1097,7 @@ w("")
 # --- cart items ---
 w("-- Uncommitted cart items — guests/waiter mid-browse, next round not yet")
 w("-- confirmed. Includes one staff-added line (waiter ordering on a guest's")
-w("-- behalf) as an added_by_type edge case the original fixture didn't cover.")
+w("-- behalf), covering the added_by_type = staff case.")
 w("insert into cart_items (id, restaurant_id, session_id, menu_item_id, quantity, spice, salt, ice, added_by_type, added_by_staff_id) values")
 rows = []
 for c in CART_ITEMS:
