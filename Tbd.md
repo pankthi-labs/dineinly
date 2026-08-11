@@ -92,43 +92,27 @@ Menu Desk has no way to see what a dish/category looks like from the guest order
 
 ---
 
-## Cart router
+## Waiter serve flow missing
 
-No `cart` tRPC router. The guest menu drawer's quantity + spice/salt/ice picker (`apps/web/app/guest/menu/page.tsx`) is visual-only — its "Add to Order" button doesn't call anything. RLS already grants guests insert/update/delete on their own session's `cart_items` (`supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 3).
+No mutation anywhere sets `order_items.status = 'served'`. `kitchen.ts`'s `advanceBatch` only moves `placed → preparing → ready` (`ADVANCE_FROM` map, `apps/web/server/routers/kitchen.ts`); nothing moves `ready → served`. Consequence: once the kitchen marks a dish Ready, it sits there forever — the guest-facing status (`apps/web/server/routers/guest.ts` `orders.list`, derived `preparing`/`partially served`/`served`) can never advance past "preparing" in practice, since no item ever reaches `served`.
 
-**Pick up:** guest-scoped mutations (add/update/remove `cart_items`), then wire the drawer to them.
-
----
-
-## No cart screen
-
-No shared-cart view. Guest needs to see/edit the live cart (multi-guest, last-write-wins per `docs/product.md`) before confirming an order.
-
-**Pick up:** build once the cart router above exists.
+**Pick up:** Floor/Waiter router + UI to mark item(s) served, gated by the Waiter role once role-level RBAC exists (see "Feature-level staff permissions" above). Known and explicitly out of scope for now.
 
 ---
 
-## Confirm-cart RPC
+## Request bill has no terminal-status guard
 
-Guests only have `select` on `orders`/`order_items` (no insert — same migration, § 3), so confirming a cart can't be a plain guest-scoped insert.
+`request_bill()` (`supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 11) lets a guest request the bill at any point, regardless of order item status — same for `docs/core-data-model.md`'s Request Bill lifecycle line. A real dine-in flow should only allow it once every Order Item in the session is `served` or `cancelled` (nothing left `placed`/`preparing`/`ready`).
 
-**Pick up:** a `SECURITY DEFINER` function (mirrors `resolve_qr_token`) that atomically moves `cart_items` → `order` + `order_items`, sets `idempotency_key`, then clears the cart. `docs/product.md`: "Confirming sends the cart to the kitchen as an order (one round) and clears the cart."
-
----
-
-## No order status screen
-
-RLS read access to `orders`/`order_items` is already in place for guests, no UI consumes it yet.
-
-**Pick up:** build once orders can actually be placed (needs the confirm-cart RPC above).
+**Pick up:** intentionally left unguarded for now — blocks dev testing, since seeded/test sessions rarely have every item served. Add the check (in `request_bill()` or `guest.bill.get`) once dev/testing can produce fully-served sessions on demand.
 
 ---
 
 ## Guest side not wired to realtime
 
-`session:{id}` channel (`docs/realtime.md`) broadcasts cart/order-item changes to every guest at the table. Nothing subscribes to it yet — a second guest adding to cart won't show up live for the first.
+`session:{id}` channel (`docs/realtime.md`) broadcasts cart/order-item changes to every guest at the table. Nothing subscribes to it — `apps/web/app/guest/menu/page.tsx`, `apps/web/app/guest/orders/page.tsx`, and `apps/web/app/guest/bill/page.tsx` all poll `refetchInterval: 8_000` instead. A second guest adding to cart, an order-item advancing to Ready, or a bill moving to `settled` won't show up for a guest until the next 8s poll tick, not live. On the bill screen the poll also re-runs `request_bill()` every tick — harmless while nothing broadcasts on `bills`, but the trigger in `docs/realtime.md` (Bill, UPDATE of `status`) needs a `WHEN (OLD.status IS DISTINCT FROM NEW.status)` guard so those no-op re-writes don't each emit a broadcast. Same interim tradeoff already accepted for the Kitchen Display below.
 
-**Pick up:** wire once the cart screen exists — no point subscribing before there's a view to update.
+**Pick up:** wire together with "Kitchen queue not wired to realtime" below — same missing Broadcast infra covers both.
 
 ---
 
@@ -140,11 +124,19 @@ RLS read access to `orders`/`order_items` is already in place for guests, no UI 
 
 ---
 
-## Tax/service/rounding formula — TBD in docs
+## No Call Waiter action on the bill
 
-Marked `TBD` in `docs/core-data-model.md`. Blocks real order/bill totals.
+The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.
 
-**Pick up:** do not guess — flag and ask (`AGENTS.md`).
+**Pick up:** needs the realtime Broadcast infra (see "Guest side not wired to realtime" below) to notify staff live, plus a decision on what a waiter-facing "call" surface looks like (toast on Kitchen Display? a separate Floor view? no Floor view exists yet).
+
+---
+
+## No Email Bill action
+
+The guest bill screen has no way to email/export the bill — no guest email capture anywhere in the guest flow (guests never have accounts, per AGENTS.md), no email-sending integration.
+
+**Pick up:** decide how a guest supplies an email (one-off field on the bill screen vs. something persisted) and which email provider to use — not decided yet, don't guess either.
 
 ---
 

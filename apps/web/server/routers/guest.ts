@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { computeBill } from "@/lib/bill-math";
 import { ICE_OPTIONS, SALT_OPTIONS, SPICE_OPTIONS } from "@/lib/menu-options";
 import { guestProcedure, router } from "../trpc/init";
 
@@ -313,6 +314,99 @@ export const guestRouter = router({
 					})),
 				};
 			});
+		}),
+	}),
+
+	bill: router({
+		// Request Bill (docs/product.md § Billing & Settlement). The
+		// request_bill() Postgres function creates or moves the session's
+		// Bill row to `requested`, idempotently. Amounts are derived on read
+		// from order_items every call (docs/core-data-model.md: "derived on
+		// read for presentation") — bills stores no line-item breakdown, only
+		// the frozen totals a settle later writes.
+		get: guestProcedure.query(async ({ ctx }) => {
+			const { data: billId, error: rpcError } =
+				await ctx.supabase.rpc("request_bill");
+			if (rpcError) {
+				throw dbError("Unable to open the bill.", rpcError);
+			}
+
+			const [restaurantResult, billResult, ordersResult] = await Promise.all([
+				ctx.supabase
+					.from("restaurants")
+					.select("name, address, city, gst_number, state, pincode")
+					.eq("id", ctx.guest.restaurant_id)
+					.maybeSingle(),
+				ctx.supabase
+					.from("bills")
+					.select("id, bill_number, status, service_charge_rate")
+					.eq("id", billId)
+					.maybeSingle(),
+				ctx.supabase
+					.from("orders")
+					.select("id")
+					.eq("restaurant_id", ctx.guest.restaurant_id)
+					.eq("session_id", ctx.guest.table_session_id),
+			]);
+
+			for (const result of [restaurantResult, billResult, ordersResult]) {
+				if (result.error) {
+					throw dbError("Unable to load the bill.", result.error);
+				}
+			}
+			if (!restaurantResult.data || !billResult.data) {
+				throw dbError(
+					"Unable to load the bill.",
+					new Error("Missing restaurant or bill row"),
+				);
+			}
+
+			const orderIds = (ordersResult.data ?? []).map((order) => order.id);
+			const itemsResult =
+				orderIds.length === 0
+					? { data: [], error: null }
+					: await ctx.supabase
+							.from("order_items")
+							.select("item_name, unit_price, tax_rate, quantity")
+							.eq("restaurant_id", ctx.guest.restaurant_id)
+							.in("order_id", orderIds)
+							.neq("status", "cancelled");
+
+			if (itemsResult.error) {
+				throw dbError("Unable to load the bill.", itemsResult.error);
+			}
+
+			const totals = computeBill(
+				(itemsResult.data ?? []).map((row) => ({
+					name: row.item_name,
+					unitPrice: Number(row.unit_price),
+					quantity: row.quantity,
+					taxRate: Number(row.tax_rate),
+				})),
+				Number(billResult.data.service_charge_rate ?? 0),
+			);
+
+			return {
+				restaurant: {
+					name: restaurantResult.data.name,
+					address: restaurantResult.data.address,
+					city: restaurantResult.data.city,
+					gstNumber: restaurantResult.data.gst_number,
+					state: restaurantResult.data.state,
+					pincode: restaurantResult.data.pincode,
+				},
+				tableLabel: ctx.guest.table_label,
+				billId: billResult.data.id,
+				billNumber: billResult.data.bill_number,
+				status: billResult.data.status,
+				// service_charge_rate is numeric(5,4), so as a percent it
+				// carries at most 2 decimals — rounding there keeps float
+				// round-trip noise out of the guest-facing label.
+				serviceChargeRatePercent:
+					Math.round(Number(billResult.data.service_charge_rate ?? 0) * 10000) /
+					100,
+				...totals,
+			};
 		}),
 	}),
 });

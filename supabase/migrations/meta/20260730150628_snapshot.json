@@ -27,6 +27,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "bill_number": {
+          "name": "bill_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
         "status": {
           "name": "status",
           "type": "bill_status",
@@ -161,6 +167,14 @@
           "nullsNotDistinct": false,
           "columns": [
             "session_id"
+          ]
+        },
+        "bills_restaurant_id_bill_number_key": {
+          "name": "bills_restaurant_id_bill_number_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "restaurant_id",
+            "bill_number"
           ]
         }
       },

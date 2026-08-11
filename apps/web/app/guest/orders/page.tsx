@@ -128,6 +128,16 @@ export default function GuestOrdersPage() {
 						))}
 					</div>
 				)}
+
+				{items.length > 0 ? (
+					<button
+						type="button"
+						onClick={() => router.push("/guest/bill")}
+						className="mt-8 w-full rounded-md bg-accent px-6 py-4 font-medium text-background text-sm"
+					>
+						View Bill
+					</button>
+				) : null}
 			</main>
 		</div>
 	);

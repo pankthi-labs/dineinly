@@ -3,9 +3,11 @@ import {
 	check,
 	foreignKey,
 	index,
+	integer,
 	numeric,
 	pgTable,
 	timestamp,
+	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
 import { billStatus } from "./enums.js";
@@ -30,6 +32,12 @@ export const bills = pgTable(
 		// constraint is the composite FK below, so session_id can never name
 		// a session from another restaurant.
 		sessionId: uuid("session_id").notNull().unique(),
+		// Human-facing bill identifier — random, not sequential (doesn't reveal
+		// order/volume to guests), assigned once at first request_bill() (never
+		// on the id/uuid, which stays internal). A 9-digit value always fits
+		// integer's range, keeping the space large enough that per-restaurant
+		// collisions stay negligible.
+		billNumber: integer("bill_number").notNull(),
 		status: billStatus("status").notNull().default("open"),
 		// Snapshotted at request/settle time — restaurant-level rate can change later.
 		serviceChargeRate: numeric("service_charge_rate", {
@@ -54,9 +62,16 @@ export const bills = pgTable(
 	(table) => [
 		// Kept single-column, unlike the other tenant tables: nothing else
 		// here is leftmost-prefixed by restaurant_id (session_id's unique
-		// constraint is its own index, and the composite FK below gets none),
-		// so this is the only tenant index.
+		// constraint is its own index, and the composite FK below gets none)
+		// other than the bill_number uniqueness below — so this stays its own
+		// tenant index.
 		index("bills_restaurant_id_idx").on(table.restaurantId),
+		// Human-facing bill number is unique per restaurant, not globally —
+		// two restaurants can both have bill #1.
+		unique("bills_restaurant_id_bill_number_key").on(
+			table.restaurantId,
+			table.billNumber,
+		),
 		foreignKey({
 			columns: [table.restaurantId, table.sessionId],
 			foreignColumns: [tableSessions.restaurantId, tableSessions.id],

@@ -944,3 +944,113 @@ $$;
 
 revoke execute on function public.link_staff_account() from public;
 grant execute on function public.link_staff_account() to authenticated;
+
+-- ============================================================================
+-- 11. Guest billing: request_bill
+-- ============================================================================
+-- Request Bill (docs/product.md § Billing & Settlement): finds or creates
+-- the session's Bill row and moves it open -> requested, snapshotting the
+-- restaurant's current service_charge_rate onto it. bills grants guests
+-- select-only (§ 3 above), so the insert/update needs SECURITY DEFINER, same
+-- reasoning as submit_order.
+--
+-- Tenancy and session come only from `auth.jwt()` claims, never arguments,
+-- same as submit_order. Idempotent: a guest revisiting the bill screen
+-- (guest.bill.get polls this) just returns the same bill id, re-snapshotting
+-- service_charge_rate every call while the bill is open or requested — both
+-- stay derived-on-read (core-data-model.md), so the restaurant's rate can
+-- still legitimately change before settle. Only `settled` freezes the row —
+-- the CASE guards below stop touching status/rate once settled, so a late
+-- poll can never un-settle or overwrite a bill the restaurant already closed
+-- out. Subtotal/tax/total are never written here — bill.ts (schema)
+-- and core-data-model.md both specify those stay derived-on-read until
+-- settle, computed by the caller from order_items, not this function.
+--
+-- bill_number is assigned once, only on the row's first insert: the update
+-- branch below runs first and handles every later poll, so a number is only
+-- drawn on a session's first Request Bill. It's a random 9-digit number, not
+-- a counter, retried on collision against bills_restaurant_id_bill_number_key
+-- (unique per restaurant): the insert is attempted inside its own
+-- begin/exception block, and a unique_violation there redraws and retries,
+-- up to v_max_attempts. Any unique_violation caught here must be the
+-- bill_number constraint, not session_id — the ON CONFLICT (session_id) DO
+-- UPDATE below already absorbs a concurrent first-request for the same
+-- session without raising.
+create or replace function public.request_bill()
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid;
+	v_session_id uuid;
+	v_service_charge_rate numeric;
+	v_bill_id uuid;
+	v_bill_number integer;
+	v_attempts int := 0;
+	v_max_attempts constant int := 20;
+begin
+	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
+	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
+
+	if not public.jwt_is_guest_for_session(v_restaurant_id, v_session_id) then
+		raise exception 'Guest session required';
+	end if;
+
+	if not public.is_active_guest_session(v_session_id, v_restaurant_id) then
+		raise exception 'Table session is not active';
+	end if;
+
+	select service_charge_rate into v_service_charge_rate
+	from public.restaurants
+	where id = v_restaurant_id;
+
+	update public.bills
+	set
+		status = case when status = 'settled' then status else 'requested' end,
+		service_charge_rate = case
+			when status = 'settled' then service_charge_rate
+			else v_service_charge_rate
+		end
+	where session_id = v_session_id
+	returning id into v_bill_id;
+
+	if v_bill_id is null then
+		loop
+			v_attempts := v_attempts + 1;
+			if v_attempts > v_max_attempts then
+				raise exception 'Could not generate a unique bill number';
+			end if;
+
+			v_bill_number := floor(random() * 900000000 + 100000000)::integer;
+
+			begin
+				insert into public.bills
+					(restaurant_id, session_id, bill_number, status, service_charge_rate)
+				values
+					(v_restaurant_id, v_session_id, v_bill_number, 'requested', v_service_charge_rate)
+				on conflict (session_id) do update
+				set
+					status = case
+						when public.bills.status = 'settled' then public.bills.status
+						else 'requested'
+					end,
+					service_charge_rate = case
+						when public.bills.status = 'settled' then public.bills.service_charge_rate
+						else excluded.service_charge_rate
+					end
+				returning id into v_bill_id;
+				exit;
+			exception when unique_violation then
+				continue;
+			end;
+		end loop;
+	end if;
+
+	return v_bill_id;
+end;
+$$;
+
+revoke execute on function public.request_bill() from public;
+grant execute on function public.request_bill() to authenticated;

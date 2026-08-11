@@ -36,6 +36,7 @@ export type Database = {
 		Tables: {
 			bills: {
 				Row: {
+					bill_number: number;
 					created_at: string;
 					id: string;
 					restaurant_id: string;
@@ -51,6 +52,7 @@ export type Database = {
 					updated_at: string;
 				};
 				Insert: {
+					bill_number: number;
 					created_at?: string;
 					id?: string;
 					restaurant_id: string;
@@ -66,6 +68,7 @@ export type Database = {
 					updated_at?: string;
 				};
 				Update: {
+					bill_number?: number;
 					created_at?: string;
 					id?: string;
 					restaurant_id?: string;
@@ -674,6 +677,7 @@ export type Database = {
 				Args: { p_category_ids: string[]; p_restaurant_id: string };
 				Returns: undefined;
 			};
+			request_bill: { Args: never; Returns: string };
 			resolve_qr_token: {
 				Args: { p_qr_token: string };
 				Returns: {

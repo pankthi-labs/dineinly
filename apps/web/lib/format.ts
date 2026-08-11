@@ -10,3 +10,13 @@ export function formatPrice(price: number): string {
 		maximumFractionDigits: 0,
 	}).format(price);
 }
+
+/** Bill line items and totals keep paisa precision, unlike menu prices. */
+export function formatBillAmount(amount: number): string {
+	return new Intl.NumberFormat("en-IN", {
+		style: "currency",
+		currency: "INR",
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	}).format(amount);
+}

@@ -42,7 +42,6 @@ This also rules out narrating what the code used to do or the bug that motivated
 
 Marked `TBD` in the docs — do not guess these, flag and ask:
 
-- Tax/service/rounding formula (`docs/core-data-model.md`)
 - Force-terminate session: void vs. settle handling of an open bill (`docs/core-data-model.md`, `docs/product.md`)
 
 If a doc introduces another `TBD`, do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.
