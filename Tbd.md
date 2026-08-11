@@ -108,27 +108,11 @@ No mutation anywhere sets `order_items.status = 'served'`. `kitchen.ts`'s `advan
 
 ---
 
-## Guest side not wired to realtime
-
-`session:{id}` channel (`docs/realtime.md`) broadcasts cart/order-item changes to every guest at the table. Nothing subscribes to it — `apps/web/app/guest/menu/page.tsx`, `apps/web/app/guest/orders/page.tsx`, and `apps/web/app/guest/bill/page.tsx` all poll `refetchInterval: 8_000` instead. A second guest adding to cart, an order-item advancing to Ready, or a bill moving to `settled` won't show up for a guest until the next 8s poll tick, not live. On the bill screen the poll also re-runs `request_bill()` every tick — harmless while nothing broadcasts on `bills`, but the trigger in `docs/realtime.md` (Bill, UPDATE of `status`) needs a `WHEN (OLD.status IS DISTINCT FROM NEW.status)` guard so those no-op re-writes don't each emit a broadcast. Same interim tradeoff already accepted for the Kitchen Display below.
-
-**Pick up:** wire together with "Kitchen queue not wired to realtime" below — same missing Broadcast infra covers both.
-
----
-
-## Kitchen queue not wired to realtime
-
-`apps/web/app/restaurants/[restaurantId]/kitchen/page.tsx` polls `kitchen.listQueue` on an 8s interval instead of subscribing to the `restaurant:{id}` topic (`docs/realtime.md`) — no Broadcast-from-Database trigger, `realtime.messages` RLS policy, or client channel subscription exists anywhere in the app yet (same gap as "Guest side not wired to realtime" above). `docs/architecture.md`/`docs/realtime.md` mandate no polling; this is the interim, same tradeoff already accepted for the guest cart.
-
-**Pick up:** build the `restaurant:{id}` Broadcast infra (trigger functions on `orders` INSERT and `order_items` status UPDATE, `realtime.messages` RLS keyed on staff/admin restaurant membership, `realtime.topic()`-based authorization) once it's built for one table — likely worth doing once for every table in `docs/realtime.md`'s Publish Side table rather than per-feature. Swapping the Kitchen Display's polling for a channel subscription only touches the `refetchInterval` call in `page.tsx`, not the query shape.
-
----
-
 ## No Call Waiter action on the bill
 
 The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.
 
-**Pick up:** needs the realtime Broadcast infra (see "Guest side not wired to realtime" below) to notify staff live, plus a decision on what a waiter-facing "call" surface looks like (toast on Kitchen Display? a separate Floor view? no Floor view exists yet).
+**Pick up:** the realtime Broadcast infra now exists (`session:{id}`/`restaurant:{id}` topics, `apps/web/lib/realtime/`) — this only needs a mutation plus a decision on what a waiter-facing "call" surface looks like (toast on Kitchen Display? a separate Floor view? no Floor view exists yet).
 
 ---
 

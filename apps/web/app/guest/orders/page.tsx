@@ -10,6 +10,8 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { titleCase } from "@/lib/format";
+import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
+import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
 import { trpc } from "@/lib/trpc-client";
 
 type GuestOrder = {
@@ -81,8 +83,18 @@ export default function GuestOrdersPage() {
 	const menu = trpc.guest.menu.useQuery(undefined, { retry: false });
 	const orders = trpc.guest.orders.list.useQuery(undefined, {
 		enabled: menu.isSuccess,
-		refetchInterval: 8_000,
 	});
+	const utils = trpc.useUtils();
+
+	const { client, tableSessionId } = useGuestRealtime();
+	useBroadcastChannel(
+		client,
+		tableSessionId ? `session:${tableSessionId}` : null,
+		{
+			"order.new": () => utils.guest.orders.list.invalidate(),
+			"order_item.status": () => utils.guest.orders.list.invalidate(),
+		},
+	);
 
 	if (menu.isLoading || (menu.isSuccess && orders.isLoading)) {
 		return <GuestLoading message="Loading your orders…" />;

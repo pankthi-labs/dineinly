@@ -24,6 +24,8 @@ import {
 	type SERVING_SIZE_OPTIONS,
 	SPICE_OPTIONS,
 } from "@/lib/menu-options";
+import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
+import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
 import { trpc } from "@/lib/trpc-client";
 
 type MenuItem = {
@@ -68,12 +70,11 @@ export default function GuestMenuPage() {
 	const router = useRouter();
 	const menu = trpc.guest.menu.useQuery(undefined, { retry: false });
 	const utils = trpc.useUtils();
+	// Shared cart — another guest at the table can add/edit lines this device
+	// never mutated, so this relies on the session:{id} broadcast below
+	// rather than only its own mutations to stay current.
 	const cart = trpc.guest.cart.list.useQuery(undefined, {
 		enabled: menu.isSuccess,
-		// Shared cart — another guest at the table can add/edit lines this
-		// device never mutated. No realtime wiring yet (same interim tradeoff
-		// as the kitchen queue), so poll instead.
-		refetchInterval: 8_000,
 	});
 	const addItem = trpc.guest.cart.addItem.useMutation({
 		onSuccess: () => utils.guest.cart.list.invalidate(),
@@ -85,6 +86,16 @@ export default function GuestMenuPage() {
 		enabled: menu.isSuccess,
 	});
 	const hasOrders = (orders.data?.length ?? 0) > 0;
+
+	const { client, restaurantId, tableSessionId } = useGuestRealtime();
+	useBroadcastChannel(
+		client,
+		tableSessionId ? `session:${tableSessionId}` : null,
+		{ "cart_item.change": () => utils.guest.cart.list.invalidate() },
+	);
+	useBroadcastChannel(client, restaurantId ? `menu:${restaurantId}` : null, {
+		"menu_item.availability": () => utils.guest.menu.invalidate(),
+	});
 
 	// Card quick-add/stepper writes/edits the *last* cart line for a menu
 	// item — for an item with no preferences there's only ever one line, so

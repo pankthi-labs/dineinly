@@ -11,15 +11,11 @@ import {
 	type KitchenBatch,
 	staggerDelayMs,
 } from "@/lib/kitchen-batches";
+import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
+import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
 import { AvailabilityPanel } from "./availability-panel";
 
-// No realtime broadcast wiring exists yet in this codebase for any table
-// (see Tbd.md "Kitchen queue not wired to realtime") — this interval is the
-// interim, same tradeoff already accepted for the guest cart. Swapping it
-// for a `restaurant:{id}` channel subscription only touches this refetch
-// call, not the query shape.
-const QUEUE_REFETCH_MS = 8_000;
 const CLOCK_TICK_MS = 30_000;
 
 const COLUMN_STYLE: Record<
@@ -54,11 +50,22 @@ export default function KitchenDisplayPage() {
 		return () => clearInterval(id);
 	}, []);
 
-	const queue = trpc.kitchen.listQueue.useQuery(
-		{ restaurantId },
-		{ refetchInterval: QUEUE_REFETCH_MS },
-	);
+	const queue = trpc.kitchen.listQueue.useQuery({ restaurantId });
 	const utils = trpc.useUtils();
+
+	// Staff realtime: the browser's Supabase Auth session (Email OTP /
+	// station PIN sign-in) already carries this client's credentials —
+	// supabase-js wires that session into Realtime auth automatically, no
+	// separate token plumbing needed (contrast lib/realtime/use-guest-realtime,
+	// where the guest JWT never reaches the browser on its own).
+	// createClient() returns @supabase/ssr's cached browser singleton, so
+	// this doesn't need its own memoization.
+	const supabase = createClient();
+	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
+		"order.new": () => utils.kitchen.listQueue.invalidate({ restaurantId }),
+		"order_item.status": () =>
+			utils.kitchen.listQueue.invalidate({ restaurantId }),
+	});
 	const advanceBatch = trpc.kitchen.advanceBatch.useMutation({
 		onMutate: async (input) => {
 			await utils.kitchen.listQueue.cancel({ restaurantId });

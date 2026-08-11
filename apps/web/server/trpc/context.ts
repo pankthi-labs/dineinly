@@ -53,7 +53,19 @@ export async function createContext() {
 	// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 4).
 	const auth = await createAuthClient();
 
-	return { guest, supabase, auth };
+	// Raw JWT, not just the parsed claims — guest.realtimeAuth (server/
+	// routers/guest.ts) hands this to the browser so it can call
+	// supabase.realtime.setAuth() itself. The httpOnly cookie above never
+	// reaches client JS, so this is the one place the token crosses that
+	// boundary; it carries no more trust than the cookie already does; every
+	// authenticated tRPC call from this browser is already running as this
+	// same guest.
+	return {
+		guest,
+		guestToken: guest ? (guestToken ?? null) : null,
+		supabase,
+		auth,
+	};
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;

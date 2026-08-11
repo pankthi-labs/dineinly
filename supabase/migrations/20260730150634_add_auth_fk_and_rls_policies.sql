@@ -1033,3 +1033,333 @@ $$;
 
 revoke execute on function public.request_bill() from public;
 grant execute on function public.request_bill() to authenticated;
+
+-- ============================================================================
+-- 12. Realtime broadcast: publish side (docs/realtime.md)
+-- ============================================================================
+-- Broadcast from Database via triggers, per docs/realtime.md — never Postgres
+-- Changes. `realtime.messages` RLS (§ 13 below) is the subscribe-side
+-- authorization gate; these triggers are the publish side, and both must
+-- exist for a channel to work end to end.
+--
+-- Guest/menu-topic payloads carry only ids and the changed field, never a
+-- full row: the client handler invalidates the matching TanStack Query cache
+-- and refetches through the existing tRPC procedures, which already
+-- re-enforce RLS (docs/realtime.md § Subscribe Side — Client: "Handler
+-- patches or invalidates"). This is what keeps every trigger a few lines
+-- instead of hand-assembling a second, parallel copy of each row's
+-- guest-safe shape — the column exclusions docs/realtime.md calls out
+-- (idempotency_key, placed_by_staff_id, added_by_staff_id) hold by
+-- construction, since none of those columns are ever read into a payload.
+--
+-- The staff-only topic (restaurant:{id}) uses realtime.broadcast_changes(),
+-- the full-row helper docs/realtime.md permits there since no guest ever
+-- subscribes to it. Event names are passed explicitly (never tg_op) because
+-- several tables broadcast onto the same restaurant:{id} topic — a shared
+-- generic event name (e.g. "UPDATE") would make the client unable to tell
+-- which table changed without inspecting the payload body.
+--
+-- Same hardening as every other function in this file: `security definer`
+-- (the calling role — anon/authenticated — has no direct grant on
+-- realtime.messages), `set search_path = ''`, schema-qualified references.
+
+create or replace function public.broadcast_event(
+	p_topic text,
+	p_event text,
+	p_payload jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	perform realtime.send(p_payload, p_event, p_topic, true);
+end;
+$$;
+
+-- Internal only: called from the SECURITY DEFINER trigger functions below,
+-- never by a client. `public` schema is PostgREST-exposed (config.toml), so
+-- without this revoke any anon/authenticated caller could hit
+-- /rpc/broadcast_event directly and spoof a broadcast onto any topic,
+-- bypassing every realtime.messages RLS policy in § 13 below (those gate
+-- SELECT/subscribe, not this definer-side send). No re-grant needed: a
+-- trigger function calling this one runs as its own owner, which retains
+-- implicit execute on functions it owns regardless of the PUBLIC revoke.
+revoke execute on function public.broadcast_event(text, text, jsonb) from public;
+
+-- cart_items: any write -> session:{id} (guests + staff on that session).
+create or replace function public.broadcast_cart_item_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_row public.cart_items;
+begin
+	v_row := coalesce(new, old);
+	perform public.broadcast_event(
+		'session:' || v_row.session_id,
+		'cart_item.change',
+		jsonb_build_object('id', v_row.id, 'op', lower(tg_op))
+	);
+	return v_row;
+end;
+$$;
+
+create trigger broadcast_cart_item_change
+after insert or update or delete on public.cart_items
+for each row execute function public.broadcast_cart_item_change();
+
+-- orders: new round -> session:{id} (guest: order id only) +
+-- restaurant:{id} (staff: full row, Kitchen queue).
+create or replace function public.broadcast_order_new()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	perform public.broadcast_event(
+		'session:' || new.session_id,
+		'order.new',
+		jsonb_build_object('orderId', new.id)
+	);
+	perform realtime.broadcast_changes(
+		'restaurant:' || new.restaurant_id,
+		'order.new', tg_op, tg_table_name, tg_table_schema, new, old
+	);
+	return new;
+end;
+$$;
+
+create trigger broadcast_order_new
+after insert on public.orders
+for each row execute function public.broadcast_order_new();
+
+-- order_items: status change -> session:{id} (guest: name/status only) +
+-- restaurant:{id} (staff: full row, Kitchen queue). order_items has no
+-- session_id column of its own (composite FK is restaurant_id+order_id, see
+-- order-item.ts), so the session comes from a lookup on orders.
+create or replace function public.broadcast_order_item_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_session_id uuid;
+begin
+	select session_id into v_session_id
+	from public.orders
+	where restaurant_id = new.restaurant_id and id = new.order_id;
+
+	perform public.broadcast_event(
+		'session:' || v_session_id,
+		'order_item.status',
+		jsonb_build_object(
+			'orderId', new.order_id,
+			'itemId', new.id,
+			'itemName', new.item_name,
+			'status', new.status
+		)
+	);
+	perform realtime.broadcast_changes(
+		'restaurant:' || new.restaurant_id,
+		'order_item.status', tg_op, tg_table_name, tg_table_schema, new, old
+	);
+	return new;
+end;
+$$;
+
+create trigger broadcast_order_item_status
+after update of status on public.order_items
+for each row execute function public.broadcast_order_item_status();
+
+-- bills: status change -> session:{id} ("requested" / "settled").
+create or replace function public.broadcast_bill_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	perform public.broadcast_event(
+		'session:' || new.session_id,
+		'bill.status',
+		jsonb_build_object('billId', new.id, 'status', new.status)
+	);
+	return new;
+end;
+$$;
+
+-- request_bill() (§ 11 above) re-writes status on every call, even when it's
+-- already 'requested' or 'settled' (idempotent no-op writes) — the WHEN
+-- guard is required, not just tidy: without it, a guest's own bill.status
+-- broadcast would re-invalidate their bill.get query, which calls
+-- request_bill() again, re-firing the same no-op update forever.
+create trigger broadcast_bill_status
+after update of status on public.bills
+for each row
+when (old.status is distinct from new.status)
+execute function public.broadcast_bill_status();
+
+-- table_sessions: open/close -> restaurant:{id} (Floor view; staff only —
+-- no guest topic, a guest never needs to know about session metadata beyond
+-- what the cart/order/bill broadcasts above already tell them).
+create or replace function public.broadcast_table_session_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	perform realtime.broadcast_changes(
+		'restaurant:' || new.restaurant_id,
+		'table_session.change', tg_op, tg_table_name, tg_table_schema, new, old
+	);
+	return new;
+end;
+$$;
+
+create trigger broadcast_table_session_change
+after insert or update of status on public.table_sessions
+for each row execute function public.broadcast_table_session_change();
+
+-- menu_items: availability (86'd) change -> menu:{restaurant_id} (guests +
+-- staff both read this topic).
+create or replace function public.broadcast_menu_item_availability()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	perform public.broadcast_event(
+		'menu:' || new.restaurant_id,
+		'menu_item.availability',
+		jsonb_build_object('itemId', new.id, 'availability', new.availability)
+	);
+	return new;
+end;
+$$;
+
+create trigger broadcast_menu_item_availability
+after update of availability on public.menu_items
+for each row execute function public.broadcast_menu_item_availability();
+
+-- ============================================================================
+-- 13. Realtime broadcast: subscribe side — realtime.messages RLS
+-- ============================================================================
+-- Authorization for every channel.subscribe() call, per docs/realtime.md §
+-- Channel Model. Reuses the same claim/staff/admin helpers as the table
+-- policies above rather than inlining new logic. `realtime.topic()` returns
+-- the topic the connecting client is authorizing against; every topic here
+-- is `<kind>:<uuid>`, so `split_part` reads the kind and `try_uuid` parses
+-- the id without ever raising out of the policy on a malformed topic
+-- (a client can request any topic string it likes — an unparsable id must
+-- read as "no match", not as a policy error).
+
+create or replace function public.try_uuid(p_text text)
+returns uuid
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+	return p_text::uuid;
+exception when invalid_text_representation then
+	return null;
+end;
+$$;
+
+revoke execute on function public.try_uuid(text) from public;
+grant execute on function public.try_uuid(text) to authenticated;
+
+-- session:{id} — guests on their own active session, plus any active staff
+-- of that session's restaurant. Liveness (`ts.status = 'active'`) is
+-- re-checked here the same way every guest table policy above does, so
+-- closing a session denies the channel immediately, not just new queries.
+create or replace function public.can_access_session_topic(p_session_id uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+	select exists (
+		select 1
+		from public.table_sessions ts
+		where ts.id = p_session_id
+			and ts.status = 'active'
+			and (
+				public.jwt_is_guest_for_session(ts.restaurant_id, ts.id)
+				or public.is_active_staff_for_restaurant(ts.restaurant_id)
+				or public.is_dineinly_admin()
+			)
+	);
+$$;
+
+revoke execute on function public.can_access_session_topic(uuid) from public;
+grant execute on function public.can_access_session_topic(uuid) to authenticated;
+
+-- restaurant:{id} — staff of that restaurant (or Dineinly Admin) only; no
+-- guest claim ever matches here.
+create or replace function public.can_access_restaurant_topic(p_restaurant_id uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+	select public.is_active_staff_for_restaurant(p_restaurant_id)
+		or public.is_dineinly_admin();
+$$;
+
+revoke execute on function public.can_access_restaurant_topic(uuid) from public;
+grant execute on function public.can_access_restaurant_topic(uuid) to authenticated;
+
+-- menu:{restaurant_id} — guests and staff of that restaurant; menu
+-- availability is already public to any guest with a valid session there.
+create or replace function public.can_access_menu_topic(p_restaurant_id uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+	select public.jwt_is_guest_for_restaurant(p_restaurant_id)
+		or public.is_active_staff_for_restaurant(p_restaurant_id)
+		or public.is_dineinly_admin();
+$$;
+
+revoke execute on function public.can_access_menu_topic(uuid) from public;
+grant execute on function public.can_access_menu_topic(uuid) to authenticated;
+
+create policy "session_topic_select" on realtime.messages
+	for select
+	to authenticated
+	using (
+		split_part(realtime.topic(), ':', 1) = 'session'
+		and public.can_access_session_topic(
+			public.try_uuid(split_part(realtime.topic(), ':', 2))
+		)
+	);
+
+create policy "restaurant_topic_select" on realtime.messages
+	for select
+	to authenticated
+	using (
+		split_part(realtime.topic(), ':', 1) = 'restaurant'
+		and public.can_access_restaurant_topic(
+			public.try_uuid(split_part(realtime.topic(), ':', 2))
+		)
+	);
+
+create policy "menu_topic_select" on realtime.messages
+	for select
+	to authenticated
+	using (
+		split_part(realtime.topic(), ':', 1) = 'menu'
+		and public.can_access_menu_topic(
+			public.try_uuid(split_part(realtime.topic(), ':', 2))
+		)
+	);

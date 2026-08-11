@@ -17,13 +17,15 @@ export const publicProcedure = trpc.procedure;
 
 /** Requires a valid, unexpired guest JWT. Staff procedures arrive with staff auth. */
 export const guestProcedure = publicProcedure.use(({ ctx, next }) => {
-	if (!ctx.guest) {
+	if (!ctx.guest || !ctx.guestToken) {
 		throw new TRPCError({
 			code: "UNAUTHORIZED",
 			message: "Valid guest session required.",
 		});
 	}
-	return next({ ctx: { ...ctx, guest: ctx.guest } });
+	return next({
+		ctx: { ...ctx, guest: ctx.guest, guestToken: ctx.guestToken },
+	});
 });
 
 /**

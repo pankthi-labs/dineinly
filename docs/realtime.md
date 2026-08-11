@@ -26,8 +26,8 @@ Revocation is live-state, not expiry-based, consistent with Guest Sessions: clos
 
 | Table | Fires on | Topic(s) | Payload |
 |---|---|---|---|
-| Cart Item | INSERT / UPDATE / DELETE | `session:{session_id}` | Hand-picked columns (id, menu_item_id, quantity, spice/salt/ice, op) — **excludes `added_by_type`/`added_by_staff_id`**; line-level so concurrent guest edits don't clobber each other |
-| Order | INSERT | `session:{session_id}` + `restaurant:{restaurant_id}` | New round. Guest topic: order id + item summary only (**no `idempotency_key`/`placed_by_staff_id`**). Staff topic: full row |
+| Cart Item | INSERT / UPDATE / DELETE | `session:{session_id}` | id + op only — the guest handler invalidates and refetches via tRPC rather than patching from the payload, so no other column needs to cross the wire (**excludes `added_by_type`/`added_by_staff_id`** by construction); per-row trigger firing keeps concurrent guest edits from clobbering each other |
+| Order | INSERT | `session:{session_id}` + `restaurant:{restaurant_id}` | New round. Guest topic: order id only, invalidate-driven same as Cart Item (**no `idempotency_key`/`placed_by_staff_id`**). Staff topic: full row |
 | Order Item | UPDATE of `status` | `session:{session_id}` + `restaurant:{restaurant_id}` | Guest topic: item name/status only. Staff topic: full row |
 | Bill | UPDATE of `status` | `session:{session_id}` | `requested` / `settled` |
 | Table Session | INSERT / UPDATE of `status` | `restaurant:{restaurant_id}` | Floor view: session open/close, table free/busy |

@@ -9,6 +9,8 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { formatBillAmount, titleCase } from "@/lib/format";
+import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
+import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
 import { trpc } from "@/lib/trpc-client";
 
 // The final screen in the guest ordering flow, reached from "View Bill" on
@@ -18,10 +20,15 @@ import { trpc } from "@/lib/trpc-client";
 // open -> requested server-side (guest.bill.get -> request_bill()).
 export default function GuestBillPage() {
 	const router = useRouter();
-	const bill = trpc.guest.bill.get.useQuery(undefined, {
-		retry: false,
-		refetchInterval: 8_000,
-	});
+	const bill = trpc.guest.bill.get.useQuery(undefined, { retry: false });
+	const utils = trpc.useUtils();
+
+	const { client, tableSessionId } = useGuestRealtime();
+	useBroadcastChannel(
+		client,
+		tableSessionId ? `session:${tableSessionId}` : null,
+		{ "bill.status": () => utils.guest.bill.get.invalidate() },
+	);
 
 	if (bill.isLoading) {
 		return <GuestLoading message="Opening your bill…" />;

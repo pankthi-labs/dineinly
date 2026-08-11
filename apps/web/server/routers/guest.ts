@@ -21,6 +21,18 @@ function dbError(message: string, cause: unknown): TRPCError {
 // still return (docs/product.md: sold-out must still show, just marked
 // unavailable), so no availability filter here either.
 export const guestRouter = router({
+	// Realtime bootstrap: the guest JWT lives in an httpOnly cookie (never
+	// reaches client JS directly), so the browser calls this once to get the
+	// raw token for supabase.realtime.setAuth() plus the ids it needs to
+	// build session:{id}/menu:{id} topic strings (apps/web/lib/realtime).
+	// Handing back the token doesn't widen what the browser can already do —
+	// every guestProcedure call already runs authenticated as this guest.
+	realtimeAuth: guestProcedure.query(({ ctx }) => ({
+		token: ctx.guestToken,
+		restaurantId: ctx.guest.restaurant_id,
+		tableSessionId: ctx.guest.table_session_id,
+	})),
+
 	menu: guestProcedure.query(async ({ ctx }) => {
 		const [restaurantResult, categoriesResult, itemsResult] = await Promise.all(
 			[
