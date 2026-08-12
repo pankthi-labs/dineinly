@@ -4,6 +4,8 @@ import { Plus, UtensilsCrossed } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CollapsibleSearch } from "@/components/collapsible-search";
 import { PageHeader } from "@/components/page-header";
+import type { ToastState } from "@/components/toast";
+import { Toast } from "@/components/toast";
 import { getPageRange } from "@/lib/pagination";
 import { trpc } from "@/lib/trpc-client";
 import { AdminNavHeader } from "../admin-nav-header";
@@ -12,8 +14,6 @@ import { PauseConfirmDialog } from "./pause-confirm-dialog";
 import type { EditTarget, RestaurantFormValues } from "./restaurant-form-sheet";
 import { RestaurantFormSheet } from "./restaurant-form-sheet";
 import { RestaurantRow } from "./restaurant-row";
-import type { ToastState } from "./toast";
-import { Toast } from "./toast";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;

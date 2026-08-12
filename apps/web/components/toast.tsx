@@ -8,8 +8,8 @@ export type ToastState = { message: string; tone: "success" | "error" };
 const TOAST_VISIBLE_MS = 3000;
 const TOAST_EXIT_MS = 150; // matches --duration-exit-fast, base.css .toast-exit
 
-// One instance, replace-on-new — the directory only ever has one thing to
-// report at a time (create/edit/pause result), so no queue is needed.
+// One instance, replace-on-new — a page only ever has one thing to report at
+// a time (create/edit/status-change result), so no queue is needed.
 export function Toast({
 	toast,
 	onDismiss,

@@ -1214,6 +1214,14 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "restaurant_table_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
         }
       },
       "indexes": {
@@ -1650,6 +1658,14 @@
     },
     "public.restaurant_status": {
       "name": "restaurant_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "archived"
+      ]
+    },
+    "public.restaurant_table_status": {
+      "name": "restaurant_table_status",
       "schema": "public",
       "values": [
         "active",

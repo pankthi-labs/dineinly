@@ -708,6 +708,7 @@ begin
 	into v_table_id, v_restaurant_id, v_label, v_session_id
 	from public.restaurant_tables rt
 	where rt.qr_token = p_qr_token
+		and rt.status = 'active'
 	for update;
 
 	if v_table_id is null then

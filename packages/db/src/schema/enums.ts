@@ -30,6 +30,10 @@ export const menuItemStatus = pgEnum("menu_item_status", [
 	"active",
 	"archived",
 ]);
+export const restaurantTableStatus = pgEnum("restaurant_table_status", [
+	"active",
+	"archived",
+]);
 
 export const sessionStatus = pgEnum("session_status", ["active", "closed"]);
 

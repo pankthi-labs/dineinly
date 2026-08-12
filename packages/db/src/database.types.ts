@@ -449,6 +449,7 @@ export type Database = {
 					qr_token: string;
 					restaurant_id: string;
 					session_id: string | null;
+					status: Database["public"]["Enums"]["restaurant_table_status"];
 				};
 				Insert: {
 					id?: string;
@@ -456,6 +457,7 @@ export type Database = {
 					qr_token: string;
 					restaurant_id: string;
 					session_id?: string | null;
+					status?: Database["public"]["Enums"]["restaurant_table_status"];
 				};
 				Update: {
 					id?: string;
@@ -463,6 +465,7 @@ export type Database = {
 					qr_token?: string;
 					restaurant_id?: string;
 					session_id?: string | null;
+					status?: Database["public"]["Enums"]["restaurant_table_status"];
 				};
 				Relationships: [
 					{
@@ -647,6 +650,22 @@ export type Database = {
 				};
 				Returns: string;
 			};
+			broadcast_event: {
+				Args: { p_event: string; p_payload: Json; p_topic: string };
+				Returns: undefined;
+			};
+			can_access_menu_topic: {
+				Args: { p_restaurant_id: string };
+				Returns: boolean;
+			};
+			can_access_restaurant_topic: {
+				Args: { p_restaurant_id: string };
+				Returns: boolean;
+			};
+			can_access_session_topic: {
+				Args: { p_session_id: string };
+				Returns: boolean;
+			};
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
 			is_active_guest_session: {
 				Args: { p_restaurant_id: string; p_session_id: string };
@@ -689,6 +708,7 @@ export type Database = {
 			};
 			resolve_staff_signin: { Args: { p_email: string }; Returns: string };
 			submit_order: { Args: { p_idempotency_key: string }; Returns: string };
+			try_uuid: { Args: { p_text: string }; Returns: string };
 		};
 		Enums: {
 			actor_type: "staff" | "guest";
@@ -718,6 +738,7 @@ export type Database = {
 				| "served"
 				| "cancelled";
 			restaurant_status: "active" | "archived";
+			restaurant_table_status: "active" | "archived";
 			salt: "less salt" | "regular";
 			session_status: "active" | "closed";
 			spice: "mild" | "regular" | "extra spicy";
@@ -886,6 +907,7 @@ export const Constants = {
 				"cancelled",
 			],
 			restaurant_status: ["active", "archived"],
+			restaurant_table_status: ["active", "archived"],
 			salt: ["less salt", "regular"],
 			session_status: ["active", "closed"],
 			spice: ["mild", "regular", "extra spicy"],

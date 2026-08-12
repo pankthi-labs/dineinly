@@ -9,6 +9,7 @@ CREATE TYPE "public"."menu_item_serving_size" AS ENUM('serves 1', 'serves 1-2', 
 CREATE TYPE "public"."menu_item_status" AS ENUM('active', 'archived');--> statement-breakpoint
 CREATE TYPE "public"."order_item_status" AS ENUM('placed', 'preparing', 'ready', 'served', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."restaurant_status" AS ENUM('active', 'archived');--> statement-breakpoint
+CREATE TYPE "public"."restaurant_table_status" AS ENUM('active', 'archived');--> statement-breakpoint
 CREATE TYPE "public"."salt" AS ENUM('less salt', 'regular');--> statement-breakpoint
 CREATE TYPE "public"."session_status" AS ENUM('active', 'closed');--> statement-breakpoint
 CREATE TYPE "public"."spice" AS ENUM('mild', 'regular', 'extra spicy');--> statement-breakpoint
@@ -180,6 +181,7 @@ CREATE TABLE "restaurant_tables" (
 	"label" text NOT NULL,
 	"qr_token" text NOT NULL,
 	"session_id" uuid,
+	"status" "restaurant_table_status" DEFAULT 'active' NOT NULL,
 	CONSTRAINT "restaurant_tables_qr_token_unique" UNIQUE("qr_token")
 );
 --> statement-breakpoint

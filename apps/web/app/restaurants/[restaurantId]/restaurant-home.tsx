@@ -40,6 +40,7 @@ const navCards: Array<{
 		title: "Table Matrix",
 		description: "Live seating status",
 		icon: LayoutGrid,
+		href: "tables",
 	},
 	{
 		title: "Staff Roster",

@@ -17,11 +17,13 @@ const NAV_ITEMS = [
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Only Home, Menu Desk, and Kitchen are built so far — the rest render inert.
+// Only Home, Menu Desk, Kitchen, and Table Matrix are built so far — the
+// rest render inert.
 const NAV_ROUTES: Partial<Record<NavItem, (restaurantId: string) => string>> = {
 	Home: (restaurantId) => `/restaurants/${restaurantId}`,
 	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
 	Kitchen: (restaurantId) => `/restaurants/${restaurantId}/kitchen`,
+	"Table Matrix": (restaurantId) => `/restaurants/${restaurantId}/tables`,
 };
 
 export function RestaurantNavHeader({
@@ -42,8 +44,11 @@ export function RestaurantNavHeader({
 					<p className="text-2xl text-primary">{restaurantName}</p>
 					<PoweredByDineinly className="mt-1" />
 				</div>
-				<div className="flex items-center gap-6 overflow-x-auto lg:gap-8">
-					<nav aria-label="Restaurant navigation">
+				<div className="flex items-center gap-6 lg:gap-8">
+					<nav
+						aria-label="Restaurant navigation"
+						className="min-w-0 overflow-x-auto"
+					>
 						<ul className="flex min-w-max items-center gap-6 text-sm lg:gap-8">
 							{NAV_ITEMS.map((item) => {
 								const isActive = item === active;
@@ -76,8 +81,10 @@ export function RestaurantNavHeader({
 							})}
 						</ul>
 					</nav>
-					<DirectoryLink />
-					<AdminHeaderActions showProfile={showProfile} />
+					<div className="flex shrink-0 items-center gap-6 lg:gap-8">
+						<DirectoryLink />
+						<AdminHeaderActions showProfile={showProfile} />
+					</div>
 				</div>
 			</div>
 		</header>

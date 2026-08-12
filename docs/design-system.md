@@ -279,6 +279,7 @@ Deviations require explicit written sign-off — never implement speculatively.
 - Text tokens keep their documented WCAG AA contrast ratios.
 - Glass/glow tokens only as documented — no new glass surfaces.
 - Stagger cap 3 items / 120ms total; motion exit always faster than entry.
+- **Exception — QR code surface:** the QR modal's code swatch (`apps/web/app/restaurants/[restaurantId]/tables/qr-modal.tsx`) renders on a raw white background, not a themed surface token. QR scanners require dark modules on a light quiet zone regardless of app theme; this is a scan-reliability requirement, not a themed surface, and is the only sanctioned use of a raw color value outside the token set. Printed QR PDFs (`apps/web/lib/qr-pdf.ts`) are likewise exempt — print output isn't governed by the dark-only screen rule.
 
 ---
 
@@ -339,7 +340,7 @@ This 44px rule governs icons. A fixed-width text-glyph control packed into a row
 | Primary section nav (tabs) | Home, Menu Desk, Table Matrix, Admin Home, Restaurants Directory (admin header tab) | No | `text-sm`, sentence case. State shown by the gold active underline, not a glyph. |
 | Exit/utility strip | Directory link (restaurant header → admin), Log out, Profile | Yes, icon + text | `.text-caps` (ALL CAPS). Deliberately separate visual weight from primary nav — these are session-level actions, not content navigation. |
 | Primary CTA / action buttons | Add dish, Create Restaurant, Add category | Yes, icon + text | Sentence case. |
-| Quick actions inside rows/cards | Edit, Hide dish, Mark sold out, Open restaurant, Mark inactive | No | Sentence case. Packed, read linearly — an icon per action clutters without adding clarity. |
+| Quick actions inside rows/cards | Edit, Hide dish, Mark sold out, Open restaurant, Mark inactive | No | `.text-caps` (ALL CAPS). Packed, read linearly — an icon per action clutters without adding clarity. |
 
 A tab bar with 4+ items never gets icons — that many glyphs in a row is decorative, not clarifying, and violates the restraint rule above.
 
