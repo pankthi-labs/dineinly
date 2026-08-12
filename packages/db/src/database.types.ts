@@ -42,6 +42,7 @@ export type Database = {
 					restaurant_id: string;
 					service_charge_amount: number | null;
 					service_charge_rate: number | null;
+					service_charge_waived: boolean;
 					session_id: string;
 					settled_at: string | null;
 					settled_by: string | null;
@@ -58,6 +59,7 @@ export type Database = {
 					restaurant_id: string;
 					service_charge_amount?: number | null;
 					service_charge_rate?: number | null;
+					service_charge_waived?: boolean;
 					session_id: string;
 					settled_at?: string | null;
 					settled_by?: string | null;
@@ -74,6 +76,7 @@ export type Database = {
 					restaurant_id?: string;
 					service_charge_amount?: number | null;
 					service_charge_rate?: number | null;
+					service_charge_waived?: boolean;
 					session_id?: string;
 					settled_at?: string | null;
 					settled_by?: string | null;
@@ -666,6 +669,7 @@ export type Database = {
 				Args: { p_session_id: string };
 				Returns: boolean;
 			};
+			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
 			is_active_guest_session: {
 				Args: { p_restaurant_id: string; p_session_id: string };

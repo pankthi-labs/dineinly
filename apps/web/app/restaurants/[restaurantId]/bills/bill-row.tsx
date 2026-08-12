@@ -1,0 +1,60 @@
+"use client";
+
+import type { inferRouterOutputs } from "@trpc/server";
+import Link from "next/link";
+import { formatBillAmount } from "@/lib/format";
+import type { AppRouter } from "@/server/routers/_app";
+
+type BillListItem = inferRouterOutputs<AppRouter>["bills"]["list"][number];
+
+const STATUS_LABEL: Record<BillListItem["status"], string> = {
+	open: "Open",
+	requested: "Requested",
+	settled: "Settled",
+};
+
+// Open: nothing pending yet, neutral. Requested: pending staff action —
+// Soft Amber, the same "in progress" role §06 assigns it (step
+// indicators/progress). Settled: Rose Copper, §06's "settlement
+// confirmation checkmarks / completed-step indicators" role exactly.
+const STATUS_COLOR: Record<BillListItem["status"], string> = {
+	open: "text-secondary",
+	requested: "text-accent-support",
+	settled: "text-accent-secondary",
+};
+
+export function BillRow({
+	restaurantId,
+	bill,
+}: {
+	restaurantId: string;
+	bill: BillListItem;
+}) {
+	return (
+		<Link
+			href={`/restaurants/${restaurantId}/bills/${bill.sessionId}`}
+			className="flex items-center justify-between gap-4 rounded-xl border border-divider bg-surface p-5 no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
+		>
+			<div className="flex min-w-0 flex-col gap-1">
+				<span className={`text-caps ${STATUS_COLOR[bill.status]}`}>
+					{STATUS_LABEL[bill.status]}
+				</span>
+				<h3 className="truncate text-lg text-primary">
+					{bill.billNumber ? `Bill #${bill.billNumber}` : "Not yet requested"}
+				</h3>
+				<p className="text-secondary text-sm">
+					Table {bill.tableLabel || "—"} ·{" "}
+					{new Date(bill.date).toLocaleString("en-IN", {
+						day: "numeric",
+						month: "short",
+						hour: "numeric",
+						minute: "2-digit",
+					})}
+				</p>
+			</div>
+			<span className="shrink-0 text-accent text-xl tabular-nums">
+				{formatBillAmount(bill.total)}
+			</span>
+		</Link>
+	);
+}

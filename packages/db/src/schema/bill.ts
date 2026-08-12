@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+	boolean,
 	check,
 	foreignKey,
 	index,
@@ -46,6 +47,13 @@ export const bills = pgTable(
 			precision: 5,
 			scale: 4,
 		}),
+		// Staff correction (Bills tab "Waive Service Charge"). While true,
+		// request_bill()'s snapshot-on-every-call logic holds serviceChargeRate
+		// at 0 instead of re-copying the restaurant's rate, so a guest's own
+		// bill.get poll can't silently undo a waiver.
+		serviceChargeWaived: boolean("service_charge_waived")
+			.notNull()
+			.default(false),
 		// Nullable until settle; derived on read before that.
 		subtotal: numeric("subtotal", { precision: 12, scale: 2 }),
 		taxAmount: numeric("tax_amount", { precision: 12, scale: 2 }),

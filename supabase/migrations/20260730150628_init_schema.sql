@@ -52,6 +52,7 @@ CREATE TABLE "bills" (
 	"bill_number" text DEFAULT encode_bill_number(nextval('bill_number_seq'::regclass)) NOT NULL,
 	"status" "bill_status" DEFAULT 'open' NOT NULL,
 	"service_charge_rate" numeric(5, 4),
+	"service_charge_waived" boolean DEFAULT false NOT NULL,
 	"subtotal" numeric(12, 2),
 	"tax_amount" numeric(12, 2),
 	"service_charge_amount" numeric(12, 2),

@@ -17,13 +17,13 @@ const NAV_ITEMS = [
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Only Home, Menu Desk, Kitchen, and Table Matrix are built so far — the
-// rest render inert.
+// Staff Roster and Venue Settings aren't built yet — they render inert.
 const NAV_ROUTES: Partial<Record<NavItem, (restaurantId: string) => string>> = {
 	Home: (restaurantId) => `/restaurants/${restaurantId}`,
 	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
 	Kitchen: (restaurantId) => `/restaurants/${restaurantId}/kitchen`,
 	"Table Matrix": (restaurantId) => `/restaurants/${restaurantId}/tables`,
+	Bills: (restaurantId) => `/restaurants/${restaurantId}/bills`,
 };
 
 export function RestaurantNavHeader({

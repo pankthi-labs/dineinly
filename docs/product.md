@@ -130,6 +130,34 @@ Dineinly never facilitates, processes, or records payment transactions.
 
 **Settlement** = the restaurant confirms payment via an external method (cash, card terminal, UPI, bank transfer, etc.) → Dineinly marks the bill settled → the session closes. No payment gateway, processing, or status sync.
 
+### Bill status
+
+Three states, own lifecycle (`core-data-model.md`), always moving forward:
+
+- **Open** — the session has a cart/orders but nobody has asked for the check yet. No `Bill` row exists; the total shown anywhere is derived live from `order_items`.
+- **Requested** — Guest, Waiter, Manager, or Owner pressed Request Bill. Still derived live — the kitchen may still be finishing served items, and staff can still correct eligible order items or waive the service charge.
+- **Settled** — staff confirmed the restaurant received payment externally. Amounts are frozen from this point on; nothing about the bill changes again except closing the session.
+
+### Bills tab
+
+Restaurant-scoped page (`app/restaurants/[restaurantId]/bills`), reachable by any active staff member — same not-yet-role-gated reach as Table Matrix/Menu Desk (`Tbd.md` "Feature-level staff permissions"); the RBAC table above states the target per-role split. One row per table session — a session gets a row the moment it opens, before anyone has ever pressed Request Bill (shown as Open with no bill number yet).
+
+- **View Bill** — list view mirrors Menu Desk/Table Matrix/Restaurant Directory: status, bill number, table, live or frozen total. Filters: quick date range (Today/Yesterday/Last 3 Days/All — every currently active session always shows regardless of range), an exact-date picker, and search by bill number or table. Opens into a detail view with the same line-item presentation as the guest bill screen.
+- **Generate / Request Bill** — staff-side equivalent of the guest's own Request Bill; same effect (`open` → `requested`), for tables that never self-request (e.g. no phone use that visit).
+- **Correct eligible order items** — cancel a single order item, only while it's still `placed` (RBAC "Cancel/Modify Order (pre-prep only)", `core-data-model.md`'s "cancelled reachable only from placed"). Unavailable once the bill is settled, even if an item is technically still `placed` — a correction after settle wouldn't reach the frozen total, which would silently make the printed bill wrong.
+- **Waive Service Charge** — zeroes the service charge for this bill only, without touching the restaurant's own rate. Available any time before settle; reversible until then. Settling freezes whatever the waived state was at that moment.
+- **Print / Download Bill** — Print is the browser's own print of the same detail view; Download renders the same content server-side as a PDF, consistent regardless of the staff member's browser (same reasoning as Table Matrix's QR PDFs).
+- **Mark Bill Settled** — freezes subtotal/tax/service charge/total onto the `Bill` row. Does not require Request Bill to have run first — settling a bill that's still `open` requests and settles it in one step.
+- **Close Session** — only once the bill is settled and every order item in the session is `served` or `cancelled` (nothing left `placed`/`preparing`/`ready`). Frees every table in the session (a merged session can span more than one), hard-deletes any unfired cart items, marks the session `closed`.
+
+**Boundaries — what Bills can and can't edit:** the tab only ever touches `Order Item.status` (cancel, pre-prep only) and the `Bill` row itself (status, service charge waiver, frozen totals at settle). It never edits menu prices, tax rates, quantities, or adds/removes anything from an order — a wrong quantity or wrong dish is a cancel-and-reorder, not an edit, same boundary the guest ordering flow already draws around a placed order.
+
+### A bill paid, then another order
+
+A session's bill is settled but the session hasn't been closed yet, and someone adds another order before staff closes it — the risk is a new order landing after the bill's total is already frozen, silently diverging from what the guest actually paid.
+
+Dineinly blocks this outright rather than opening a second session on the same table: once a session's bill is `settled`, Confirm Order fails for that session with a clear error, for guest and staff alike. The fix is the same either way — staff hits Close Session; the *next* QR scan on that table then opens a brand-new session (per "Scanning a QR resolves to its restaurant table, then joins the table's active session or creates one" above — a closed session is never "active", so a fresh scan can only create a new one). The settled bill stays exactly as printed in the Bills tab history; the new order lands on a new session with its own new bill. One active session still means one bill (MVP: no split bills) — this never reopens a settled one.
+
 ---
 
 ## Roadmap

@@ -424,6 +424,34 @@ create policy "staff_select_own_restaurant" on public.restaurants
 	to authenticated
 	using (public.is_active_staff_for_restaurant(id));
 
+-- Bills tab (docs/product.md § Billing & Settlement): list/settle/waive
+-- service charge/close session all read or write these three tables for
+-- sessions across the restaurant, not just the caller's own — unlike the
+-- guest policies above, which are scoped to one session by JWT claim. No
+-- staff policy existed on any of the three before this — table_sessions,
+-- bills, and cart_items previously had no reach for a non-admin session.
+create policy "staff_all_table_sessions" on public.table_sessions
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
+create policy "staff_all_bills" on public.bills
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
+-- Write reach for close_session()'s unfired-cart cleanup (§ 14 below) —
+-- bills.get never reads cart_items (a bill's line items come from
+-- order_items only), this policy exists solely so close_session() can
+-- delete a session's leftover unfired cart rows through RLS.
+create policy "staff_all_cart_items" on public.cart_items
+	for all
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id))
+	with check (public.is_active_staff_for_restaurant(restaurant_id));
+
 -- Menu Desk: any active staff member of the restaurant, not just Owner/
 -- Manager — a role-level split (Waiter/Kitchen view-only) is the deferred
 -- feature-level gating noted above, not modeled here yet.
@@ -788,6 +816,18 @@ begin
 		raise exception 'Table session is not active';
 	end if;
 
+	-- A settled bill's amounts are frozen (core-data-model.md); a new order
+	-- placed after settle would silently drift the paid total. Staff must
+	-- Close Session (which requires a settled bill and nothing in progress)
+	-- before the table's next QR scan opens a fresh session for more orders
+	-- — this session never reopens for ordering once its bill is settled.
+	if exists (
+		select 1 from public.bills
+		where session_id = v_session_id and status = 'settled'
+	) then
+		raise exception 'This bill has already been settled — ask staff for a new table session';
+	end if;
+
 	-- Idempotent retry: a prior call with this key already succeeded.
 	select id into v_order_id
 	from public.orders
@@ -1000,11 +1040,16 @@ begin
 	from public.restaurants
 	where id = v_restaurant_id;
 
+	-- Staff's Waive Service Charge correction (bills.service_charge_waived)
+	-- must survive this snapshot-on-every-call: once waived, keep the rate
+	-- at 0 instead of re-copying the restaurant's current rate, so a guest
+	-- revisiting the bill screen can't silently undo the waiver.
 	update public.bills
 	set
 		status = case when status = 'settled' then status else 'requested' end,
 		service_charge_rate = case
 			when status = 'settled' then service_charge_rate
+			when service_charge_waived then 0
 			else v_service_charge_rate
 		end
 	where session_id = v_session_id
@@ -1023,6 +1068,7 @@ begin
 			end,
 			service_charge_rate = case
 				when public.bills.status = 'settled' then public.bills.service_charge_rate
+				when public.bills.service_charge_waived then 0
 				else excluded.service_charge_rate
 			end
 		returning id into v_bill_id;
@@ -1178,7 +1224,11 @@ create trigger broadcast_order_item_status
 after update of status on public.order_items
 for each row execute function public.broadcast_order_item_status();
 
--- bills: status change -> session:{id} ("requested" / "settled").
+-- bills: status change -> session:{id} (guest + staff on that session,
+-- "requested"/"settled" only) + restaurant:{id} (staff, full row) — the
+-- second topic is what the Bills tab list (many sessions at once, not just
+-- the one a guest is sitting at) subscribes to, same staff-only reach as
+-- order_new/order_item_status above.
 create or replace function public.broadcast_bill_status()
 returns trigger
 language plpgsql
@@ -1191,16 +1241,35 @@ begin
 		'bill.status',
 		jsonb_build_object('billId', new.id, 'status', new.status)
 	);
+	perform realtime.broadcast_changes(
+		'restaurant:' || new.restaurant_id,
+		'bill.status', tg_op, tg_table_name, tg_table_schema, new, old
+	);
 	return new;
 end;
 $$;
 
--- request_bill() (§ 11 above) re-writes status on every call, even when it's
--- already 'requested' or 'settled' (idempotent no-op writes) — the WHEN
--- guard is required, not just tidy: without it, a guest's own bill.status
--- broadcast would re-invalidate their bill.get query, which calls
--- request_bill() again, re-firing the same no-op update forever.
-create trigger broadcast_bill_status
+-- Two triggers, not one "insert or update" trigger with a tg_op check in
+-- WHEN: a WHEN condition only ever sees OLD/NEW row values, not the TG_OP
+-- special variable, so INSERT and UPDATE need separate WHEN clauses anyway.
+--
+-- The insert trigger covers the Bills tab's settle/waiveServiceCharge
+-- mutations (apps/web/server/routers/bills.ts), which can create a bill row
+-- already in its target status (settling a session that never had "Request
+-- Bill" pressed, for example) rather than transitioning an existing row —
+-- an update-only trigger would miss that for every other staff screen
+-- watching restaurant:{id} live.
+create trigger broadcast_bill_status_insert
+after insert on public.bills
+for each row
+execute function public.broadcast_bill_status();
+
+-- request_bill() (§ 11 above) re-writes status on every call, even when
+-- it's already 'requested' or 'settled' (idempotent no-op writes) — the
+-- WHEN guard is required here, not just tidy: without it, a guest's own
+-- bill.status broadcast would re-invalidate their bill.get query, which
+-- calls request_bill() again, re-firing the same no-op update forever.
+create trigger broadcast_bill_status_update
 after update of status on public.bills
 for each row
 when (old.status is distinct from new.status)
@@ -1364,3 +1433,84 @@ create policy "menu_topic_select" on realtime.messages
 			public.try_uuid(split_part(realtime.topic(), ':', 2))
 		)
 	);
+
+-- ============================================================================
+-- 14. Staff billing: close_session
+-- ============================================================================
+-- Close Session (docs/product.md § Shared Table Session, docs/
+-- core-data-model.md lifecycle invariants): frees every table pointing at
+-- the session (plural — a merged session can span more than one
+-- restaurant_tables row), hard-deletes any unfired cart_items, and marks
+-- the session closed. Three tables, one transaction — same reasoning as
+-- submit_order() above: a partial write would leave a table stuck
+-- "occupied" with nothing left to close, or a session "closed" with a
+-- table still pointing at it.
+--
+-- SECURITY INVOKER, not DEFINER, unlike the guest functions above: the
+-- caller is always a signed-in staff member or Dineinly Admin, and both
+-- already hold real table grants and RLS reach on table_sessions, bills,
+-- cart_items, and restaurant_tables (§ 5 staff / § 4 admin above) — no
+-- elevated privilege is needed, same reasoning as admin_create_restaurant
+-- (§ 6). RLS on the initial select already confines a caller to sessions in
+-- their own restaurant, so a session belonging to another tenant reads back
+-- as "not found" rather than needing a separate explicit ownership check.
+create or replace function public.close_session(p_session_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+	v_bill_status public.bill_status;
+	v_updated int;
+begin
+	if not exists (
+		select 1 from public.table_sessions
+		where id = p_session_id and status = 'active'
+	) then
+		raise exception 'Session not found or already closed';
+	end if;
+
+	select status into v_bill_status
+	from public.bills
+	where session_id = p_session_id;
+
+	if v_bill_status is distinct from 'settled' then
+		raise exception 'Bill must be settled before closing the session';
+	end if;
+
+	if exists (
+		select 1
+		from public.order_items oi
+		join public.orders o on o.id = oi.order_id
+		where o.session_id = p_session_id
+			and oi.status in ('placed', 'preparing', 'ready')
+	) then
+		raise exception 'This session still has orders in progress';
+	end if;
+
+	delete from public.cart_items where session_id = p_session_id;
+
+	update public.restaurant_tables
+	set session_id = null
+	where session_id = p_session_id;
+
+	-- SECURITY INVOKER means every write above is still subject to RLS: a
+	-- caller who passed the checks above but lacks staff/admin UPDATE reach
+	-- on table_sessions (a guest JWT is `role: authenticated` too, see
+	-- lib/guest-token.ts) would otherwise have this UPDATE silently match
+	-- zero rows and the function would still report success. Fail loudly
+	-- instead of lying about having closed the session.
+	update public.table_sessions
+	set status = 'closed', closed_at = now()
+	where id = p_session_id;
+
+	get diagnostics v_updated = row_count;
+	if v_updated = 0 then
+		raise exception 'Not permitted to close this session';
+	end if;
+end;
+$$;
+
+revoke execute on function public.close_session(uuid) from public;
+grant execute on function public.close_session(uuid) to authenticated;

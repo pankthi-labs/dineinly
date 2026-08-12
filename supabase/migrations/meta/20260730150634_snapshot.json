@@ -48,6 +48,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "service_charge_waived": {
+          "name": "service_charge_waived",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "subtotal": {
           "name": "subtotal",
           "type": "numeric(12, 2)",

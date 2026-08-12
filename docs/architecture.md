@@ -128,6 +128,12 @@ Both trees' home pages (`app/admin/page.tsx`, `app/restaurants/[restaurantId]/pa
 
 `DirectoryLink` is a single hop back to the Directory, never a multi-level trail — switching between a restaurant's own sub-pages (Menu Desk, Staff Roster, etc.) is the nav header's tab strip's job, not `DirectoryLink`'s. The Restaurant Directory (`app/admin/restaurants/restaurant-row.tsx`) links into a restaurant via an explicit "Open" action per row, landing on the restaurant home page (`app/restaurants/[restaurantId]/page.tsx`).
 
+### Bills Tab
+
+Bill procedures live in `apps/web/server/routers/bills.ts`, gated by `authedProcedure` — same any-active-staff reach as Table Matrix/Menu Desk (`staff_all_table_sessions`/`staff_all_bills`/`staff_all_cart_items` RLS, `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 5, added alongside these routes — staff had no reach on `table_sessions`, `bills`, or `cart_items` at all before). Most mutations (`request`, `waiveServiceCharge`, `cancelOrderItem`, `settle`) are plain single-table `ctx.auth` writes guarded by an atomic `where` clause, same pattern as `tables.ts`'s `updateFreeTable` — a single-staff, low-stakes action doesn't need a database function. `closeSession` is the exception: it frees potentially several tables (a merged session), hard-deletes cart items, and closes the session in one transaction, so it calls `close_session()` (§ 14 of the RLS migration) instead, the same reasoning as `submit_order()`.
+
+`list` returns one row per table session, not per `Bill` row — a session with no `Bill` row yet (nobody has pressed Request Bill) is presented as the virtual `open` state, computed the same `computeBill` (`apps/web/lib/bill-math.ts`) way the guest bill screen already does. `get` (the detail view) never calls `request_bill()` as a read side effect the way `guest.bill.get` does — opening a row to look shouldn't itself flip a bill `open → requested`.
+
 ## Authorization & Idempotency
 
 - RBAC (matrix in `product.md`) is enforced server-side on every mutation; client-side checks are UX-only.
