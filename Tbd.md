@@ -124,6 +124,30 @@ The guest bill screen has no way to email/export the bill — no guest email cap
 
 ---
 
+## Settle bill not implemented
+
+`docs/core-data-model.md` and `docs/product.md` describe "Settle bill" (staff confirms external payment, `bills.status` -> `settled`) as a working action. No mutation/RPC exists anywhere (`grep -rn "settled"` across `apps/web/server`, `packages/db`, `supabase/migrations` only finds the enum definition, a check constraint, and the guest UI's display branch for an already-settled bill). A bill can reach `requested` via `request_bill()` but nothing ever moves it to `settled`.
+
+**Pick up:** Waiter/Floor router + UI to mark a bill settled once staff confirms external payment (no payments processing per AGENTS.md — this only records the fact), gated by role once role-level RBAC exists (see "Feature-level staff permissions" above).
+
+---
+
+## Close session not implemented
+
+`docs/core-data-model.md` and `docs/product.md` describe closing a table session (`table_sessions.status` -> `closed`, frees the table) as a working action. No mutation/RPC exists — a table occupied via QR scan stays occupied indefinitely; nothing ever sets a session's status to `closed`.
+
+**Pick up:** almost certainly ships together with Settle bill (closing a session is the natural follow-on to settling its bill) — Waiter/Floor router + UI, same role gating.
+
+---
+
+## Merge tables not implemented
+
+`docs/product.md` describes merging tables (for shared/combined dining parties) as a working action. No merge router procedure or RPC exists in the codebase.
+
+**Pick up:** lower priority than Settle bill / Close session — scope once there's a concrete need.
+
+---
+
 ## Force-terminate session handling — TBD in docs
 
 Void vs. settle handling of an open bill on force-terminate, marked `TBD` in `docs/core-data-model.md` / `docs/product.md`.

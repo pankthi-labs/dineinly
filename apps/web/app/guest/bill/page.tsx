@@ -27,7 +27,11 @@ export default function GuestBillPage() {
 	useBroadcastChannel(
 		client,
 		tableSessionId ? `session:${tableSessionId}` : null,
-		{ "bill.status": () => utils.guest.bill.get.invalidate() },
+		{
+			"bill.status": () => utils.guest.bill.get.invalidate(),
+			"order.new": () => utils.guest.bill.get.invalidate(),
+			"order_item.status": () => utils.guest.bill.get.invalidate(),
+		},
 	);
 
 	if (bill.isLoading) {

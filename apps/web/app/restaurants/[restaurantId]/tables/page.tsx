@@ -8,6 +8,8 @@ import { CollapsibleSearch } from "@/components/collapsible-search";
 import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
+import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
+import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
 import type { AppRouter } from "@/server/routers/_app";
 import { RestaurantNavHeader } from "../restaurant-nav-header";
@@ -75,6 +77,15 @@ export default function TableMatrixPage() {
 		id: restaurantId,
 	});
 	const listQuery = trpc.tables.list.useQuery({ restaurantId });
+
+	// Staff realtime, same as Kitchen Display: table_session.change fires on
+	// every session open/close so occupied/free status updates live instead
+	// of only on this page's own mutations or a manual reload.
+	const supabase = createClient();
+	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
+		"table_session.change": () =>
+			utils.tables.list.invalidate({ restaurantId }),
+	});
 
 	function invalidateAndNotify(message: string) {
 		utils.tables.list.invalidate({ restaurantId });
