@@ -968,6 +968,20 @@
           "notNull": true,
           "default": "'placed'"
         },
+        "waived_quantity": {
+          "name": "waived_quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cancelled_quantity": {
+          "name": "cancelled_quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "preparing_at": {
           "name": "preparing_at",
           "type": "timestamp with time zone",
@@ -1106,6 +1120,18 @@
         "order_items_tax_rate_check": {
           "name": "order_items_tax_rate_check",
           "value": "\"order_items\".\"tax_rate\" between 0 and 1"
+        },
+        "order_items_waived_quantity_check": {
+          "name": "order_items_waived_quantity_check",
+          "value": "\"order_items\".\"waived_quantity\" >= 0 AND \"order_items\".\"waived_quantity\" <= \"order_items\".\"quantity\""
+        },
+        "order_items_cancelled_quantity_check": {
+          "name": "order_items_cancelled_quantity_check",
+          "value": "\"order_items\".\"cancelled_quantity\" >= 0 AND \"order_items\".\"cancelled_quantity\" <= \"order_items\".\"quantity\""
+        },
+        "order_items_waived_cancelled_quantity_check": {
+          "name": "order_items_waived_cancelled_quantity_check",
+          "value": "\"order_items\".\"waived_quantity\" + \"order_items\".\"cancelled_quantity\" <= \"order_items\".\"quantity\""
         }
       },
       "isRLSEnabled": false

@@ -36,7 +36,7 @@ export const kitchenRouter = router({
 				ctx.auth
 					.from("order_items")
 					.select(
-						"id, item_name, quantity, status, order_id, preparing_at, ready_at",
+						"id, item_name, quantity, cancelled_quantity, status, order_id, preparing_at, ready_at",
 					)
 					.eq("restaurant_id", input.restaurantId)
 					.in("status", ["placed", "preparing", "ready"]),
@@ -83,21 +83,26 @@ export const kitchenRouter = router({
 
 			return {
 				restaurant: restaurantResult.data,
-				items: items.map((item) => {
-					const order = ordersById.get(item.order_id);
-					return {
-						id: item.id,
-						dish: item.item_name,
-						quantity: item.quantity,
-						status: item.status as "placed" | "preparing" | "ready",
-						placedAt: order?.placed_at ?? null,
-						preparingAt: item.preparing_at,
-						readyAt: item.ready_at,
-						tables: order
-							? (tableLabelsBySession.get(order.session_id) ?? [])
-							: [],
-					};
-				}),
+				// A partially cancelled 'placed' row (Bills tab, pre-prep) still
+				// carries its full ordered quantity — only the remaining,
+				// still-billable units should ever reach the kitchen queue.
+				items: items
+					.map((item) => {
+						const order = ordersById.get(item.order_id);
+						return {
+							id: item.id,
+							dish: item.item_name,
+							quantity: item.quantity - item.cancelled_quantity,
+							status: item.status as "placed" | "preparing" | "ready",
+							placedAt: order?.placed_at ?? null,
+							preparingAt: item.preparing_at,
+							readyAt: item.ready_at,
+							tables: order
+								? (tableLabelsBySession.get(order.session_id) ?? [])
+								: [],
+						};
+					})
+					.filter((item) => item.quantity > 0),
 			};
 		}),
 

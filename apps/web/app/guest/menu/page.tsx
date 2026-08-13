@@ -726,7 +726,7 @@ function NoMatches({
 				<button
 					type="button"
 					onClick={onClear}
-					className="mt-3 text-accent text-caps hover:text-accent-hover"
+					className="mt-3 text-accent text-caps hover:opacity-80"
 				>
 					Clear filters
 				</button>

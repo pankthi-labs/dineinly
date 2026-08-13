@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowLeftFromLine } from "lucide-react";
 import Link from "next/link";
 import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
@@ -37,6 +36,8 @@ export function RestaurantNavHeader({
 	active: NavItem;
 	showProfile?: boolean;
 }) {
+	const isAdmin = useIsAdmin();
+
 	return (
 		<header className="border-divider border-b bg-surface">
 			<div className="flex flex-col gap-6 px-4 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-16 xl:px-24">
@@ -82,32 +83,13 @@ export function RestaurantNavHeader({
 						</ul>
 					</nav>
 					<div className="flex shrink-0 items-center gap-6 lg:gap-8">
-						<DirectoryLink />
-						<AdminHeaderActions showProfile={showProfile} />
+						<AdminHeaderActions
+							showProfile={showProfile}
+							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
+						/>
 					</div>
 				</div>
 			</div>
 		</header>
-	);
-}
-
-// Dineinly Admin only — a restaurant's own staff has no "directory" to
-// leave to.
-export function DirectoryLink() {
-	const isAdmin = useIsAdmin();
-	if (!isAdmin) return null;
-
-	return (
-		<Link
-			href="/admin/restaurants"
-			className="icon-tap-target flex items-center gap-2 text-caps text-secondary no-underline transition-colors duration-(--duration-base) ease-out hover:text-primary focus-visible:text-primary"
-		>
-			<ArrowLeftFromLine
-				className="icon-sm"
-				strokeWidth={1.5}
-				aria-hidden="true"
-			/>
-			Restaurants Directory
-		</Link>
 	);
 }

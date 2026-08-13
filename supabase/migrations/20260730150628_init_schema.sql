@@ -153,12 +153,17 @@ CREATE TABLE "order_items" (
 	"salt" "salt",
 	"ice" "ice",
 	"status" "order_item_status" DEFAULT 'placed' NOT NULL,
+	"waived_quantity" integer DEFAULT 0 NOT NULL,
+	"cancelled_quantity" integer DEFAULT 0 NOT NULL,
 	"preparing_at" timestamp with time zone,
 	"ready_at" timestamp with time zone,
 	"menu_item_id" uuid,
 	CONSTRAINT "order_items_quantity_check" CHECK ("order_items"."quantity" > 0 AND "order_items"."quantity" <= 99),
 	CONSTRAINT "order_items_unit_price_check" CHECK ("order_items"."unit_price" >= 0),
-	CONSTRAINT "order_items_tax_rate_check" CHECK ("order_items"."tax_rate" between 0 and 1)
+	CONSTRAINT "order_items_tax_rate_check" CHECK ("order_items"."tax_rate" between 0 and 1),
+	CONSTRAINT "order_items_waived_quantity_check" CHECK ("order_items"."waived_quantity" >= 0 AND "order_items"."waived_quantity" <= "order_items"."quantity"),
+	CONSTRAINT "order_items_cancelled_quantity_check" CHECK ("order_items"."cancelled_quantity" >= 0 AND "order_items"."cancelled_quantity" <= "order_items"."quantity"),
+	CONSTRAINT "order_items_waived_cancelled_quantity_check" CHECK ("order_items"."waived_quantity" + "order_items"."cancelled_quantity" <= "order_items"."quantity")
 );
 --> statement-breakpoint
 CREATE TABLE "restaurants" (

@@ -8,16 +8,10 @@ const restaurantIdSchema = z.string().uuid();
 const sessionIdSchema = z.string().uuid();
 const orderItemIdSchema = z.string().uuid();
 
-// Quick filters (docs/product.md § Bills tab): the default "Today" bounds
-// the list to current business; "All" is an explicit opt-in for full
-// history. "date" overrides the quick range with one exact calendar day —
-// mutually exclusive with quickRange at the UI layer, but both are
-// accepted here so the router doesn't need to guess which one is active.
+// Filters (docs/product.md § Bills tab): defaults to today; "date" opts
+// into one exact calendar day instead — mutually exclusive at the UI layer.
 export const listBillsInput = z.object({
 	restaurantId: restaurantIdSchema,
-	quickRange: z
-		.enum(["today", "yesterday", "last3days", "all"])
-		.default("today"),
 	date: z
 		.string()
 		.regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -39,6 +33,12 @@ export const waiveServiceChargeInput = z.object({
 
 export const cancelOrderItemInput = z.object({
 	orderItemId: orderItemIdSchema,
+	cancelledQuantity: z.number().int().min(0),
+});
+
+export const waiveOrderItemInput = z.object({
+	orderItemId: orderItemIdSchema,
+	waivedQuantity: z.number().int().min(0),
 });
 
 export const settleBillInput = z.object({

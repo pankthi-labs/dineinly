@@ -14,15 +14,7 @@ import { RestaurantNavHeader } from "../restaurant-nav-header";
 import { BillRow } from "./bill-row";
 
 type Bill = inferRouterOutputs<AppRouter>["bills"]["list"][number];
-type QuickRange = "today" | "yesterday" | "last3days" | "all";
 type StatusFilter = "all" | "open" | "requested" | "settled";
-
-const QUICK_RANGES: { value: QuickRange; label: string }[] = [
-	{ value: "today", label: "Today" },
-	{ value: "yesterday", label: "Yesterday" },
-	{ value: "last3days", label: "Last 3 Days" },
-	{ value: "all", label: "All" },
-];
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 	{ value: "all", label: "All" },
@@ -34,7 +26,6 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 export default function BillsPage() {
 	const { restaurantId } = useParams<{ restaurantId: string }>();
 	const [search, setSearch] = useState("");
-	const [quickRange, setQuickRange] = useState<QuickRange>("today");
 	const [exactDate, setExactDate] = useState("");
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
@@ -43,7 +34,6 @@ export default function BillsPage() {
 	});
 	const listQuery = trpc.bills.list.useQuery({
 		restaurantId,
-		quickRange,
 		date: exactDate || undefined,
 	});
 
@@ -56,12 +46,13 @@ export default function BillsPage() {
 	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
 		"table_session.change": () => utils.bills.list.invalidate(),
 		"bill.status": () => utils.bills.list.invalidate(),
+		// A live (open/requested) row's total is computed from order_items on
+		// every list read (bills.ts) — a new order or an item's status/waive
+		// changing has to invalidate the same way, or the shown total goes
+		// stale until something else happens to touch this session.
+		"order.new": () => utils.bills.list.invalidate(),
+		"order_item.status": () => utils.bills.list.invalidate(),
 	});
-
-	function selectQuickRange(value: QuickRange) {
-		setQuickRange(value);
-		setExactDate("");
-	}
 
 	const bills = listQuery.data ?? [];
 	const filterCounts = {
@@ -101,54 +92,44 @@ export default function BillsPage() {
 					description="Generate, correct, settle, and close bills for every table."
 				/>
 
-				<div className="mt-8 flex flex-wrap items-center gap-3">
-					<div className="flex flex-wrap items-center gap-2">
-						{QUICK_RANGES.map((range) => (
-							<button
-								key={range.value}
-								type="button"
-								onClick={() => selectQuickRange(range.value)}
-								aria-pressed={!exactDate && quickRange === range.value}
-								className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
-									!exactDate && quickRange === range.value
-										? "border-accent text-primary"
-										: "border-divider text-secondary hover:text-primary"
-								}`}
-							>
-								{range.label}
-							</button>
-						))}
-					</div>
-					<label className="flex items-center gap-2 text-secondary text-sm">
-						<span className="text-caps">Or exact date</span>
-						<input
-							type="date"
-							value={exactDate}
-							onChange={(event) => setExactDate(event.target.value)}
-							className="rounded-sm border border-divider bg-surface px-3 py-2 text-primary text-sm"
-						/>
-					</label>
+				<div className="mt-8 flex flex-wrap items-center gap-2">
+					<button
+						type="button"
+						onClick={() => setExactDate("")}
+						aria-pressed={!exactDate}
+						className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
+							!exactDate
+								? "border-accent text-primary"
+								: "border-divider text-secondary hover:text-primary"
+						}`}
+					>
+						Today
+					</button>
+					<input
+						type="date"
+						value={exactDate}
+						onChange={(event) => setExactDate(event.target.value)}
+						aria-label="Filter by exact date"
+						className="rounded-sm border border-divider bg-surface px-3 py-2 text-primary text-sm"
+					/>
+					{bills.length === 0
+						? null
+						: STATUS_FILTERS.map((filter) => (
+								<button
+									key={filter.value}
+									type="button"
+									onClick={() => setStatusFilter(filter.value)}
+									aria-pressed={statusFilter === filter.value}
+									className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
+										statusFilter === filter.value
+											? "border-accent text-primary"
+											: "border-divider text-secondary hover:text-primary"
+									}`}
+								>
+									{filter.label} ({filterCounts[filter.value]})
+								</button>
+							))}
 				</div>
-
-				{bills.length === 0 ? null : (
-					<div className="mt-4 flex flex-wrap items-center gap-2">
-						{STATUS_FILTERS.map((filter) => (
-							<button
-								key={filter.value}
-								type="button"
-								onClick={() => setStatusFilter(filter.value)}
-								aria-pressed={statusFilter === filter.value}
-								className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
-									statusFilter === filter.value
-										? "border-accent text-primary"
-										: "border-divider text-secondary hover:text-primary"
-								}`}
-							>
-								{filter.label} ({filterCounts[filter.value]})
-							</button>
-						))}
-					</div>
-				)}
 
 				<div className="mt-8 flex flex-col gap-3">
 					{listQuery.isPending ? (
@@ -167,7 +148,7 @@ export default function BillsPage() {
 							<button
 								type="button"
 								onClick={() => listQuery.refetch()}
-								className="mt-4 text-accent text-caps hover:text-accent-hover"
+								className="mt-4 text-accent text-caps hover:opacity-80"
 							>
 								Retry
 							</button>
@@ -190,7 +171,7 @@ export default function BillsPage() {
 									setSearch("");
 									setStatusFilter("all");
 								}}
-								className="mt-3 text-accent text-caps hover:text-accent-hover"
+								className="mt-3 text-accent text-caps hover:opacity-80"
 							>
 								Clear filters
 							</button>

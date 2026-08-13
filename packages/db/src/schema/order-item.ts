@@ -40,6 +40,19 @@ export const orderItems = pgTable(
 		salt: salt("salt"),
 		ice: ice("ice"),
 		status: orderItemStatus("status").notNull().default("placed"),
+		// Bills tab correction (product.md § Bills tab "Waive Item") — the
+		// portion of quantity excluded from bill math without touching status
+		// or quantity itself, for exceptional cases (quality complaint,
+		// short-served quantity) that aren't a mis-added order. 0 means not
+		// waived; equal to quantity means fully waived. Reversible until the
+		// bill settles.
+		waivedQuantity: integer("waived_quantity").notNull().default(0),
+		// Bills tab correction (product.md § Bills tab "Cancel Item") — the
+		// portion of quantity cancelled pre-prep, excluded from both bill math
+		// and the kitchen queue without splitting the row. Only settable while
+		// status is 'placed'; reaching quantity flips status to 'cancelled'
+		// (irreversible, same as a whole-row cancel).
+		cancelledQuantity: integer("cancelled_quantity").notNull().default(0),
 		// Set by the kitchen when it advances status (Kitchen Display) — null
 		// until that transition happens. Lets elapsed-time displays report
 		// time-in-preparation and time-awaiting-pickup separately, rather than
@@ -82,5 +95,17 @@ export const orderItems = pgTable(
 		),
 		check("order_items_unit_price_check", sql`${table.unitPrice} >= 0`),
 		check("order_items_tax_rate_check", sql`${table.taxRate} between 0 and 1`),
+		check(
+			"order_items_waived_quantity_check",
+			sql`${table.waivedQuantity} >= 0 AND ${table.waivedQuantity} <= ${table.quantity}`,
+		),
+		check(
+			"order_items_cancelled_quantity_check",
+			sql`${table.cancelledQuantity} >= 0 AND ${table.cancelledQuantity} <= ${table.quantity}`,
+		),
+		check(
+			"order_items_waived_cancelled_quantity_check",
+			sql`${table.waivedQuantity} + ${table.cancelledQuantity} <= ${table.quantity}`,
+		),
 	],
 );

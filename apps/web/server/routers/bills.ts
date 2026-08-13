@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import { computeBill } from "@/lib/bill-math";
+import { billableQuantity, computeBill } from "@/lib/bill-math";
 import { buildBillPdf } from "@/lib/bill-pdf";
+import type { Context } from "../trpc/context";
 import { authedProcedure, router } from "../trpc/init";
 import {
 	cancelOrderItemInput,
@@ -10,6 +11,7 @@ import {
 	listBillsInput,
 	requestBillInput,
 	settleBillInput,
+	waiveOrderItemInput,
 	waiveServiceChargeInput,
 } from "./bills.schema";
 
@@ -19,40 +21,18 @@ function dbError(message: string, cause: unknown): TRPCError {
 
 // A day's [start, end) as local-server-time ISO bounds — the app has no
 // per-restaurant timezone setting (core-data-model.md lists no such
-// column), so "Today"/"Yesterday" mean the server's own calendar day, same
-// as every other timestamp in the app.
-function dayBounds(daysAgo: number): { start: string; end: string } {
-	const start = new Date();
-	start.setHours(0, 0, 0, 0);
-	start.setDate(start.getDate() - daysAgo);
+// column), so "Today" means the server's own calendar day, same as every
+// other timestamp in the app. `date` narrows this to one exact past day
+// instead of today.
+function dateRangeFor(date: string | undefined): {
+	start: string;
+	end: string;
+} {
+	const start = date ? new Date(`${date}T00:00:00`) : new Date();
+	if (!date) start.setHours(0, 0, 0, 0);
 	const end = new Date(start);
 	end.setDate(end.getDate() + 1);
 	return { start: start.toISOString(), end: end.toISOString() };
-}
-
-function dateRangeFor(
-	quickRange: "today" | "yesterday" | "last3days" | "all",
-	date: string | undefined,
-): { start: string; end: string } | null {
-	if (date) {
-		const start = new Date(`${date}T00:00:00`);
-		const end = new Date(start);
-		end.setDate(end.getDate() + 1);
-		return { start: start.toISOString(), end: end.toISOString() };
-	}
-	switch (quickRange) {
-		case "today":
-			return dayBounds(0);
-		case "yesterday":
-			return dayBounds(1);
-		case "last3days": {
-			const { start } = dayBounds(2);
-			const { end } = dayBounds(0);
-			return { start, end };
-		}
-		default:
-			return null;
-	}
 }
 
 type BillableItem = {
@@ -71,6 +51,67 @@ function liveTotal(items: BillableItem[], serviceChargeRate: number): number {
 	return computeBill(items, serviceChargeRate).total;
 }
 
+// Shared by cancelOrderItem and waiveOrderItem: an item's cancelled and
+// waived quantities are independent corrections drawn from the same pool
+// (docs/core-data-model.md — their sum can never exceed quantity, enforced
+// again at the DB with order_items_waived_cancelled_quantity_check), so
+// setting one has to know how much the other has already claimed.
+function assertWithinRemaining(
+	action: "cancel" | "waive",
+	requested: number,
+	quantity: number,
+	otherQuantity: number,
+): void {
+	if (requested > quantity) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: `Can't ${action} more than the ordered quantity.`,
+		});
+	}
+	if (requested + otherQuantity > quantity) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: `Can't ${action} more than the quantity still remaining.`,
+		});
+	}
+}
+
+// Shared by cancelOrderItem and waiveOrderItem: both corrections are blocked
+// once the item's bill is settled (docs/product.md § Bills tab: "Unavailable
+// once the bill is settled, even if an item is technically still placed") —
+// a correction after settle wouldn't reach the frozen total, which would
+// silently make the printed bill wrong. Derived from the item's own order
+// rather than trusting a client-supplied sessionId, so a mismatched
+// sessionId can't bypass the check for an item in a different session.
+async function assertBillNotSettled(
+	auth: Context["auth"],
+	orderId: string,
+	errorMessage: string,
+): Promise<void> {
+	const orderResult = await auth
+		.from("orders")
+		.select("session_id")
+		.eq("id", orderId)
+		.maybeSingle();
+	if (orderResult.error) throw dbError(errorMessage, orderResult.error);
+	if (!orderResult.data) {
+		throw new TRPCError({ code: "NOT_FOUND", message: "Order not found." });
+	}
+
+	const billResult = await auth
+		.from("bills")
+		.select("status")
+		.eq("session_id", orderResult.data.session_id)
+		.maybeSingle();
+	if (billResult.error) throw dbError(errorMessage, billResult.error);
+	if (billResult.data?.status === "settled") {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "This bill is already settled and can no longer be corrected.",
+		});
+	}
+}
+
 // Any active staff member of the restaurant reaches the Bills tab, same
 // reach as Menu Desk/Table Matrix/Kitchen — no role-level split yet (see
 // Tbd.md "Feature-level staff permissions"). staff_all_table_sessions/
@@ -86,25 +127,29 @@ export const billsRouter = router({
 	// (today's business, regardless of the date filter); the date filter
 	// only bounds the *closed* history so past days don't grow unbounded.
 	list: authedProcedure.input(listBillsInput).query(async ({ ctx, input }) => {
-		const range = dateRangeFor(input.quickRange, input.date);
+		const range = dateRangeFor(input.date);
 
-		let closedQuery = ctx.auth
+		const closedQuery = ctx.auth
 			.from("table_sessions")
 			.select("id, restaurant_id, status, opened_at, closed_at")
 			.eq("restaurant_id", input.restaurantId)
-			.eq("status", "closed");
-		if (range) {
-			closedQuery = closedQuery
-				.gte("closed_at", range.start)
-				.lt("closed_at", range.end);
-		}
+			.eq("status", "closed")
+			.gte("closed_at", range.start)
+			.lt("closed_at", range.end);
+
+		// Active sessions have no closed_at to filter by, and are always
+		// today's business — only pull them in on the default "Today" view.
+		// A past date shouldn't show a table that's still currently open.
+		const activeQuery = input.date
+			? Promise.resolve({ data: [], error: null })
+			: ctx.auth
+					.from("table_sessions")
+					.select("id, restaurant_id, status, opened_at, closed_at")
+					.eq("restaurant_id", input.restaurantId)
+					.eq("status", "active");
 
 		const [activeResult, closedResult, restaurantResult] = await Promise.all([
-			ctx.auth
-				.from("table_sessions")
-				.select("id, restaurant_id, status, opened_at, closed_at")
-				.eq("restaurant_id", input.restaurantId)
-				.eq("status", "active"),
+			activeQuery,
 			closedQuery,
 			ctx.auth
 				.from("restaurants")
@@ -183,7 +228,9 @@ export const billsRouter = router({
 				? { data: [], error: null }
 				: await ctx.auth
 						.from("order_items")
-						.select("order_id, item_name, unit_price, tax_rate, quantity")
+						.select(
+							"order_id, item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity",
+						)
 						.eq("restaurant_id", input.restaurantId)
 						.in("order_id", liveOrderIds)
 						.neq("status", "cancelled");
@@ -193,11 +240,17 @@ export const billsRouter = router({
 
 		const itemsByOrder = new Map<string, BillableItem[]>();
 		for (const item of itemsResult.data ?? []) {
+			const quantity = billableQuantity(
+				item.quantity,
+				item.waived_quantity,
+				item.cancelled_quantity,
+			);
+			if (quantity <= 0) continue;
 			const list = itemsByOrder.get(item.order_id) ?? [];
 			list.push({
 				name: item.item_name,
 				unitPrice: Number(item.unit_price),
-				quantity: item.quantity,
+				quantity,
 				taxRate: Number(item.tax_rate),
 			});
 			itemsByOrder.set(item.order_id, list);
@@ -314,7 +367,7 @@ export const billsRouter = router({
 				: await ctx.auth
 						.from("order_items")
 						.select(
-							"id, item_name, unit_price, tax_rate, quantity, status, order_id",
+							"id, item_name, unit_price, tax_rate, quantity, status, waived_quantity, cancelled_quantity, order_id",
 						)
 						.eq("restaurant_id", session.restaurant_id)
 						.in("order_id", orderIds)
@@ -333,9 +386,14 @@ export const billsRouter = router({
 			.map((item) => ({
 				name: item.item_name,
 				unitPrice: Number(item.unit_price),
-				quantity: item.quantity,
+				quantity: billableQuantity(
+					item.quantity,
+					item.waived_quantity,
+					item.cancelled_quantity,
+				),
 				taxRate: Number(item.tax_rate),
-			}));
+			}))
+			.filter((item) => item.quantity > 0);
 
 		const serviceChargeRate = waived
 			? 0
@@ -395,19 +453,22 @@ export const billsRouter = router({
 					| "ready"
 					| "served"
 					| "cancelled",
+				waivedQuantity: item.waived_quantity,
+				cancelledQuantity: item.cancelled_quantity,
 				// Correct eligible order items (docs/product.md § Bills tab):
 				// only an item still in `placed` may be cancelled from here,
 				// mirroring the RBAC "Cancel/Modify Order (pre-prep only)" row
 				// and core-data-model.md's Order Item lifecycle
 				// ("cancelled reachable only from placed").
 				cancellable: item.status === "placed",
+				waivable: item.status !== "cancelled",
 			})),
 			...totals,
 		};
 	}),
 
 	// Generate / Request Bill. Staff-facing equivalent of the guest's own
-	// Request Bill (guest.bill.get -> request_bill()); guests carry
+	// Request Bill (guest.bill.request -> request_bill()); guests carry
 	// restaurant_id/table_session_id as JWT claims that request_bill() reads
 	// directly, but a staff session has no such claims (they can act on any
 	// session in their restaurant), so this mirrors that function's logic
@@ -570,28 +631,27 @@ export const billsRouter = router({
 			return { waived: input.waived };
 		}),
 
-	// Correct eligible order items: cancel a mis-added line before it's
-	// started preparing. `.eq("status", "placed")` makes the eligibility
-	// check atomic with the write (same pattern as tables.ts's
-	// updateFreeTable) — a kitchen advance racing this cancel just means
-	// zero rows match and the client gets a clear "no longer eligible"
-	// error instead of cancelling an in-flight dish.
+	// Correct eligible order items, in whole or in part: cancel a mis-added
+	// line — or part of its quantity — before it's started preparing.
+	// `.eq("status", "placed")` makes the eligibility check atomic with the
+	// write (same pattern as tables.ts's updateFreeTable) — a kitchen
+	// advance racing this cancel just means zero rows match and the client
+	// gets a clear "no longer eligible" error instead of cancelling an
+	// in-flight dish. Reaching the full quantity also flips status to
+	// 'cancelled' — irreversible from there, since that same `.eq("status",
+	// "placed")` gate then rejects any further edit (same finality the old
+	// whole-row-only cancel had).
 	//
-	// Also blocked once the item's bill is settled (docs/product.md § Bills
-	// tab: "Unavailable once the bill is settled, even if an item is
-	// technically still placed") — a correction after settle wouldn't reach
-	// the frozen total, which would silently make the printed bill wrong.
-	// The frontend already hides the Cancel button once settled, but that's
-	// UX only; this is the server-enforced version (AGENTS.md "All
-	// permissions are server-enforced"). Derived from the item's own order
-	// rather than trusting a client-supplied sessionId, so a mismatched
-	// sessionId can't bypass the check for an item in a different session.
+	// Also blocked once the item's bill is settled — see
+	// assertBillNotSettled. The frontend already hides the Cancel button once
+	// settled, but that's UX only; this is the server-enforced version
+	// (AGENTS.md "All permissions are server-enforced").
 	cancelOrderItem: authedProcedure
 		.input(cancelOrderItemInput)
 		.mutation(async ({ ctx, input }) => {
 			const itemResult = await ctx.auth
 				.from("order_items")
-				.select("order_id")
+				.select("order_id, quantity, waived_quantity")
 				.eq("id", input.orderItemId)
 				.maybeSingle();
 			if (itemResult.error)
@@ -602,36 +662,28 @@ export const billsRouter = router({
 					message: "Order item not found.",
 				});
 			}
+			assertWithinRemaining(
+				"cancel",
+				input.cancelledQuantity,
+				itemResult.data.quantity,
+				itemResult.data.waived_quantity,
+			);
 
-			const orderResult = await ctx.auth
-				.from("orders")
-				.select("session_id")
-				.eq("id", itemResult.data.order_id)
-				.maybeSingle();
-			if (orderResult.error)
-				throw dbError("Unable to cancel the item.", orderResult.error);
-			if (!orderResult.data) {
-				throw new TRPCError({ code: "NOT_FOUND", message: "Order not found." });
-			}
+			await assertBillNotSettled(
+				ctx.auth,
+				itemResult.data.order_id,
+				"Unable to cancel the item.",
+			);
 
-			const billResult = await ctx.auth
-				.from("bills")
-				.select("status")
-				.eq("session_id", orderResult.data.session_id)
-				.maybeSingle();
-			if (billResult.error)
-				throw dbError("Unable to cancel the item.", billResult.error);
-			if (billResult.data?.status === "settled") {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message:
-						"This bill is already settled and can no longer be corrected.",
-				});
-			}
+			const fullyCancelled =
+				input.cancelledQuantity === itemResult.data.quantity;
 
 			const { data, error } = await ctx.auth
 				.from("order_items")
-				.update({ status: "cancelled" })
+				.update({
+					cancelled_quantity: input.cancelledQuantity,
+					...(fullyCancelled ? { status: "cancelled" as const } : {}),
+				})
 				.eq("id", input.orderItemId)
 				.eq("status", "placed")
 				.select("id")
@@ -645,7 +697,66 @@ export const billsRouter = router({
 						"This item has already started preparing and can no longer be corrected.",
 				});
 			}
-			return { id: data.id };
+			return { id: data.id, cancelledQuantity: input.cancelledQuantity };
+		}),
+
+	// Waive an order item, in whole or in part: excludes waivedQuantity of it
+	// from bill math without touching status/quantity, for exceptional cases
+	// a cancel doesn't fit — a quality complaint on an already-served dish,
+	// or a short-served quantity (e.g. 3 ordered, only 2 came out). Mirrors
+	// waiveServiceCharge: adjustable until the bill settles. Unlike
+	// cancelOrderItem, not gated to `status = 'placed'` — the whole point is
+	// covering items past that point, so any non-cancelled item is eligible.
+	waiveOrderItem: authedProcedure
+		.input(waiveOrderItemInput)
+		.mutation(async ({ ctx, input }) => {
+			const itemResult = await ctx.auth
+				.from("order_items")
+				.select("order_id, status, quantity, cancelled_quantity")
+				.eq("id", input.orderItemId)
+				.maybeSingle();
+			if (itemResult.error)
+				throw dbError("Unable to update the item.", itemResult.error);
+			if (!itemResult.data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Order item not found.",
+				});
+			}
+			if (itemResult.data.status === "cancelled") {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "This item is cancelled and isn't part of the bill.",
+				});
+			}
+			assertWithinRemaining(
+				"waive",
+				input.waivedQuantity,
+				itemResult.data.quantity,
+				itemResult.data.cancelled_quantity,
+			);
+
+			await assertBillNotSettled(
+				ctx.auth,
+				itemResult.data.order_id,
+				"Unable to update the item.",
+			);
+
+			const { data, error } = await ctx.auth
+				.from("order_items")
+				.update({ waived_quantity: input.waivedQuantity })
+				.eq("id", input.orderItemId)
+				.neq("status", "cancelled")
+				.select("id")
+				.maybeSingle();
+			if (error) throw dbError("Unable to update the item.", error);
+			if (!data) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "This item is cancelled and isn't part of the bill.",
+				});
+			}
+			return { id: data.id, waivedQuantity: input.waivedQuantity };
 		}),
 
 	// Mark Bill Settled. Computes and freezes subtotal/tax/service/total from
@@ -653,7 +764,10 @@ export const billsRouter = router({
 	// and store ... at settlement") using the same bill-math.ts the guest
 	// screen reads live — settle isn't a different formula, just the last
 	// time it's ever run for this bill. `.neq("status", "settled")` makes
-	// the freeze atomic against a double-tap.
+	// the freeze atomic against a double-tap. Requires an existing bill row
+	// (i.e. Request Bill has already run) — the status ladder is always
+	// Open -> Requested -> Settled, never a direct Open -> Settled skip, so
+	// there's nothing to freeze if the bill was never requested.
 	settle: authedProcedure
 		.input(settleBillInput)
 		.mutation(async ({ ctx, input }) => {
@@ -692,6 +806,12 @@ export const billsRouter = router({
 			if (billResult.data?.status === "settled") {
 				return { billId: billResult.data.id };
 			}
+			if (!billResult.data) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Request the bill before settling it.",
+				});
+			}
 
 			// settled_by: the caller's own Staff row for this restaurant, if they
 			// have one — Dineinly Admin settling on a restaurant's behalf has no
@@ -712,22 +832,9 @@ export const billsRouter = router({
 				settledBy = staffResult.data?.id ?? null;
 			}
 
-			let serviceChargeRate = billResult.data?.service_charge_waived
+			const serviceChargeRate = billResult.data.service_charge_waived
 				? 0
-				: Number(billResult.data?.service_charge_rate ?? 0);
-			if (!billResult.data) {
-				const restaurantResult = await ctx.auth
-					.from("restaurants")
-					.select("service_charge_rate")
-					.eq("id", restaurantId)
-					.maybeSingle();
-				if (restaurantResult.error) {
-					throw dbError("Unable to settle the bill.", restaurantResult.error);
-				}
-				serviceChargeRate = Number(
-					restaurantResult.data?.service_charge_rate ?? 0,
-				);
-			}
+				: Number(billResult.data.service_charge_rate ?? 0);
 
 			const orderIds = (ordersResult.data ?? []).map((o) => o.id);
 			const itemsResult =
@@ -735,7 +842,9 @@ export const billsRouter = router({
 					? { data: [], error: null }
 					: await ctx.auth
 							.from("order_items")
-							.select("item_name, unit_price, tax_rate, quantity")
+							.select(
+								"item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity",
+							)
 							.eq("restaurant_id", restaurantId)
 							.in("order_id", orderIds)
 							.neq("status", "cancelled");
@@ -743,12 +852,18 @@ export const billsRouter = router({
 				throw dbError("Unable to settle the bill.", itemsResult.error);
 
 			const totals = computeBill(
-				(itemsResult.data ?? []).map((row) => ({
-					name: row.item_name,
-					unitPrice: Number(row.unit_price),
-					quantity: row.quantity,
-					taxRate: Number(row.tax_rate),
-				})),
+				(itemsResult.data ?? [])
+					.map((row) => ({
+						name: row.item_name,
+						unitPrice: Number(row.unit_price),
+						quantity: billableQuantity(
+							row.quantity,
+							row.waived_quantity,
+							row.cancelled_quantity,
+						),
+						taxRate: Number(row.tax_rate),
+					}))
+					.filter((row) => row.quantity > 0),
 				serviceChargeRate,
 			);
 			const taxAmount = totals.taxSlabs.reduce(
@@ -769,41 +884,17 @@ export const billsRouter = router({
 
 			// .maybeSingle(), not .single(): a concurrent settle can win the
 			// `.neq("status", "settled")` race between our read above and this
-			// write, leaving 0 rows matched (update branch) or a unique-
-			// violation on bills_session_id_unique (insert branch) — either way
-			// the bill ends up settled, so both are idempotent successes, not
-			// errors. Re-select the row rather than surfacing the write error.
-			if (billResult.data) {
-				const { data, error } = await ctx.auth
-					.from("bills")
-					.update(settledFields)
-					.eq("id", billResult.data.id)
-					.neq("status", "settled")
-					.select("id")
-					.maybeSingle();
-				if (error) throw dbError("Unable to settle the bill.", error);
-				return { billId: data?.id ?? billResult.data.id };
-			}
-
-			const inserted = await ctx.auth
+			// write, leaving 0 rows matched — already settled by the other
+			// caller, so still an idempotent success, not an error.
+			const { data, error } = await ctx.auth
 				.from("bills")
-				.insert({
-					restaurant_id: restaurantId,
-					session_id: input.sessionId,
-					...settledFields,
-				})
+				.update(settledFields)
+				.eq("id", billResult.data.id)
+				.neq("status", "settled")
 				.select("id")
 				.maybeSingle();
-			if (!inserted.error && inserted.data) {
-				return { billId: inserted.data.id };
-			}
-			const raced = await ctx.auth
-				.from("bills")
-				.select("id")
-				.eq("session_id", input.sessionId)
-				.maybeSingle();
-			if (raced.data) return { billId: raced.data.id };
-			throw dbError("Unable to settle the bill.", inserted.error);
+			if (error) throw dbError("Unable to settle the bill.", error);
+			return { billId: data?.id ?? billResult.data.id };
 		}),
 
 	// Close Session: delegates to close_session() (supabase/migrations/
@@ -897,7 +988,9 @@ export const billsRouter = router({
 					? { data: [], error: null }
 					: await ctx.auth
 							.from("order_items")
-							.select("item_name, unit_price, tax_rate, quantity")
+							.select(
+								"item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity",
+							)
 							.eq("restaurant_id", sessionResult.data.restaurant_id)
 							.in("order_id", orderIds)
 							.neq("status", "cancelled");
@@ -914,12 +1007,18 @@ export const billsRouter = router({
 							0,
 					);
 			const computed = computeBill(
-				(itemsResult.data ?? []).map((row) => ({
-					name: row.item_name,
-					unitPrice: Number(row.unit_price),
-					quantity: row.quantity,
-					taxRate: Number(row.tax_rate),
-				})),
+				(itemsResult.data ?? [])
+					.map((row) => ({
+						name: row.item_name,
+						unitPrice: Number(row.unit_price),
+						quantity: billableQuantity(
+							row.quantity,
+							row.waived_quantity,
+							row.cancelled_quantity,
+						),
+						taxRate: Number(row.tax_rate),
+					}))
+					.filter((row) => row.quantity > 0),
 				serviceChargeRate,
 			);
 			// Frozen totals for a settled bill come straight from the row, same

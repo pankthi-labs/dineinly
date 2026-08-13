@@ -893,14 +893,18 @@ bill_ctr = 3
 BILLS = []
 
 for i, s in enumerate(SESSIONS):
+    # A session with no Request Bill yet gets no bills row at all — the app
+    # never inserts one for "open" (bills.ts request only ever inserts a row
+    # already 'requested'); its bill_number sequence default would otherwise
+    # hand out a number for a bill product.md describes as "no bill number
+    # yet". Only emit rows for sessions that have actually been requested.
+    if s["id"] not in (clean_requested_session, still_cooking_session):
+        continue
     bid = nid("a0000000", bill_ctr)
     bill_ctr += 1
-    status = "open"
-    if s["id"] == clean_requested_session:
-        status = "requested"  # clean requested: everything already served
-    if s["id"] == still_cooking_session:
-        status = "requested"  # edge case: bill requested while food still cooking
-    BILLS.append(dict(id=bid, session_id=s["id"], status=status))
+    # clean_requested_session: everything already served.
+    # still_cooking_session: edge case, bill requested while food still cooking.
+    BILLS.append(dict(id=bid, session_id=s["id"], status="requested"))
 
 for h in HISTORICAL:
     subtotal = 0.0
@@ -1149,9 +1153,10 @@ w("on conflict (id) do nothing;")
 w("")
 
 # --- bills ---
-w(f"-- {len(BILLS) + len(HISTORICAL)} bills — {len(BILLS)} open/requested on the active")
-w("-- sessions (amounts derived on read per docs/core-data-model.md, so left")
-w("-- null here same as the existing fixture's open bill), 3 settled on the")
+w(f"-- {len(BILLS) + len(HISTORICAL)} bills — {len(BILLS)} requested on active sessions")
+w("-- (every other active session stays 'open' with no bills row at all, same")
+w("-- as the real app never inserting one until Request Bill; amounts derived")
+w("-- on read per docs/core-data-model.md, so left null here), 3 settled on the")
 w("-- historical closed sessions with amounts computed from their order items")
 w("-- using a simple subtotal+tax+service-charge formula — a fixture")
 w("-- convenience, NOT the official tax/service/rounding formula (still TBD,")
@@ -1161,7 +1166,7 @@ rows = []
 for b in BILLS:
     rows.append(
         f"\t('{b['id']}', '{REST_ID}', '{b['session_id']}', '{b['status']}', "
-        "null, null, null, null, null, null, null)"
+        "0.05, null, null, null, null, null, null)"
     )
 for h in HISTORICAL:
     bl = h["bill"]

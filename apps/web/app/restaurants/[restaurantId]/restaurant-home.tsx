@@ -14,7 +14,7 @@ import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
 import { getGreeting } from "@/lib/greeting";
 import { trpc } from "@/lib/trpc-client";
-import { DirectoryLink } from "./restaurant-nav-header";
+import { useIsAdmin } from "./viewer-context";
 
 const navCards: Array<{
 	title: string;
@@ -56,6 +56,7 @@ const navCards: Array<{
 		title: "Bills",
 		description: "Revenue & settlements",
 		icon: Receipt,
+		href: "bills",
 	},
 ];
 
@@ -67,6 +68,7 @@ export function RestaurantHome({
 	viewerName: string;
 }) {
 	const restaurant = trpc.restaurants.getById.useQuery({ id: restaurantId });
+	const isAdmin = useIsAdmin();
 
 	if (restaurant.isPending) {
 		return <HomeLoading />;
@@ -91,8 +93,10 @@ export function RestaurantHome({
 					</div>
 
 					<div className="flex items-center gap-4">
-						<DirectoryLink />
-						<AdminHeaderActions showProfile />
+						<AdminHeaderActions
+							showProfile
+							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
+						/>
 					</div>
 				</div>
 

@@ -305,7 +305,7 @@ export default function TableMatrixPage() {
 							<button
 								type="button"
 								onClick={() => listQuery.refetch()}
-								className="mt-4 text-accent text-caps hover:text-accent-hover"
+								className="mt-4 text-accent text-caps hover:opacity-80"
 							>
 								Retry
 							</button>
@@ -321,7 +321,7 @@ export default function TableMatrixPage() {
 							<button
 								type="button"
 								onClick={openCreateSheet}
-								className="text-accent text-caps hover:text-accent-hover"
+								className="text-accent text-caps hover:opacity-80"
 							>
 								Create your first table
 							</button>
@@ -335,7 +335,7 @@ export default function TableMatrixPage() {
 									setSearch("");
 									setStatusFilter("all");
 								}}
-								className="mt-3 text-accent text-caps hover:text-accent-hover"
+								className="mt-3 text-accent text-caps hover:opacity-80"
 							>
 								Clear filters
 							</button>

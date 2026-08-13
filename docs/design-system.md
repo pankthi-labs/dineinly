@@ -262,7 +262,7 @@ Four accent tokens, four distinct roles. Do not substitute one for another.
 
 Use Dineinly domain terms only. Nothing may imply reservation or payment functionality.
 
-- **Approved:** Add to Cart, Confirm Order, Send to Kitchen, Preparing, Ready, Served, Request Bill, Generate Bill, Mark Bill Settled.
+- **Approved:** Add to Cart, Confirm Order, Send to Kitchen, Preparing, Ready, Served, View Bill, Request Bill, Generate Bill, Waive Service Charge, Waive Item, Cancel Item, Mark Bill Settled, Close Session.
 - **Excluded:** Reservations, Bookings, Payment/Checkout flows and states.
 
 ---

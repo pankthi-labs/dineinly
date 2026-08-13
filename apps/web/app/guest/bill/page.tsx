@@ -2,7 +2,7 @@
 
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Fragment } from "react";
+import { Fragment, useEffect } from "react";
 import {
 	GuestError,
 	GuestLoading,
@@ -13,11 +13,12 @@ import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
 import { trpc } from "@/lib/trpc-client";
 
-// The final screen in the guest ordering flow, reached from "View Bill" on
-// My Orders (app/guest/orders/page.tsx). Requesting the bill (§ Billing &
-// Settlement) happens as a side effect of loading this screen — same
-// pattern as every other guest read, just one that also flips the Bill row
-// open -> requested server-side (guest.bill.get -> request_bill()).
+// The itemized receipt — reached only after Request Bill (My Orders §
+// app/guest/orders/page.tsx, which shows the live running subtotal and is
+// where Request Bill actually lives). This screen assumes the bill has
+// already been requested; if it somehow lands here pre-request (stale
+// bookmark, back button), it bounces back to My Orders rather than showing
+// a half-built page.
 export default function GuestBillPage() {
 	const router = useRouter();
 	const bill = trpc.guest.bill.get.useQuery(undefined, { retry: false });
@@ -34,7 +35,13 @@ export default function GuestBillPage() {
 		},
 	);
 
-	if (bill.isLoading) {
+	useEffect(() => {
+		if (bill.data?.status === "open") {
+			router.replace("/guest/orders");
+		}
+	}, [bill.data?.status, router]);
+
+	if (bill.isLoading || bill.data?.status === "open") {
 		return <GuestLoading message="Opening your bill…" />;
 	}
 	if (bill.error?.data?.code === "UNAUTHORIZED") return <NoGuestSession />;
@@ -51,7 +58,7 @@ export default function GuestBillPage() {
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
-			<main className="mx-auto max-w-md px-5 pt-6 pb-16">
+			<main className="px-5 pt-4 pb-16">
 				<button
 					type="button"
 					onClick={() => router.push("/guest/orders")}
@@ -61,7 +68,7 @@ export default function GuestBillPage() {
 					Orders
 				</button>
 
-				<div className="mt-6 rounded-xl border border-divider bg-surface p-5 tabular-nums">
+				<div className="mx-auto mt-6 max-w-md rounded-xl border border-divider bg-surface p-5 tabular-nums">
 					<header className="text-center">
 						<h1 className="text-3xl">{data.restaurant.name}</h1>
 						<p className="mt-2 text-secondary text-sm">

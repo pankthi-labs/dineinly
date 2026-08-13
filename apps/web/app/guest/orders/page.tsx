@@ -9,7 +9,7 @@ import {
 	GuestLoading,
 	NoGuestSession,
 } from "@/components/guest-page-states";
-import { titleCase } from "@/lib/format";
+import { formatBillAmount, titleCase } from "@/lib/format";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
 import { trpc } from "@/lib/trpc-client";
@@ -84,15 +84,35 @@ export default function GuestOrdersPage() {
 	const orders = trpc.guest.orders.list.useQuery(undefined, {
 		enabled: menu.isSuccess,
 	});
+	// Live running subtotal only (no tax/service breakdown — that only
+	// applies once the bill is actually requested) — read-only, same query
+	// the bill screen uses, no side effect.
+	const bill = trpc.guest.bill.get.useQuery(undefined, {
+		enabled: menu.isSuccess,
+	});
 	const utils = trpc.useUtils();
+
+	const requestBillMutation = trpc.guest.bill.request.useMutation({
+		onSuccess: async () => {
+			await utils.guest.bill.get.invalidate();
+			router.push("/guest/bill");
+		},
+	});
 
 	const { client, tableSessionId } = useGuestRealtime();
 	useBroadcastChannel(
 		client,
 		tableSessionId ? `session:${tableSessionId}` : null,
 		{
-			"order.new": () => utils.guest.orders.list.invalidate(),
-			"order_item.status": () => utils.guest.orders.list.invalidate(),
+			"order.new": () => {
+				utils.guest.orders.list.invalidate();
+				utils.guest.bill.get.invalidate();
+			},
+			"order_item.status": () => {
+				utils.guest.orders.list.invalidate();
+				utils.guest.bill.get.invalidate();
+			},
+			"bill.status": () => utils.guest.bill.get.invalidate(),
 		},
 	);
 
@@ -141,14 +161,38 @@ export default function GuestOrdersPage() {
 					</div>
 				)}
 
-				{items.length > 0 ? (
-					<button
-						type="button"
-						onClick={() => router.push("/guest/bill")}
-						className="mt-8 w-full rounded-md bg-accent px-6 py-4 font-medium text-background text-sm"
-					>
-						View Bill
-					</button>
+				{items.length > 0 && bill.data ? (
+					<div className="mt-8 flex flex-col gap-4 border-divider border-t pt-6">
+						<div className="flex items-baseline justify-between">
+							<span className="text-secondary text-sm">Subtotal so far</span>
+							<span className="text-primary text-xl tabular-nums">
+								{formatBillAmount(bill.data.subtotal)}
+							</span>
+						</div>
+						{bill.data.status === "open" ? (
+							<button
+								type="button"
+								onClick={() => requestBillMutation.mutate()}
+								disabled={requestBillMutation.isPending}
+								className="w-full rounded-md bg-accent px-6 py-4 font-medium text-background text-sm disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
+							>
+								{requestBillMutation.isPending ? "Requesting…" : "Request Bill"}
+							</button>
+						) : (
+							<button
+								type="button"
+								onClick={() => router.push("/guest/bill")}
+								className="w-full rounded-md bg-accent px-6 py-4 font-medium text-background text-sm"
+							>
+								View Bill
+							</button>
+						)}
+						{requestBillMutation.error ? (
+							<p role="alert" className="text-error text-sm">
+								{requestBillMutation.error.message}
+							</p>
+						) : null}
+					</div>
 				) : null}
 			</main>
 		</div>

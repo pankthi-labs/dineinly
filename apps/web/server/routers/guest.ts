@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { computeBill } from "@/lib/bill-math";
+import { billableQuantity, computeBill } from "@/lib/bill-math";
 import { ICE_OPTIONS, SALT_OPTIONS, SPICE_OPTIONS } from "@/lib/menu-options";
 import { guestProcedure, router } from "../trpc/init";
 
@@ -283,7 +283,7 @@ export const guestRouter = router({
 
 			const itemsResult = await ctx.supabase
 				.from("order_items")
-				.select("order_id, item_name, quantity, status")
+				.select("order_id, item_name, quantity, cancelled_quantity, status")
 				.eq("restaurant_id", ctx.guest.restaurant_id)
 				.in(
 					"order_id",
@@ -295,8 +295,12 @@ export const guestRouter = router({
 				throw dbError("Unable to load your orders.", itemsResult.error);
 			}
 
+			// A partially cancelled 'placed' row still carries its full ordered
+			// quantity — only the remaining, still-billable units should ever
+			// reach the guest, same as the kitchen queue (kitchen.ts).
 			const itemsByOrder = new Map<string, typeof itemsResult.data>();
 			for (const item of itemsResult.data ?? []) {
+				if (item.quantity - item.cancelled_quantity <= 0) continue;
 				const list = itemsByOrder.get(item.order_id) ?? [];
 				list.push(item);
 				itemsByOrder.set(item.order_id, list);
@@ -321,7 +325,7 @@ export const guestRouter = router({
 					status,
 					items: items.map((item) => ({
 						name: item.item_name,
-						quantity: item.quantity,
+						quantity: item.quantity - item.cancelled_quantity,
 						served: item.status === "served",
 					})),
 				};
@@ -330,29 +334,27 @@ export const guestRouter = router({
 	}),
 
 	bill: router({
-		// Request Bill (docs/product.md § Billing & Settlement). The
-		// request_bill() Postgres function creates or moves the session's
-		// Bill row to `requested`, idempotently. Amounts are derived on read
-		// from order_items every call (docs/core-data-model.md: "derived on
-		// read for presentation") — bills stores no line-item breakdown, only
-		// the frozen totals a settle later writes.
+		// Live running total — read-only, no side effect. Works whether or
+		// not a `bills` row exists yet (pre-request: no row, virtual "open"
+		// status, same pattern as the staff Bills tab). Guests use this to
+		// check "how much so far" without it signaling staff they're ready to
+		// pay — that's the separate `request` mutation below. Amounts are
+		// derived on read from order_items every call (docs/core-data-model.md:
+		// "derived on read for presentation") — bills stores no line-item
+		// breakdown, only the frozen totals a settle later writes.
 		get: guestProcedure.query(async ({ ctx }) => {
-			const { data: billId, error: rpcError } =
-				await ctx.supabase.rpc("request_bill");
-			if (rpcError) {
-				throw dbError("Unable to open the bill.", rpcError);
-			}
-
 			const [restaurantResult, billResult, ordersResult] = await Promise.all([
 				ctx.supabase
 					.from("restaurants")
-					.select("name, address, city, gst_number, state, pincode")
+					.select(
+						"name, address, city, gst_number, state, pincode, service_charge_rate",
+					)
 					.eq("id", ctx.guest.restaurant_id)
 					.maybeSingle(),
 				ctx.supabase
 					.from("bills")
 					.select("id, bill_number, status, service_charge_rate")
-					.eq("id", billId)
+					.eq("session_id", ctx.guest.table_session_id)
 					.maybeSingle(),
 				ctx.supabase
 					.from("orders")
@@ -366,10 +368,10 @@ export const guestRouter = router({
 					throw dbError("Unable to load the bill.", result.error);
 				}
 			}
-			if (!restaurantResult.data || !billResult.data) {
+			if (!restaurantResult.data) {
 				throw dbError(
 					"Unable to load the bill.",
-					new Error("Missing restaurant or bill row"),
+					new Error("Missing restaurant"),
 				);
 			}
 
@@ -379,7 +381,9 @@ export const guestRouter = router({
 					? { data: [], error: null }
 					: await ctx.supabase
 							.from("order_items")
-							.select("item_name, unit_price, tax_rate, quantity")
+							.select(
+								"item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity",
+							)
 							.eq("restaurant_id", ctx.guest.restaurant_id)
 							.in("order_id", orderIds)
 							.neq("status", "cancelled");
@@ -388,14 +392,30 @@ export const guestRouter = router({
 				throw dbError("Unable to load the bill.", itemsResult.error);
 			}
 
+			const status: "open" | "requested" | "settled" =
+				billResult.data?.status ?? "open";
+			// Pre-request, no bill row has snapshotted a rate yet — fall back to
+			// the restaurant's own current rate, same as the staff Bills tab's
+			// live (unsettled) total.
+			const serviceChargeRate = Number(
+				billResult.data?.service_charge_rate ??
+					restaurantResult.data.service_charge_rate ??
+					0,
+			);
 			const totals = computeBill(
-				(itemsResult.data ?? []).map((row) => ({
-					name: row.item_name,
-					unitPrice: Number(row.unit_price),
-					quantity: row.quantity,
-					taxRate: Number(row.tax_rate),
-				})),
-				Number(billResult.data.service_charge_rate ?? 0),
+				(itemsResult.data ?? [])
+					.map((row) => ({
+						name: row.item_name,
+						unitPrice: Number(row.unit_price),
+						quantity: billableQuantity(
+							row.quantity,
+							row.waived_quantity,
+							row.cancelled_quantity,
+						),
+						taxRate: Number(row.tax_rate),
+					}))
+					.filter((row) => row.quantity > 0),
+				serviceChargeRate,
 			);
 
 			return {
@@ -408,17 +428,30 @@ export const guestRouter = router({
 					pincode: restaurantResult.data.pincode,
 				},
 				tableLabel: ctx.guest.table_label,
-				billId: billResult.data.id,
-				billNumber: billResult.data.bill_number,
-				status: billResult.data.status,
+				billId: billResult.data?.id ?? null,
+				billNumber: billResult.data?.bill_number ?? null,
+				status,
 				// service_charge_rate is numeric(5,4), so as a percent it
 				// carries at most 2 decimals — rounding there keeps float
 				// round-trip noise out of the guest-facing label.
-				serviceChargeRatePercent:
-					Math.round(Number(billResult.data.service_charge_rate ?? 0) * 10000) /
-					100,
+				serviceChargeRatePercent: Math.round(serviceChargeRate * 10000) / 100,
 				...totals,
 			};
+		}),
+
+		// Request Bill (docs/product.md § Billing & Settlement) — the explicit
+		// guest action, separate from viewing. Only this moves the session's
+		// Bill row to `requested` (creating it if needed); `get` above never
+		// does, so a guest merely checking their running total doesn't
+		// silently signal staff they're ready to pay. request_bill() reads
+		// restaurant_id/table_session_id off this guest's own JWT claims, so
+		// no input is needed.
+		request: guestProcedure.mutation(async ({ ctx }) => {
+			const { data: billId, error } = await ctx.supabase.rpc("request_bill");
+			if (error) {
+				throw dbError("Unable to request the bill.", error);
+			}
+			return { billId };
 		}),
 	}),
 });

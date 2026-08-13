@@ -319,6 +319,7 @@ export type Database = {
 			};
 			order_items: {
 				Row: {
+					cancelled_quantity: number;
 					diet: Database["public"]["Enums"]["diet"];
 					ice: Database["public"]["Enums"]["ice"] | null;
 					id: string;
@@ -334,8 +335,10 @@ export type Database = {
 					status: Database["public"]["Enums"]["order_item_status"];
 					tax_rate: number;
 					unit_price: number;
+					waived_quantity: number;
 				};
 				Insert: {
+					cancelled_quantity?: number;
 					diet: Database["public"]["Enums"]["diet"];
 					ice?: Database["public"]["Enums"]["ice"] | null;
 					id?: string;
@@ -351,8 +354,10 @@ export type Database = {
 					status?: Database["public"]["Enums"]["order_item_status"];
 					tax_rate: number;
 					unit_price: number;
+					waived_quantity?: number;
 				};
 				Update: {
+					cancelled_quantity?: number;
 					diet?: Database["public"]["Enums"]["diet"];
 					ice?: Database["public"]["Enums"]["ice"] | null;
 					id?: string;
@@ -368,6 +373,7 @@ export type Database = {
 					status?: Database["public"]["Enums"]["order_item_status"];
 					tax_rate?: number;
 					unit_price?: number;
+					waived_quantity?: number;
 				};
 				Relationships: [
 					{

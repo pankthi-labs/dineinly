@@ -28,6 +28,18 @@ export type BillTotals = {
 
 const toPaisa = (rupees: number) => Math.round(rupees * 100);
 
+// Shared by every bill-math call site (staff list/detail/settle/PDF, guest
+// bill) that reads order_items: the portion of quantity still billable after
+// a Bills tab partial waive and/or partial cancel. 0 or negative means the
+// whole line is excluded.
+export function billableQuantity(
+	quantity: number,
+	waivedQuantity: number,
+	cancelledQuantity = 0,
+): number {
+	return quantity - waivedQuantity - cancelledQuantity;
+}
+
 /**
  * All money math runs in integer paisa (round-half-up at each step, 2dp
  * final precision, no whole-rupee round-off line) to avoid floating-point

@@ -190,7 +190,7 @@ export default function RestaurantsDirectoryPage() {
 							<button
 								type="button"
 								onClick={() => listQuery.refetch()}
-								className="mt-4 text-accent text-caps hover:text-accent-hover"
+								className="mt-4 text-accent text-caps hover:opacity-80"
 							>
 								Retry
 							</button>
@@ -210,7 +210,7 @@ export default function RestaurantsDirectoryPage() {
 									<button
 										type="button"
 										onClick={() => setSearchInput("")}
-										className="text-accent text-caps hover:text-accent-hover"
+										className="text-accent text-caps hover:opacity-80"
 									>
 										Clear search
 									</button>
@@ -221,7 +221,7 @@ export default function RestaurantsDirectoryPage() {
 									<button
 										type="button"
 										onClick={openCreateSheet}
-										className="text-accent text-caps hover:text-accent-hover"
+										className="text-accent text-caps hover:opacity-80"
 									>
 										Create your first restaurant
 									</button>

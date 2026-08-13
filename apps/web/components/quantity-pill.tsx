@@ -20,17 +20,26 @@ export function QuantityPill({
 	value,
 	onDecrement,
 	onIncrement,
+	max,
+	disabled = false,
 }: {
 	value: number;
 	onDecrement: () => void;
 	onIncrement: () => void;
+	// Caps the stepper (a bounded correction editor) instead of an unbounded
+	// cart add. Passing max also opts out of the value-0 "Add" state below —
+	// a bounded editor still needs its −/+ shell visible at 0, unlike the
+	// cart's "nothing added yet" affordance.
+	max?: number;
+	disabled?: boolean;
 }) {
-	if (value === 0) {
+	if (value === 0 && max === undefined) {
 		return (
 			<button
 				type="button"
 				onClick={onIncrement}
-				className={`${SHELL} font-medium text-accent text-sm`}
+				disabled={disabled}
+				className={`${SHELL} font-medium text-accent text-sm disabled:cursor-not-allowed disabled:opacity-60`}
 			>
 				Add
 			</button>
@@ -43,7 +52,8 @@ export function QuantityPill({
 				type="button"
 				aria-label="Decrease quantity"
 				onClick={onDecrement}
-				className="flex h-full flex-1 items-center justify-center text-primary text-sm leading-none transition-colors duration-(--duration-base) ease-out hover:text-accent"
+				disabled={disabled || value <= 0}
+				className="flex h-full flex-1 items-center justify-center text-primary text-sm leading-none transition-colors duration-(--duration-base) ease-out hover:text-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-primary"
 			>
 				−
 			</button>
@@ -54,7 +64,8 @@ export function QuantityPill({
 				type="button"
 				aria-label="Increase quantity"
 				onClick={onIncrement}
-				className="flex h-full flex-1 items-center justify-center text-primary text-sm leading-none transition-colors duration-(--duration-base) ease-out hover:text-accent"
+				disabled={disabled || (max !== undefined && value >= max)}
+				className="flex h-full flex-1 items-center justify-center text-primary text-sm leading-none transition-colors duration-(--duration-base) ease-out hover:text-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-primary"
 			>
 				+
 			</button>
