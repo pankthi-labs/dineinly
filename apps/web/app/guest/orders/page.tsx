@@ -142,7 +142,7 @@ export default function GuestOrdersPage() {
 				<button
 					type="button"
 					onClick={() => router.push("/guest/menu")}
-					className="flex items-center gap-1 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
+					className="-my-3 flex items-center gap-1 py-3 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
 				>
 					<ArrowLeft className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 					Menu
@@ -207,7 +207,7 @@ function OrderGroupCard({ group }: { group: OrderGroup }) {
 				type="button"
 				onClick={() => setExpanded((value) => !value)}
 				aria-expanded={expanded}
-				className="flex w-full items-center justify-between gap-4 text-left"
+				className="-my-2 flex w-full items-center justify-between gap-4 py-2 text-left"
 			>
 				<h3 className="text-lg text-primary">
 					Order {group.number} · {group.items.length}{" "}

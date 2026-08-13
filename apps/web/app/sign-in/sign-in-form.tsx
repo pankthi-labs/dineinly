@@ -351,7 +351,10 @@ function OtpStep({
 			</div>
 
 			<form className="space-y-6" onSubmit={onSubmit} noValidate>
-				<fieldset className="flex justify-between gap-2" disabled={isVerifying}>
+				<fieldset
+					className="flex justify-between gap-1 sm:gap-2"
+					disabled={isVerifying}
+				>
 					<legend className="sr-only">Verification code</legend>
 					{otp.map((digit, index) => (
 						<input
@@ -374,7 +377,7 @@ function OtpStep({
 							onChange={(event) => handleChange(index, event)}
 							onKeyDown={(event) => handleKeyDown(index, event)}
 							onPaste={handlePaste}
-							className={`h-12 w-12 border-b bg-transparent text-center text-lg text-primary transition-colors duration-(--duration-base) ease-out focus:outline-none disabled:cursor-not-allowed disabled:text-muted ${
+							className={`h-10 w-10 border-b bg-transparent text-center text-lg text-primary transition-colors duration-(--duration-base) ease-out focus:outline-none disabled:cursor-not-allowed disabled:text-muted sm:h-12 sm:w-12 ${
 								error ? "border-error" : "border-secondary focus:border-accent"
 							}`}
 						/>

@@ -62,7 +62,7 @@ export default function GuestBillPage() {
 				<button
 					type="button"
 					onClick={() => router.push("/guest/orders")}
-					className="flex items-center gap-1 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
+					className="-my-3 flex items-center gap-1 py-3 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
 				>
 					<ArrowLeft className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 					Orders

@@ -122,18 +122,18 @@ export default function KitchenDisplayPage() {
 	}
 
 	return (
-		<div className="flex h-dvh flex-col overflow-hidden bg-background text-primary">
-			<header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-8 border-divider border-b bg-surface px-8 py-5">
-				<div className="min-w-0 justify-self-start">
+		<div className="flex min-h-dvh flex-col bg-background text-primary md:h-dvh md:overflow-hidden">
+			<header className="flex shrink-0 flex-col gap-3 border-divider border-b bg-surface px-4 py-4 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-8 md:px-8 md:py-5">
+				<div className="min-w-0 md:justify-self-start">
 					<p className="truncate text-2xl text-primary">
 						{queue.data.restaurant.name}
 					</p>
 					<PoweredByDineinly className="mt-1" />
 				</div>
-				<h1 className="justify-self-center whitespace-nowrap text-3xl text-primary">
+				<h1 className="text-2xl text-primary md:justify-self-center md:whitespace-nowrap md:text-3xl">
 					Kitchen Display
 				</h1>
-				<div className="flex shrink-0 items-center gap-3 justify-self-end">
+				<div className="flex flex-wrap items-center gap-3 md:shrink-0 md:flex-nowrap md:justify-self-end">
 					<button
 						type="button"
 						onClick={() => setAvailabilityMode("unavailable")}
@@ -159,7 +159,7 @@ export default function KitchenDisplayPage() {
 				</div>
 			</header>
 
-			<main className="flex flex-1 overflow-hidden">
+			<main className="flex flex-1 flex-col md:flex-row md:overflow-hidden">
 				<QueueColumn
 					label="Incoming"
 					status="placed"
@@ -239,7 +239,7 @@ function QueueColumn({
 	renderAction: (batch: KitchenBatch) => React.ReactNode;
 }) {
 	return (
-		<section className="flex flex-1 flex-col overflow-hidden border-divider border-r last:border-r-0">
+		<section className="flex flex-col border-divider border-b last:border-b-0 md:flex-1 md:overflow-hidden md:border-r md:border-b-0 md:last:border-r-0">
 			<div className="flex shrink-0 items-center gap-2 px-6 py-4">
 				<span
 					aria-hidden="true"
@@ -250,7 +250,7 @@ function QueueColumn({
 					{batchCountLabel(batches.length)}
 				</span>
 			</div>
-			<div className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 pb-5">
+			<div className="flex flex-col gap-3 px-5 pb-5 md:flex-1 md:overflow-y-auto">
 				{batches.length === 0 ? (
 					<p className="px-1 text-muted text-sm">No dishes.</p>
 				) : (

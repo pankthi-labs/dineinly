@@ -363,7 +363,7 @@ export default function GuestMenuPage() {
 							<button
 								type="button"
 								onClick={() => router.push("/guest/orders")}
-								className="font-semibold text-accent text-sm"
+								className="-my-3 py-3 font-semibold text-accent text-sm"
 							>
 								My Orders
 							</button>

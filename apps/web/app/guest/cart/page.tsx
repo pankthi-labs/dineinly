@@ -138,7 +138,7 @@ function GuestCartContent({
 				<button
 					type="button"
 					onClick={() => router.push("/guest/menu")}
-					className="flex items-center gap-1 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
+					className="-my-3 flex items-center gap-1 py-3 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
 				>
 					<ArrowLeft className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 					Menu
@@ -177,7 +177,7 @@ function GuestCartContent({
 										<button
 											type="button"
 											onClick={() => onRemove(item)}
-											className="shrink-0 text-caps text-muted hover:text-primary"
+											className="-m-3 shrink-0 p-3 text-caps text-muted hover:text-primary"
 										>
 											Remove
 										</button>

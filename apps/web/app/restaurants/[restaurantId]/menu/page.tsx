@@ -309,7 +309,7 @@ export default function RestaurantMenuPage() {
 										>
 											<h2
 												id={`category-${category.id}`}
-												className="shrink-0 text-caps text-muted"
+												className="min-w-0 truncate text-caps text-muted"
 											>
 												{titleCase(category.name)}
 												{category.status === "archived" ? " · Hidden" : ""}
