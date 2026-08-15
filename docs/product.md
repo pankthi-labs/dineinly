@@ -6,6 +6,39 @@ Dineinly is a premium restaurant platform delivering a seamless dine-in experien
 
 Every feature must improve guest experience, staff efficiency, or restaurant visibility — otherwise it should not be built.
 
+---
+
+## Dineinly Experiences
+
+Dineinly is sold as packaged experiences so a restaurant can adopt at their own pace, on top of whatever they already run — not as a single all-or-nothing platform. A restaurant picks one experience (not per touchpoint); moving between experiences is a self-serve flag flip on the same restaurant record — same staff, menu, and history, no re-onboarding.
+
+Requires a `restaurant.experience` field (does not exist yet) checked by ordering/kitchen/bill routers — without it every tenant gets identical behavior and none of these experiences can actually be switched on per restaurant. This is a prerequisite for shipping any experience beyond One.
+
+**Strategic shape:** Menu is the universal entry point. Guest is the adoption wedge — zero integration risk, sells itself on guest experience alone. One is the deep platform, full integration, the ceiling Guest grows into. Counter is a separate vertical entirely, not a deeper Guest — it serves quick-service restaurants, not an upgrade path for dine-in ones.
+
+### Full-Service vs. Quick-Service
+
+Every restaurant sits on exactly one of two tracks. The track is decided by an explicit question at signup — **does payment happen before or after food is served?** — not by restaurant category. A banquet hall or buffet that collects payment upfront runs on the Quick-Service track even with tables and waitstaff; a fast-casual spot that tabs guests and settles after the meal runs on Full-Service even though it feels quick.
+
+```
+                              Menu
+                    (view-only, either track)
+                       /                    \
+              Full-Service track          Quick-Service track
+             (pay after, staff-mediated)   (pay before, self-service)
+                  |                              |
+             Guest → One                      Counter
+        (zero integration →           (terminal — full integration
+         full integration)             is the only version that works)
+```
+
+A restaurant only moves within its own track (Menu→Guest→One, or Menu→Counter). Crossing tracks isn't a routine upgrade — different operating model, gets a real conversation, not a toggle.
+
+- **Dineinly Menu** — view-only digital menu, either track. No ordering, no kitchen, no bill. Guests always see current prices/items/availability.
+- **Dineinly Guest** *(Full-Service)* — adds guest ordering on top of Menu, with zero change to the restaurant's existing systems. Guest sends an order request; staff sees it in Dineinly and manually re-enters it into their existing POS/kitchen process exactly as they do today — or simply walks back to the table to confirm with the guest. No real-time order status shown to the guest (nobody in Dineinly ever advances an item's status, so the ladder would just hang on "Preparing" forever). Billing is untouched — the restaurant's existing billing flow runs exactly as it always has, disconnected from Dineinly.
+- **Dineinly One** *(Full-Service)* — full dine-in experience: real-time kitchen queue, live guest order status, full Bills tab (corrections, waivers, settlement). This is what's built today as MVP scope (see below) — the ceiling Guest grows into, not a separate build.
+- **Dineinly Counter** *(Quick-Service)* — payment happens before food is prepared. Guest orders, gets a token + bill from Dineinly, pays at the counter (external — Dineinly never touches the transaction), and only once payment is confirmed does the order auto-fire to kitchen; guest gets a ready notification. Terminal on its track by design: the pain point this track solves is queue/throughput, not staff availability, so only the payment-gated automation earns its keep — a lighter "digital order capture, staff still manually re-keys and relays to kitchen" version wouldn't move the line, so it isn't offered.
+
 ## Principles
 
 - **Guest experience first** — technology disappears into the dining experience; guests never need instructions.
