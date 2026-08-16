@@ -15,16 +15,41 @@ const trpc = initTRPC.context<Context>().create();
 export const router = trpc.router;
 export const publicProcedure = trpc.procedure;
 
-/** Requires a valid, unexpired guest JWT. Staff procedures arrive with staff auth. */
-export const guestProcedure = publicProcedure.use(({ ctx, next }) => {
+/**
+ * Requires a valid, unexpired guest JWT. Staff procedures arrive with staff
+ * auth. Also resolves this guest's restaurant.experience fresh on every call
+ * (never cached on the JWT) so an admin flipping a restaurant's experience
+ * takes effect on a guest's very next request, not just their next scan —
+ * see docs/product.md § Dineinly Experiences for what each tier gates.
+ */
+export const guestProcedure = publicProcedure.use(async ({ ctx, next }) => {
 	if (!ctx.guest || !ctx.guestToken) {
 		throw new TRPCError({
 			code: "UNAUTHORIZED",
 			message: "Valid guest session required.",
 		});
 	}
+
+	const { data, error } = await ctx.supabase
+		.from("restaurants")
+		.select("experience")
+		.eq("id", ctx.guest.restaurant_id)
+		.maybeSingle();
+
+	if (error || !data) {
+		throw new TRPCError({
+			code: "UNAUTHORIZED",
+			message: "Valid guest session required.",
+		});
+	}
+
 	return next({
-		ctx: { ...ctx, guest: ctx.guest, guestToken: ctx.guestToken },
+		ctx: {
+			...ctx,
+			guest: ctx.guest,
+			guestToken: ctx.guestToken,
+			experience: data.experience,
+		},
 	});
 });
 

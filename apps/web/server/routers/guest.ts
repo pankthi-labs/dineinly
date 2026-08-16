@@ -14,6 +14,32 @@ function dbError(message: string, cause: unknown): TRPCError {
 	return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message, cause });
 }
 
+// docs/product.md § Dineinly Experiences: Menu is view-only (no ordering, no
+// order history). Guest adds ordering and a plain order history, but no live
+// status (nobody in Dineinly ever advances an item's status for Guest, so a
+// status ladder would just hang on "Preparing" forever) and no bill (staff
+// runs billing outside Dineinly). One is the full dine-in experience —
+// ordering, live status, and bill. Counter never reaches this router — it
+// has no Restaurant Table rows, so it can't resolve through the table-QR
+// guest session this router serves.
+function requireOrderingEnabled(experience: string): void {
+	if (experience === "menu") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "This restaurant's menu is view-only.",
+		});
+	}
+}
+
+function requireBillEnabled(experience: string): void {
+	if (experience !== "one") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Billing isn't available here.",
+		});
+	}
+}
+
 // Guest-facing reads only. RLS (guest_select_own_restaurant,
 // guest_select_active_menu_categories/items — supabase/migrations/
 // 20260730150634_..._policies.sql § 3) already scopes every query below to
@@ -38,7 +64,7 @@ export const guestRouter = router({
 			[
 				ctx.supabase
 					.from("restaurants")
-					.select("name")
+					.select("name, experience")
 					.eq("id", ctx.guest.restaurant_id)
 					.maybeSingle(),
 				ctx.supabase
@@ -145,6 +171,8 @@ export const guestRouter = router({
 				}),
 			)
 			.mutation(async ({ ctx, input }) => {
+				requireOrderingEnabled(ctx.experience);
+
 				let existingQuery = ctx.supabase
 					.from("cart_items")
 					.select("id, quantity")
@@ -242,6 +270,8 @@ export const guestRouter = router({
 	submitOrder: guestProcedure
 		.input(z.object({ idempotencyKey: z.uuid() }))
 		.mutation(async ({ ctx, input }) => {
+			requireOrderingEnabled(ctx.experience);
+
 			const { data, error } = await ctx.supabase.rpc("submit_order", {
 				p_idempotency_key: input.idempotencyKey,
 			});
@@ -267,6 +297,8 @@ export const guestRouter = router({
 		// docs specifies guest-facing cancellation UI, and a silently
 		// shortened order is less confusing than an unexplained strikethrough.
 		list: guestProcedure.query(async ({ ctx }) => {
+			requireOrderingEnabled(ctx.experience);
+
 			const ordersResult = await ctx.supabase
 				.from("orders")
 				.select("id, placed_at")
@@ -343,6 +375,8 @@ export const guestRouter = router({
 		// "derived on read for presentation") — bills stores no line-item
 		// breakdown, only the frozen totals a settle later writes.
 		get: guestProcedure.query(async ({ ctx }) => {
+			requireBillEnabled(ctx.experience);
+
 			const [restaurantResult, billResult, ordersResult] = await Promise.all([
 				ctx.supabase
 					.from("restaurants")
@@ -447,6 +481,8 @@ export const guestRouter = router({
 		// restaurant_id/table_session_id off this guest's own JWT claims, so
 		// no input is needed.
 		request: guestProcedure.mutation(async ({ ctx }) => {
+			requireBillEnabled(ctx.experience);
+
 			const { data: billId, error } = await ctx.supabase.rpc("request_bill");
 			if (error) {
 				throw dbError("Unable to request the bill.", error);

@@ -113,6 +113,9 @@ function GuestCartContent({
 }) {
 	const router = useRouter();
 	const utils = trpc.useUtils();
+	// Guest and One both have an order history (app/guest/orders/page.tsx),
+	// just with different depth (docs/product.md § Dineinly Experiences) — so
+	// Confirm Order always lands there.
 	const submitOrder = trpc.guest.submitOrder.useMutation({
 		onSuccess: () => {
 			utils.guest.cart.list.invalidate();

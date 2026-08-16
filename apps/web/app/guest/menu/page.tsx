@@ -70,11 +70,17 @@ export default function GuestMenuPage() {
 	const router = useRouter();
 	const menu = trpc.guest.menu.useQuery(undefined, { retry: false });
 	const utils = trpc.useUtils();
+	// docs/product.md § Dineinly Experiences: Menu is view-only (no cart, no
+	// order history at all). Guest and One both order and can view order
+	// history — Guest's history just has no live status/bill (guest/orders
+	// handles that split). Server-enforced too (guest.ts) — this only decides
+	// what renders.
+	const orderingEnabled = menu.data?.restaurant.experience !== "menu";
 	// Shared cart — another guest at the table can add/edit lines this device
 	// never mutated, so this relies on the session:{id} broadcast below
 	// rather than only its own mutations to stay current.
 	const cart = trpc.guest.cart.list.useQuery(undefined, {
-		enabled: menu.isSuccess,
+		enabled: menu.isSuccess && orderingEnabled,
 	});
 	const addItem = trpc.guest.cart.addItem.useMutation({
 		onSuccess: () => utils.guest.cart.list.invalidate(),
@@ -83,7 +89,7 @@ export default function GuestMenuPage() {
 		onSuccess: () => utils.guest.cart.list.invalidate(),
 	});
 	const orders = trpc.guest.orders.list.useQuery(undefined, {
-		enabled: menu.isSuccess,
+		enabled: menu.isSuccess && orderingEnabled,
 	});
 	const hasOrders = (orders.data?.length ?? 0) > 0;
 
@@ -308,6 +314,7 @@ export default function GuestMenuPage() {
 											key={item.id}
 											item={item}
 											onOpen={() => setOpenItem(item)}
+											orderingEnabled={orderingEnabled}
 											cartQuantity={cartQuantity}
 											onAdd={() =>
 												addItem.mutate({
@@ -348,6 +355,7 @@ export default function GuestMenuPage() {
 					key={openItem.id}
 					item={openItem}
 					onClose={() => setOpenItem(null)}
+					orderingEnabled={orderingEnabled}
 					onAddToOrder={(input) =>
 						addItem.mutateAsync({ menuItemId: openItem.id, ...input })
 					}
@@ -387,12 +395,14 @@ export default function GuestMenuPage() {
 function MenuItemCard({
 	item,
 	onOpen,
+	orderingEnabled,
 	cartQuantity,
 	onAdd,
 	onDecrement,
 }: {
 	item: MenuItem;
 	onOpen: () => void;
+	orderingEnabled: boolean;
 	cartQuantity: number;
 	onAdd: () => void;
 	onDecrement: () => void;
@@ -436,7 +446,7 @@ function MenuItemCard({
 					<span className="self-start justify-self-end text-caps text-muted">
 						Sold out
 					</span>
-				) : (
+				) : orderingEnabled ? (
 					// One control for both states — at quantity 0 it renders
 					// "Add" itself, so tapping it can never resize the row.
 					<div className="self-start justify-self-end">
@@ -446,7 +456,7 @@ function MenuItemCard({
 							onIncrement={onAdd}
 						/>
 					</div>
-				)}
+				) : null}
 			</div>
 		</div>
 	);
@@ -490,10 +500,12 @@ function QuantityStepper({
 function MenuItemDrawer({
 	item,
 	onClose,
+	orderingEnabled,
 	onAddToOrder,
 }: {
 	item: MenuItem;
 	onClose: () => void;
+	orderingEnabled: boolean;
 	onAddToOrder: (input: {
 		quantity: number;
 		spice?: (typeof SPICE_OPTIONS)[number];
@@ -540,6 +552,8 @@ function MenuItemDrawer({
 					<p className="text-center text-caps text-muted">
 						Currently unavailable
 					</p>
+				) : !orderingEnabled ? (
+					<p className="text-center text-caps text-muted">View only</p>
 				) : (
 					<div className="flex flex-col gap-3">
 						{error ? (

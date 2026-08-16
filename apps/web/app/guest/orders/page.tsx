@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GuestPageHeader } from "@/components/guest-page-header";
 import {
 	GuestError,
@@ -81,16 +81,28 @@ function orderGroups(order: GuestOrder): OrderGroup[] {
 export default function GuestOrdersPage() {
 	const router = useRouter();
 	const menu = trpc.guest.menu.useQuery(undefined, { retry: false });
+	// docs/product.md § Dineinly Experiences: Menu never places an order, so
+	// it has no history to bounce here for. Guest and One both get an order
+	// history — only One's is live-status-tracked and has a bill attached
+	// (see the ordersEnabled/billEnabled split below and in guest.ts).
+	const ordersEnabled = menu.data?.restaurant.experience !== "menu";
+	const billEnabled = menu.data?.restaurant.experience === "one";
 	const orders = trpc.guest.orders.list.useQuery(undefined, {
-		enabled: menu.isSuccess,
+		enabled: menu.isSuccess && ordersEnabled,
 	});
 	// Live running subtotal only (no tax/service breakdown — that only
 	// applies once the bill is actually requested) — read-only, same query
 	// the bill screen uses, no side effect.
 	const bill = trpc.guest.bill.get.useQuery(undefined, {
-		enabled: menu.isSuccess,
+		enabled: menu.isSuccess && billEnabled,
 	});
 	const utils = trpc.useUtils();
+
+	useEffect(() => {
+		if (menu.isSuccess && !ordersEnabled) {
+			router.replace("/guest/menu");
+		}
+	}, [menu.isSuccess, ordersEnabled, router]);
 
 	const requestBillMutation = trpc.guest.bill.request.useMutation({
 		onSuccess: async () => {
@@ -116,7 +128,11 @@ export default function GuestOrdersPage() {
 		},
 	);
 
-	if (menu.isLoading || (menu.isSuccess && orders.isLoading)) {
+	if (
+		menu.isLoading ||
+		(menu.isSuccess && !ordersEnabled) ||
+		(menu.isSuccess && orders.isLoading)
+	) {
 		return <GuestLoading message="Loading your orders…" />;
 	}
 	if (menu.error?.data?.code === "UNAUTHORIZED") return <NoGuestSession />;
@@ -153,15 +169,21 @@ export default function GuestOrdersPage() {
 					<p className="mt-8 text-center text-muted">
 						You haven't placed an order yet.
 					</p>
-				) : (
+				) : billEnabled ? (
 					<div className="mt-6 flex flex-col gap-6">
 						{items.flatMap(orderGroups).map((group) => (
 							<OrderGroupCard key={group.key} group={group} />
 						))}
 					</div>
+				) : (
+					<div className="mt-6 flex flex-col gap-6">
+						{items.map((order) => (
+							<GuestOrderCard key={order.id} order={order} />
+						))}
+					</div>
 				)}
 
-				{items.length > 0 && bill.data ? (
+				{items.length > 0 && billEnabled && bill.data ? (
 					<div className="mt-8 flex flex-col gap-4 border-divider border-t pt-6">
 						<div className="flex items-baseline justify-between">
 							<span className="text-secondary text-sm">Subtotal so far</span>
@@ -195,6 +217,47 @@ export default function GuestOrdersPage() {
 					</div>
 				) : null}
 			</main>
+		</div>
+	);
+}
+
+// Guest experience's order history — no status ladder, since nobody in
+// Dineinly ever advances an item's status for this tier (docs/product.md §
+// Dineinly Experiences), so a "Preparing"/"Served" split would just be wrong.
+function GuestOrderCard({ order }: { order: GuestOrder }) {
+	const [expanded, setExpanded] = useState(false);
+	return (
+		<div className="border-divider border-b pb-6">
+			<button
+				type="button"
+				onClick={() => setExpanded((value) => !value)}
+				aria-expanded={expanded}
+				className="-my-2 flex w-full items-center justify-between gap-4 py-2 text-left"
+			>
+				<h3 className="text-lg text-primary">
+					Order {order.number} · {order.items.length}{" "}
+					{order.items.length === 1 ? "item" : "items"}
+				</h3>
+				<ChevronDown
+					className={`icon-sm shrink-0 text-secondary transition-transform duration-(--duration-base) ease-out ${expanded ? "rotate-180" : ""}`}
+					strokeWidth={1.5}
+					aria-hidden="true"
+				/>
+			</button>
+
+			{expanded ? (
+				<div className="mt-4 flex flex-col gap-3 border-divider border-t pt-4">
+					{order.items.map((item, index) => (
+						<span
+							// biome-ignore lint/suspicious/noArrayIndexKey: no stable id — list is never reordered/edited
+							key={index}
+							className="text-base text-primary"
+						>
+							{item.quantity}x {titleCase(item.name)}
+						</span>
+					))}
+				</div>
+			) : null}
 		</div>
 	);
 }

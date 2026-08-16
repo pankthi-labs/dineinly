@@ -31,6 +31,7 @@ Non-negotiable regardless of which doc you're reading:
 - **Order mutations must be idempotent** — no duplicate orders from retries or repeated taps.
 - **Migrations: Drizzle authors, Supabase CLI applies.** `drizzle-kit generate` writes to `supabase/migrations/`; `supabase db reset` / `db push` apply. Never run `drizzle-kit migrate`, `drizzle-kit push`, or `supabase db diff`, and never edit tables in Studio — each starts a second, divergent migration history. See `docs/architecture.md`.
 - **Never model external Supabase schemas as Drizzle tables** (`auth`, `storage`, `realtime`, etc.) — Supabase owns their migrations. A typed `.references()` stub makes `drizzle-kit generate` treat that table as ours to manage and try to create or drop it. FKs into these schemas are a plain column plus a hand-written `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`, in a custom migration (`drizzle-kit generate --custom`), never folded into a Drizzle-generated one. See `docs/architecture.md`.
+- **Never start the dev server, take screenshots, or run Playwright/browser automation to test a change.** The user tests every UI change manually. Verify with typecheck/lint/unit tests/build only, then report the change as done and let the user check it in the browser themselves. Do not add new Playwright specs unless explicitly asked.
 
 ## Code Comments
 
@@ -45,3 +46,7 @@ Marked `TBD` in the docs — do not guess these, flag and ask:
 - Force-terminate session: void vs. settle handling of an open bill (`docs/core-data-model.md`, `docs/product.md`)
 
 If a doc introduces another `TBD`, do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.
+
+## Testing UI Changes
+
+Never start the dev server, take screenshots, or run Playwright/browser automation to verify a UI change works. The user tests every change manually in their own browser. Verify with typecheck/lint/unit tests/build only, then report the change as done. Do not add new Playwright specs unless explicitly asked.

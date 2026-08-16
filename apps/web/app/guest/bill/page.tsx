@@ -35,13 +35,17 @@ export default function GuestBillPage() {
 		},
 	);
 
-	useEffect(() => {
-		if (bill.data?.status === "open") {
-			router.replace("/guest/orders");
-		}
-	}, [bill.data?.status, router]);
+	// Guest/Menu experiences never have a bill (docs/product.md § Dineinly
+	// Experiences) — guest.bill.get throws FORBIDDEN for them, server-side.
+	const experienceBlocked = bill.error?.data?.code === "FORBIDDEN";
 
-	if (bill.isLoading || bill.data?.status === "open") {
+	useEffect(() => {
+		if (bill.data?.status === "open" || experienceBlocked) {
+			router.replace(experienceBlocked ? "/guest/menu" : "/guest/orders");
+		}
+	}, [bill.data?.status, experienceBlocked, router]);
+
+	if (bill.isLoading || bill.data?.status === "open" || experienceBlocked) {
 		return <GuestLoading message="Opening your bill…" />;
 	}
 	if (bill.error?.data?.code === "UNAUTHORIZED") return <NoGuestSession />;
