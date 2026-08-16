@@ -12,6 +12,7 @@ const validRestaurant = {
 	state: "Maharashtra",
 	pincode: "400001",
 	serviceChargePercent: 5,
+	experience: "one",
 };
 
 const validOwner = {
