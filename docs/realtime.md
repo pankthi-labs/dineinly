@@ -22,6 +22,8 @@ Guest-facing order status (`Preparing` → `Partially Served` → `Served`, per 
 
 Revocation is live-state, not expiry-based, consistent with Guest Sessions: closing a session immediately fails the `session:{id}` RLS check, denying the channel regardless of token validity.
 
+**Counter-experience sessions reuse both topics unchanged.** A tableless Table Session (`core-data-model.md` § Experience Gating) still has an id, so `session:{id}` works exactly as it does for dine-in — no new topic. The payment-gate signal Kitchen Display needs (has this session's Bill been settled yet?) is already carried by the existing Bill broadcast on `restaurant:{id}`; the ready-notification the guest sees is the same Order Item status broadcast on `session:{id}` every experience already gets, just labeled differently client-side (`core-data-model.md` § Lifecycle invariants).
+
 ## Publish Side — Triggers
 
 | Table | Fires on | Topic(s) | Payload |
