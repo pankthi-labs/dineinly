@@ -38,10 +38,12 @@ export const staff = pgTable(
 			.references(() => restaurants.id, { onDelete: "cascade" }),
 		userId: uuid("user_id"),
 		email: text("email").notNull(),
-		// Contact fields captured when Dineinly Admin creates a restaurant
-		// and invites its owner (apps/web/server/routers/restaurants.ts).
-		// Nullable — other invite paths (Owner/Manager inviting Waiters,
-		// Kitchen, other Managers) don't collect these.
+		// name is collected by every invite path: Dineinly Admin inviting a
+		// restaurant's owner (apps/web/server/routers/restaurants.ts) and
+		// Owner/Manager inviting Waiters/Kitchen/Managers/other Owners via
+		// Staff Roster (apps/web/server/routers/staff.ts, invite_staff).
+		// Nullable regardless, since a row can predate both flows.
+		// mobile stays owner-invite-only — Staff Roster doesn't collect it.
 		name: text("name"),
 		mobile: text("mobile"),
 		role: staffRole("role").notNull(),

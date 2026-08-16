@@ -14,10 +14,18 @@ export default async function SignInPage() {
 			redirect("/admin");
 		}
 
+		// Explicit user_id filter, not just RLS: an Owner/Manager's RLS reach
+		// on staff isn't scoped to their own row alone (staff_roster_select,
+		// supabase/migrations/20260816164344_add_staff_roster_rpcs.sql, exposes
+		// every active row at their restaurant). Without this filter
+		// .maybeSingle() sees every teammate's row too and errors as soon as
+		// there's more than one, which this fallback silently treats as "not
+		// staff" and sends to /admin instead.
 		const supabase = await createClient();
 		const { data: staffRow } = await supabase
 			.from("staff")
 			.select("restaurant_id")
+			.eq("user_id", viewer.id)
 			.eq("status", "active")
 			.maybeSingle();
 
