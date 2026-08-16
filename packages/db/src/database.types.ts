@@ -677,6 +677,21 @@ export type Database = {
 			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
+			invite_staff: {
+				Args: {
+					p_email: string;
+					p_name: string;
+					p_restaurant_id: string;
+					p_role: Database["public"]["Enums"]["staff_role"];
+				};
+				Returns: {
+					email: string;
+					id: string;
+					name: string;
+					role: Database["public"]["Enums"]["staff_role"];
+					status: Database["public"]["Enums"]["staff_status"];
+				}[];
+			};
 			is_active_guest_session: {
 				Args: { p_restaurant_id: string; p_session_id: string };
 				Returns: boolean;
@@ -686,6 +701,10 @@ export type Database = {
 				Returns: boolean;
 			};
 			is_dineinly_admin: { Args: never; Returns: boolean };
+			is_staff_manager_for_restaurant: {
+				Args: { p_restaurant_id: string };
+				Returns: boolean;
+			};
 			jwt_is_guest_for_restaurant: {
 				Args: { p_restaurant_id: string };
 				Returns: boolean;
@@ -703,6 +722,13 @@ export type Database = {
 					staff_id: string;
 				}[];
 			};
+			remove_staff: {
+				Args: { p_staff_id: string };
+				Returns: {
+					id: string;
+					status: Database["public"]["Enums"]["staff_status"];
+				}[];
+			};
 			reorder_menu_categories: {
 				Args: { p_category_ids: string[]; p_restaurant_id: string };
 				Returns: undefined;
@@ -717,8 +743,27 @@ export type Database = {
 				}[];
 			};
 			resolve_staff_signin: { Args: { p_email: string }; Returns: string };
+			staff_role_for_restaurant: {
+				Args: { p_restaurant_id: string };
+				Returns: Database["public"]["Enums"]["staff_role"];
+			};
 			submit_order: { Args: { p_idempotency_key: string }; Returns: string };
 			try_uuid: { Args: { p_text: string }; Returns: string };
+			update_staff: {
+				Args: {
+					p_email: string;
+					p_name: string;
+					p_role: Database["public"]["Enums"]["staff_role"];
+					p_staff_id: string;
+				};
+				Returns: {
+					email: string;
+					id: string;
+					name: string;
+					role: Database["public"]["Enums"]["staff_role"];
+					status: Database["public"]["Enums"]["staff_status"];
+				}[];
+			};
 		};
 		Enums: {
 			actor_type: "staff" | "guest";

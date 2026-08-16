@@ -1,27 +1,53 @@
 "use client";
 
 import { createContext, type ReactNode, useContext } from "react";
+import type { StaffRole } from "@/lib/auth";
 
-const IsAdminContext = createContext<boolean | null>(null);
+type RestaurantViewer = {
+	isAdmin: boolean;
+	/** Caller's own active Staff role at this restaurant, or null for
+	 * Dineinly Admin (see lib/auth.ts RestaurantAccess). */
+	restaurantRole: StaffRole | null;
+};
+
+const RestaurantViewerContext = createContext<RestaurantViewer | null>(null);
 
 export function RestaurantViewerProvider({
 	isAdmin,
+	restaurantRole,
 	children,
-}: {
-	isAdmin: boolean;
-	children: ReactNode;
-}) {
+}: RestaurantViewer & { children: ReactNode }) {
 	return (
-		<IsAdminContext.Provider value={isAdmin}>
+		<RestaurantViewerContext.Provider value={{ isAdmin, restaurantRole }}>
 			{children}
-		</IsAdminContext.Provider>
+		</RestaurantViewerContext.Provider>
 	);
 }
 
-export function useIsAdmin(): boolean {
-	const isAdmin = useContext(IsAdminContext);
-	if (isAdmin === null) {
-		throw new Error("useIsAdmin must be used within RestaurantViewerProvider");
+function useRestaurantViewer(): RestaurantViewer {
+	const viewer = useContext(RestaurantViewerContext);
+	if (viewer === null) {
+		throw new Error(
+			"useIsAdmin/useCanManageStaff must be used within RestaurantViewerProvider",
+		);
 	}
-	return isAdmin;
+	return viewer;
+}
+
+export function useIsAdmin(): boolean {
+	return useRestaurantViewer().isAdmin;
+}
+
+export function useRestaurantRole(): StaffRole | null {
+	return useRestaurantViewer().restaurantRole;
+}
+
+// Manage Staff (docs/product.md § RBAC): Owner, Manager, and Dineinly Admin
+// only — everyone else (Waiter, Kitchen) is excluded. Client-side UX only,
+// never the real gate — see app/restaurants/[restaurantId]/staff/layout.tsx
+// and the invite_staff/update_staff/remove_staff RPCs for the actual,
+// server-enforced check (AGENTS.md: "client-side checks are UX only").
+export function useCanManageStaff(): boolean {
+	const { isAdmin, restaurantRole } = useRestaurantViewer();
+	return isAdmin || restaurantRole === "owner" || restaurantRole === "manager";
 }

@@ -15,6 +15,13 @@
       "when": 1785423994558,
       "tag": "20260730150634_add_auth_fk_and_rls_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786898624996,
+      "tag": "20260816164344_add_staff_roster_rpcs",
+      "breakpoints": true
     }
   ]
 }
