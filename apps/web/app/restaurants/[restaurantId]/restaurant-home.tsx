@@ -14,14 +14,17 @@ import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
 import { getGreeting } from "@/lib/greeting";
 import { trpc } from "@/lib/trpc-client";
-import { useIsAdmin } from "./viewer-context";
+import { useCanManageStaff, useIsAdmin } from "./viewer-context";
 
 const navCards: Array<{
 	title: string;
 	description: string;
 	icon: LucideIcon;
 	// Cards without an href aren't built yet — rendered inert rather than
-	// linking nowhere.
+	// linking nowhere. Staff Roster is the one exception: it's built, but
+	// Owner/Manager-only (docs/product.md § RBAC "Manage Staff"), so its href
+	// is added conditionally in the render below rather than here — same
+	// pattern as restaurant-nav-header.tsx.
 	href?: string;
 }> = [
 	{
@@ -69,6 +72,7 @@ export function RestaurantHome({
 }) {
 	const restaurant = trpc.restaurants.getById.useQuery({ id: restaurantId });
 	const isAdmin = useIsAdmin();
+	const canManageStaff = useCanManageStaff();
 
 	if (restaurant.isPending) {
 		return <HomeLoading />;
@@ -106,6 +110,12 @@ export function RestaurantHome({
 
 			<main className="grid flex-1 content-start gap-4 sm:gap-6 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
 				{navCards.map(({ title, description, icon: Icon, href }) => {
+					const resolvedHref =
+						title === "Staff Roster"
+							? canManageStaff
+								? "staff"
+								: undefined
+							: href;
 					const cardClass =
 						"group flex flex-col gap-4 rounded-xl border border-divider bg-surface p-6 text-left no-underline transition-colors duration-(--duration-base) ease-out sm:gap-6 sm:p-8";
 					const content = (
@@ -122,10 +132,10 @@ export function RestaurantHome({
 						</>
 					);
 
-					return href ? (
+					return resolvedHref ? (
 						<Link
 							key={title}
-							href={`/restaurants/${restaurantId}/${href}`}
+							href={`/restaurants/${restaurantId}/${resolvedHref}`}
 							className={`${cardClass} hover:bg-surface-elevated focus-visible:bg-surface-elevated`}
 						>
 							{content}

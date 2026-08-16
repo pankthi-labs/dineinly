@@ -1,7 +1,10 @@
 import type { User } from "@supabase/supabase-js";
+import type { Database } from "@workspace/db";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+
+export type StaffRole = Database["public"]["Enums"]["staff_role"];
 
 // Dineinly Admin identity and its app_metadata.app_role claim: see
 // docs/architecture.md § Authentication. This is the single point where
@@ -54,6 +57,12 @@ export async function requireAdmin(): Promise<Viewer> {
 	return viewer;
 }
 
+export type RestaurantAccess = Viewer & {
+	/** Caller's own active Staff role at this restaurant, or null for
+	 * Dineinly Admin — who has no Staff row anywhere by design. */
+	restaurantRole: StaffRole | null;
+};
+
 /**
  * Viewer, redirecting to /sign-in unless they may view restaurant
  * `restaurantId` — pages under app/restaurants/[restaurantId] (Home,
@@ -64,36 +73,43 @@ export async function requireAdmin(): Promise<Viewer> {
  * This grants page-level access only — every staff role reaches the same
  * pages once past this gate. Feature-level gating within a page (e.g. a
  * waiter reaching Venue Settings) isn't implemented yet; see Tbd.md
- * "Feature-level staff permissions".
+ * "Feature-level staff permissions". Staff Roster is the one exception —
+ * app/restaurants/[restaurantId]/staff/layout.tsx reads restaurantRole off
+ * this function's return value to additionally gate that one subtree to
+ * Owner/Manager, per docs/product.md's RBAC "Manage Staff" row, which is
+ * also why that layout calls this function a second time for the same
+ * request — deduped by the cache() wrapper below rather than a second round
+ * trip to Postgres.
  */
-export async function requireRestaurantAccess(
-	restaurantId: string,
-): Promise<Viewer> {
-	const viewer = await getViewer();
+export const requireRestaurantAccess = cache(
+	async (restaurantId: string): Promise<RestaurantAccess> => {
+		const viewer = await getViewer();
 
-	if (!viewer) {
-		redirect("/sign-in");
-	}
+		if (!viewer) {
+			redirect("/sign-in");
+		}
 
-	if (viewer.isAdmin) {
-		return viewer;
-	}
+		if (viewer.isAdmin) {
+			return { ...viewer, restaurantRole: null };
+		}
 
-	// RLS-scoped to the signed-in user's own session (staff_select_own_row,
-	// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql §
-	// 5) — this can only ever see the caller's own Staff row(s), so a match
-	// here means an active Staff row at this restaurant, not anyone else's.
-	const supabase = await createClient();
-	const { data: staffRow } = await supabase
-		.from("staff")
-		.select("id")
-		.eq("restaurant_id", restaurantId)
-		.eq("status", "active")
-		.maybeSingle();
+		// Scoped to the caller's own row via user_id, not RLS alone —
+		// staff_roster_select (supabase/migrations/20260816164344_add_staff_roster_rpcs.sql)
+		// gives Owner/Manager visibility into every active row at this
+		// restaurant, not just their own.
+		const supabase = await createClient();
+		const { data: staffRow } = await supabase
+			.from("staff")
+			.select("id, role")
+			.eq("restaurant_id", restaurantId)
+			.eq("user_id", viewer.id)
+			.eq("status", "active")
+			.maybeSingle();
 
-	if (!staffRow) {
-		redirect("/sign-in");
-	}
+		if (!staffRow) {
+			redirect("/sign-in");
+		}
 
-	return viewer;
-}
+		return { ...viewer, restaurantRole: staffRow.role };
+	},
+);

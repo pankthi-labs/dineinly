@@ -6,9 +6,9 @@ Deferred work, tracked in one place. Each entry: what's missing, why it's deferr
 
 ## PIN station login for Kitchen/Floor
 
-Not implemented. Only Owner/Manager email OTP exists (`apps/web/app/sign-in/`). `docs/architecture.md` requires a shared station account + app-level PIN for Kitchen/Floor — no PIN storage, verification, or UI anywhere in the codebase.
+Not implemented. Only Owner/Manager email OTP exists (`apps/web/app/sign-in/`). `docs/architecture.md` requires a shared station account + app-level PIN for Kitchen/Floor — no PIN storage, verification, or UI anywhere in the codebase. Staff Roster (invite/edit/remove — `apps/web/app/restaurants/[restaurantId]/staff/`) now exists, but doesn't touch this: no `pin_hash` write path, no device-pairing-code UI (`docs/architecture.md`'s 6-digit pairing flow).
 
-**Pick up:** design PIN hash storage + verification alongside the Staff Roster work (see below) — station account is a Staff concept.
+**Pick up:** design PIN hash storage + verification, plus the pairing-code device onboarding UI — station account is a Staff concept, but a separate one from the roster CRUD that shipped.
 
 ---
 
@@ -30,17 +30,19 @@ An `invited` Staff row never expires (`packages/db/src/schema/staff.ts`). Sign-i
 
 ## Feature-level staff permissions
 
-Every active Staff role (Owner/Manager/Kitchen/Floor) can now reach every restaurant page and every Menu Desk action once signed in (`requireRestaurantAccess`, `staff_all_menu_*` RLS — `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 5). There's no role-level split yet — a Waiter can open Venue Settings, a Kitchen account can edit dishes, same as an Owner.
+Every active Staff role (Owner/Manager/Kitchen/Floor) can still reach every Menu Desk/Table Matrix/Kitchen/Bills page and action once signed in (`requireRestaurantAccess`, `staff_all_menu_*` RLS — `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 5). There's no role-level split on any of those yet — a Waiter can open Venue Settings, a Kitchen account can edit dishes, same as an Owner.
 
-**Pick up:** design the actual RBAC matrix per `docs/product.md` (which role may do what) alongside Staff Roster, then gate individual pages/mutations by `staff.role`, not just restaurant membership.
+Staff Roster (`apps/web/app/restaurants/[restaurantId]/staff/`) is the one exception, now that it exists: `staff/layout.tsx` restricts the page to Owner/Manager/Dineinly Admin, and `invite_staff`/`update_staff`/`remove_staff` (`supabase/migrations/20260816164344_add_staff_roster_rpcs.sql`) enforce "Managers may not manage Owners" and lock the primary owner row server-side — the RBAC matrix's "Manage Staff" row specifically, not the other rows.
+
+**Pick up:** the remaining rows of `docs/product.md`'s RBAC matrix (Menu, Tables, Kitchen, Bills, Analytics, Settings) still need the same per-`staff.role` gating Staff Roster just got, one feature at a time.
 
 ---
 
 ## Owner reassignment
 
-Once a restaurant's owner status flips to `active`, owner fields lock permanently in the edit form (`restaurant-form-sheet.tsx`) — no escape hatch if that owner needs to be replaced.
+Once a restaurant's owner status flips to `active`, owner fields lock permanently in the edit form (`restaurant-form-sheet.tsx`) — no escape hatch if that owner needs to be replaced. Staff Roster (`apps/web/app/restaurants/[restaurantId]/staff/`) now exists but deliberately excludes this: `update_staff`/`remove_staff` both reject any row where `is_primary_owner` is true, same lock as `restaurant-form-sheet.tsx`'s, rather than half-build a reassignment flow with no design to build it against.
 
-**Pick up:** build as part of Staff Roster, same as the Staff RLS item above — reassignment is explicitly a Staff Roster capability per `docs/core-data-model.md`.
+**Pick up:** reassignment is still explicitly a Staff Roster capability per `docs/core-data-model.md` — needs its own design (does it promote an existing staff row, or create a new one; what happens to the outgoing owner's row/status) before building.
 
 ---
 

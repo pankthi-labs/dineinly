@@ -15,7 +15,10 @@ export default async function RestaurantLayout({
 	const viewer = await requireRestaurantAccess(restaurantId);
 
 	return (
-		<RestaurantViewerProvider isAdmin={viewer.isAdmin}>
+		<RestaurantViewerProvider
+			isAdmin={viewer.isAdmin}
+			restaurantRole={viewer.restaurantRole}
+		>
 			{children}
 		</RestaurantViewerProvider>
 	);
