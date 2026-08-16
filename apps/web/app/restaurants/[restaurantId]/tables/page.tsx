@@ -4,7 +4,6 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { Plus, QrCode, UtensilsCrossed } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { CollapsibleSearch } from "@/components/collapsible-search";
 import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
@@ -225,13 +224,11 @@ export default function TableMatrixPage() {
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
-					search={
-						<CollapsibleSearch
-							value={search}
-							onChange={setSearch}
-							label="Search tables"
-						/>
-					}
+					search={{
+						value: search,
+						onChange: setSearch,
+						label: "Search tables",
+					}}
 					title="Table Matrix"
 					description="Create tables, manage QR codes, and control who can seat where."
 					actions={

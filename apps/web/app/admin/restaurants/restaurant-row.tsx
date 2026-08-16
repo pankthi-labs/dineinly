@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
 import type { AppRouter } from "@/server/routers/_app";
+import { EXPERIENCE_LABELS } from "./restaurant-form-sheet";
 
 type RestaurantListItem =
 	inferRouterOutputs<AppRouter>["restaurants"]["list"]["items"][number];
@@ -63,6 +64,10 @@ export function RestaurantRow({
 						<Detail
 							label="Address"
 							value={`${restaurant.address}, ${restaurant.city}, ${restaurant.state}`}
+						/>
+						<Detail
+							label="Dineinly Experience"
+							value={EXPERIENCE_LABELS[restaurant.experience]}
 						/>
 						<Detail label="GST Number" value={restaurant.gstNumber} />
 						<Detail label="Pincode" value={restaurant.pincode} />

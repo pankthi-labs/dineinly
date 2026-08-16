@@ -8,6 +8,7 @@ CREATE TYPE "public"."menu_item_prep_time" AS ENUM('5-10 mins', '10-15 mins', '1
 CREATE TYPE "public"."menu_item_serving_size" AS ENUM('serves 1', 'serves 1-2', 'serves 2', 'serves 2-3', 'serves 4-5', 'serves 5+');--> statement-breakpoint
 CREATE TYPE "public"."menu_item_status" AS ENUM('active', 'archived');--> statement-breakpoint
 CREATE TYPE "public"."order_item_status" AS ENUM('placed', 'preparing', 'ready', 'served', 'cancelled');--> statement-breakpoint
+CREATE TYPE "public"."restaurant_experience" AS ENUM('menu', 'guest', 'counter', 'one');--> statement-breakpoint
 CREATE TYPE "public"."restaurant_status" AS ENUM('active', 'archived');--> statement-breakpoint
 CREATE TYPE "public"."restaurant_table_status" AS ENUM('active', 'archived');--> statement-breakpoint
 CREATE TYPE "public"."salt" AS ENUM('less salt', 'regular');--> statement-breakpoint
@@ -176,6 +177,7 @@ CREATE TABLE "restaurants" (
 	"pincode" text NOT NULL,
 	"service_charge_rate" numeric(5, 4),
 	"status" "restaurant_status" DEFAULT 'active' NOT NULL,
+	"experience" "restaurant_experience" DEFAULT 'one' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "restaurants_service_charge_rate_check" CHECK ("restaurants"."service_charge_rate" between 0 and 1)

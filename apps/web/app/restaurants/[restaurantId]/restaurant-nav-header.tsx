@@ -29,23 +29,21 @@ export function RestaurantNavHeader({
 	restaurantId,
 	restaurantName,
 	active,
-	showProfile = false,
 }: {
 	restaurantId: string;
 	restaurantName: string;
 	active: NavItem;
-	showProfile?: boolean;
 }) {
 	const isAdmin = useIsAdmin();
 
 	return (
 		<header className="border-divider border-b bg-surface">
-			<div className="flex flex-col gap-6 px-4 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-16 xl:px-24">
+			<div className="flex flex-col gap-6 px-4 py-5 md:flex-row md:items-center md:justify-between md:px-16 xl:px-24">
 				<div>
 					<p className="text-2xl text-primary">{restaurantName}</p>
 					<PoweredByDineinly className="mt-1" />
 				</div>
-				<div className="flex items-center gap-6 lg:gap-8">
+				<div className="flex min-w-0 items-center gap-6 lg:gap-8">
 					<nav
 						aria-label="Restaurant navigation"
 						className="min-w-0 overflow-x-auto"
@@ -55,10 +53,10 @@ export function RestaurantNavHeader({
 								const isActive = item === active;
 								const route = NAV_ROUTES[item];
 								const itemClass = isActive
-									? "border-accent border-b-2 pb-2 font-medium text-primary"
+									? "border-accent border-b-2 pb-2 font-semibold text-primary"
 									: route
-										? "text-muted transition-colors duration-(--duration-base) ease-out hover:text-secondary"
-										: "cursor-not-allowed text-muted opacity-60";
+										? "font-medium text-muted transition-colors duration-(--duration-base) ease-out hover:text-secondary"
+										: "cursor-not-allowed font-medium text-muted opacity-60";
 
 								return (
 									<li key={item}>
@@ -84,7 +82,6 @@ export function RestaurantNavHeader({
 					</nav>
 					<div className="flex shrink-0 items-center gap-6 lg:gap-8">
 						<AdminHeaderActions
-							showProfile={showProfile}
 							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
 						/>
 					</div>

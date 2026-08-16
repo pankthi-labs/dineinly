@@ -2,7 +2,6 @@
 
 import { Plus, UtensilsCrossed } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CollapsibleSearch } from "@/components/collapsible-search";
 import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
@@ -115,6 +114,7 @@ export default function RestaurantsDirectoryPage() {
 				state: item.state,
 				pincode: item.pincode,
 				serviceChargePercent: item.serviceChargePercent,
+				experience: item.experience,
 				ownerName: item.owner?.name ?? "",
 				ownerEmail: item.owner?.email ?? "",
 				ownerMobile: item.owner?.mobile ?? "",
@@ -147,13 +147,11 @@ export default function RestaurantsDirectoryPage() {
 			<div className="mx-auto flex max-w-7xl flex-col px-4 py-8 sm:px-6 sm:py-12 lg:px-12 lg:py-16">
 				<div className="mb-10 sm:mb-16">
 					<PageHeader
-						search={
-							<CollapsibleSearch
-								value={searchInput}
-								onChange={setSearchInput}
-								label="Search restaurants"
-							/>
-						}
+						search={{
+							value: searchInput,
+							onChange: setSearchInput,
+							label: "Search restaurants",
+						}}
 						title="Restaurants Directory"
 						description="Manage restaurant accounts, details, and status across Dineinly."
 						actions={
@@ -252,7 +250,7 @@ export default function RestaurantsDirectoryPage() {
 				{total > 0 ? (
 					<nav
 						aria-label="Pagination"
-						className="mt-12 flex flex-col items-center justify-between gap-6 border-divider border-t pt-8 lg:flex-row"
+						className="mt-12 flex flex-col items-center justify-between gap-6 border-divider border-t pt-8 md:flex-row"
 					>
 						<p className="text-secondary text-sm">
 							Showing {(page - 1) * PAGE_SIZE + 1}-

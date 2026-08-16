@@ -11,17 +11,15 @@ const menuItemClass =
 
 /**
  * One "More" dropdown for every header utility action — Restaurants
- * Directory (Dineinly Admin viewing a restaurant only), Profile (admin home
- * dashboard only), Log out (always) — instead of a row of separate icon
- * buttons. Keeps the header's own space for the restaurant/brand name and
- * the full nav bar; extensible for whatever gets added here next
- * (Notifications, Settings, ...) without widening the header further.
+ * Directory (Dineinly Admin viewing a restaurant only), Profile (every
+ * page), Log out (always) — instead of a row of separate icon buttons.
+ * Keeps the header's own space for the restaurant/brand name and the full
+ * nav bar; extensible for whatever gets added here next (Notifications,
+ * Settings, ...) without widening the header further.
  */
 export function AdminHeaderActions({
-	showProfile = false,
 	directoryHref,
 }: {
-	showProfile?: boolean;
 	directoryHref?: string;
 }) {
 	const router = useRouter();
@@ -99,16 +97,14 @@ export function AdminHeaderActions({
 							Restaurants Directory
 						</Link>
 					) : null}
-					{showProfile ? (
-						<button
-							type="button"
-							className={menuItemClass}
-							onClick={() => close(false)}
-						>
-							<User className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
-							Profile
-						</button>
-					) : null}
+					<button
+						type="button"
+						className={menuItemClass}
+						onClick={() => close(false)}
+					>
+						<User className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
+						Profile
+					</button>
 					<button
 						type="button"
 						className={menuItemClass}

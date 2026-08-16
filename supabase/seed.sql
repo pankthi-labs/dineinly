@@ -98,7 +98,7 @@ insert into auth.identities (provider_id, user_id, identity_data, provider, crea
 on conflict (provider_id, provider) do nothing;
 
 -- 1 restaurant -----------------------------------------------------------
-insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status)
+insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status, experience)
 values (
 	'10000000-0000-4000-8000-000000000001',
 	'Dineinly Test Kitchen',
@@ -108,7 +108,8 @@ values (
 	'Karnataka',
 	'560038',
 	0.0500,
-	'active'
+	'active',
+	'one'
 )
 on conflict (id) do nothing;
 
@@ -247,7 +248,7 @@ on conflict (id) do nothing;
 -- ==========================================================================
 
 -- 1 restaurant — Arbor Brewing Company (Bengaluru brewpub, 30-table floor) ---
-insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status)
+insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status, experience)
 values (
 	'10000000-0000-4000-8000-000000000002',
 	'Arbor Brewing Company',
@@ -257,7 +258,8 @@ values (
 	'Karnataka',
 	'560038',
 	0.0500,
-	'active'
+	'active',
+	'one'
 )
 on conflict (id) do nothing;
 

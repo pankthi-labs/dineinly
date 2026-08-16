@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, numeric, pgTable, text } from "drizzle-orm/pg-core";
-import { restaurantStatus } from "./enums.js";
+import { restaurantExperience, restaurantStatus } from "./enums.js";
 import { createdAt, id, updatedAt } from "./helpers.js";
 
 // Tenant root. Restaurant settings folded in as columns — read on nearly
@@ -22,6 +22,9 @@ export const restaurants = pgTable(
 			scale: 4,
 		}),
 		status: restaurantStatus("status").notNull().default("active"),
+		// Which Dineinly package this restaurant runs — set at creation, changed
+		// via the same admin edit flow. See restaurantExperience in enums.ts.
+		experience: restaurantExperience("experience").notNull().default("one"),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},

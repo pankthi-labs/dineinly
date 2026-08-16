@@ -18,6 +18,30 @@ type OwnerContact = z.infer<typeof ownerContactSchema>;
 export type RestaurantFormValues = z.infer<typeof restaurantFieldsSchema> &
 	OwnerContact;
 
+export type RestaurantExperience = RestaurantFormValues["experience"];
+
+// docs/product.md § Dineinly Experiences — Menu spans either track; Guest/One
+// are Full-Service, Counter is Quick-Service.
+export const EXPERIENCE_LABELS: Record<RestaurantExperience, string> = {
+	menu: "Dineinly Menu",
+	guest: "Dineinly Guest",
+	one: "Dineinly One",
+	counter: "Dineinly Counter",
+};
+
+type PaymentTrack = "full-service" | "quick-service";
+
+// Menu appears on both tracks (docs/product.md — "view-only, either track");
+// Guest/One are Full-Service only, Counter is Quick-Service only.
+const TRACK_EXPERIENCES: Record<PaymentTrack, RestaurantExperience[]> = {
+	"full-service": ["menu", "guest", "one"],
+	"quick-service": ["menu", "counter"],
+};
+
+function trackForExperience(experience: RestaurantExperience): PaymentTrack {
+	return experience === "counter" ? "quick-service" : "full-service";
+}
+
 export type EditTarget = {
 	id: string;
 	values: RestaurantFormValues;
@@ -38,6 +62,7 @@ const EMPTY_VALUES: RestaurantFormValues = {
 	state: "",
 	pincode: "",
 	serviceChargePercent: null,
+	experience: "one",
 	...EMPTY_OWNER,
 };
 
@@ -65,7 +90,20 @@ export function RestaurantFormSheet({
 	const [values, setValues] = useState<RestaurantFormValues>(
 		editTarget?.values ?? EMPTY_VALUES,
 	);
+	const [track, setTrack] = useState<PaymentTrack>(
+		trackForExperience(values.experience),
+	);
 	const [errors, setErrors] = useState<FieldErrors>({});
+
+	function handleTrackChange(nextTrack: PaymentTrack) {
+		setTrack(nextTrack);
+		if (!TRACK_EXPERIENCES[nextTrack].includes(values.experience)) {
+			setField(
+				"experience",
+				nextTrack === "full-service" ? "guest" : "counter",
+			);
+		}
+	}
 
 	function setField<K extends keyof RestaurantFormValues>(
 		key: K,
@@ -152,6 +190,42 @@ export function RestaurantFormSheet({
 						{submitError}
 					</p>
 				) : null}
+
+				<FieldGroup legend="Dineinly Experience">
+					<Field label="Payment timing">
+						<select
+							value={track}
+							onChange={(e) =>
+								handleTrackChange(e.target.value as PaymentTrack)
+							}
+						>
+							<option value="full-service">
+								Pay after the meal (Full-Service)
+							</option>
+							<option value="quick-service">
+								Pay before the meal (Quick-Service)
+							</option>
+						</select>
+					</Field>
+					<Field label="Experience" error={errors.experience}>
+						<select
+							value={values.experience}
+							onChange={(e) =>
+								setField(
+									"experience",
+									e.target.value as RestaurantFormValues["experience"],
+								)
+							}
+							onBlur={() => validateField("experience")}
+						>
+							{TRACK_EXPERIENCES[track].map((experience) => (
+								<option key={experience} value={experience}>
+									{EXPERIENCE_LABELS[experience]}
+								</option>
+							))}
+						</select>
+					</Field>
+				</FieldGroup>
 
 				<FieldGroup legend="Restaurant Details">
 					<Field label="Restaurant name" error={errors.name}>

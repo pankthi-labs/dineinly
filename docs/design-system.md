@@ -262,8 +262,8 @@ Four accent tokens, four distinct roles. Do not substitute one for another.
 
 Use Dineinly domain terms only. Nothing may imply reservation or payment functionality.
 
-- **Approved:** Add to Cart, Confirm Order, Send to Kitchen, Preparing, Ready, Served, View Bill, Request Bill, Generate Bill, Waive Service Charge, Waive Item, Cancel Item, Mark Bill Settled, Close Session, Token Number, Show at Counter, Ready for Pickup.
-- **Excluded:** Reservations, Bookings, Payment/Checkout flows and states — this means no in-app payment UI (no "Pay Now" button, no card entry, no transaction status). Directing a guest to pay externally (e.g. "Show at Counter") is not a payment flow and is fine.
+- **Approved:** Add to Cart, Confirm Order, Send to Kitchen, Preparing, Ready, Served, View Bill, Request Bill, Generate Bill, Waive Service Charge, Waive Item, Cancel Item, Mark Bill Settled, Close Session, Token Number, Show at Counter, Ready for Pickup, Dineinly Menu, Dineinly Guest, Dineinly Counter, Dineinly One, Dineinly Experience, Experience, Payment timing, Full-Service, Quick-Service.
+- **Excluded:** Reservations, Bookings, Payment/Checkout flows and states — this means no in-app payment UI (no "Pay Now" button, no card entry, no transaction status). Directing a guest to pay externally (e.g. "Show at Counter") is not a payment flow and is fine. Admin-only configuration of *when* a restaurant collects payment (Payment timing: Full-Service/Quick-Service, on the restaurant record) is the same external-settlement carve-out, not an in-app payment flow — it never appears in the guest-facing app.
 
 ---
 

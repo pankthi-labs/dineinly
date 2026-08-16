@@ -39,15 +39,17 @@ export function CollapsibleSearch({
 				type="button"
 				onClick={open}
 				aria-label={label}
-				// icon-tap-target's 44px hit box is bigger than the 16px glyph it
-				// wraps (§11's minimum tap target) — without a visible border to
-				// justify that padding (removed above), the box's true right edge
-				// reads as a stray gap before the page margin. Negative margin
-				// pulls the glyph flush to the same edge as the text above/below
-				// it while keeping the full tap area (it just extends inward).
-				// -mr-4, not the exact 14px half-difference, because globals.css's
-				// 8px grid has no registered step between 12px and 16px.
-				className="icon-tap-target -mr-4 shrink-0 text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
+				// A centered 44px hit box (§11's minimum tap target) around a
+				// 16px glyph would leave a 14px gap before the page margin.
+				// This button is also the trailing item in PageHeader's
+				// `overflow-x-auto` actions row, where a negative margin or
+				// transform on the box would extend its scrollable overflow
+				// past the container and draw a phantom horizontal scrollbar.
+				// Right-aligning the glyph inside the box (own utilities, not
+				// the shared `icon-tap-target` class and its `justify-center`)
+				// keeps the box's own edge flush with the container's — no
+				// margin/transform trick needed, so no overflow to produce.
+				className="inline-flex min-h-(--icon-tap-target) min-w-(--icon-tap-target) shrink-0 items-center justify-end text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
 			>
 				<Search className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 			</button>

@@ -1197,6 +1197,14 @@
           "notNull": true,
           "default": "'active'"
         },
+        "experience": {
+          "name": "experience",
+          "type": "restaurant_experience",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'one'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1699,6 +1707,16 @@
         "ready",
         "served",
         "cancelled"
+      ]
+    },
+    "public.restaurant_experience": {
+      "name": "restaurant_experience",
+      "schema": "public",
+      "values": [
+        "menu",
+        "guest",
+        "counter",
+        "one"
       ]
     },
     "public.restaurant_status": {

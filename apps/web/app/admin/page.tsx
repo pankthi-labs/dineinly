@@ -43,7 +43,7 @@ export default async function AdminDashboardPage() {
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<BrandLogo height={31} priority />
 
-					<AdminHeaderActions showProfile />
+					<AdminHeaderActions />
 				</div>
 
 				<h1 className="font-medium text-3xl text-primary sm:text-4xl lg:text-5xl">

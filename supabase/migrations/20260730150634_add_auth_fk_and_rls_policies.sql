@@ -526,6 +526,7 @@ create or replace function public.admin_create_restaurant(
 	p_state text,
 	p_pincode text,
 	p_service_charge_rate numeric,
+	p_experience public.restaurant_experience,
 	p_owner_name text,
 	p_owner_email text,
 	p_owner_mobile text
@@ -543,8 +544,8 @@ begin
 		raise exception 'Only Dineinly Admin may create restaurants';
 	end if;
 
-	insert into public.restaurants (name, address, city, gst_number, state, pincode, service_charge_rate)
-	values (p_name, p_address, p_city, p_gst_number, p_state, p_pincode, p_service_charge_rate)
+	insert into public.restaurants (name, address, city, gst_number, state, pincode, service_charge_rate, experience)
+	values (p_name, p_address, p_city, p_gst_number, p_state, p_pincode, p_service_charge_rate, p_experience)
 	returning id into v_restaurant_id;
 
 	-- The restaurant's first owner: an invitation record, not a live
@@ -560,10 +561,10 @@ end;
 $$;
 
 revoke execute on function public.admin_create_restaurant(
-	text, text, text, text, text, text, numeric, text, text, text
+	text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
 ) from public;
 grant execute on function public.admin_create_restaurant(
-	text, text, text, text, text, text, numeric, text, text, text
+	text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
 ) to authenticated;
 
 -- admin_update_restaurant: updates the restaurant and its owner-contact row
@@ -580,6 +581,7 @@ create or replace function public.admin_update_restaurant(
 	p_state text,
 	p_pincode text,
 	p_service_charge_rate numeric,
+	p_experience public.restaurant_experience,
 	p_owner_name text,
 	p_owner_email text,
 	p_owner_mobile text
@@ -615,7 +617,8 @@ begin
 		gst_number = p_gst_number,
 		state = p_state,
 		pincode = p_pincode,
-		service_charge_rate = p_service_charge_rate
+		service_charge_rate = p_service_charge_rate,
+		experience = p_experience
 	where id = p_id;
 
 	if v_primary_owner_id is null then
@@ -632,10 +635,10 @@ end;
 $$;
 
 revoke execute on function public.admin_update_restaurant(
-	uuid, text, text, text, text, text, text, numeric, text, text, text
+	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
 ) from public;
 grant execute on function public.admin_update_restaurant(
-	uuid, text, text, text, text, text, text, numeric, text, text, text
+	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
 ) to authenticated;
 
 -- ============================================================================

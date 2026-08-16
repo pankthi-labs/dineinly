@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { CollapsibleSearch } from "@/components/collapsible-search";
 import { Detail } from "@/components/detail";
 import { DietMark } from "@/components/diet-mark";
 import { PageHeader } from "@/components/page-header";
@@ -152,13 +151,11 @@ export default function RestaurantMenuPage() {
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
-					search={
-						<CollapsibleSearch
-							value={search}
-							onChange={setSearch}
-							label="Search dishes"
-						/>
-					}
+					search={{
+						value: search,
+						onChange: setSearch,
+						label: "Search dishes",
+					}}
 					title="Menu Desk"
 					description={
 						<>

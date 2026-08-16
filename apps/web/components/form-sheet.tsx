@@ -161,7 +161,7 @@ export function FieldRow({
 }) {
 	return (
 		<div
-			className={`grid grid-cols-1 gap-x-6 ${columns === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+			className={`grid grid-cols-1 gap-x-6 sm:grid-cols-2 ${columns === 3 ? "lg:grid-cols-3" : ""}`}
 		>
 			{children}
 		</div>

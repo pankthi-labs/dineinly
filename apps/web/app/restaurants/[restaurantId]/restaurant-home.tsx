@@ -94,7 +94,6 @@ export function RestaurantHome({
 
 					<div className="flex items-center gap-4">
 						<AdminHeaderActions
-							showProfile
 							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
 						/>
 					</div>

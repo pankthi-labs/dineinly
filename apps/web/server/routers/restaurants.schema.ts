@@ -21,6 +21,9 @@ export const restaurantFieldsSchema = z.object({
 	// Percent (0-100) at the edge — restaurants.service_charge_rate stores
 	// the 0-1 fraction; converted at the router boundary, never in the UI.
 	serviceChargePercent: z.number().min(0).max(100).nullable(),
+	// Which Dineinly package this restaurant runs (docs/product.md § Dineinly
+	// Experiences) — asked at creation, changeable via the same edit flow.
+	experience: z.enum(["menu", "guest", "counter", "one"]),
 });
 
 export const ownerContactSchema = z.object({

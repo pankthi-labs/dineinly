@@ -22,6 +22,17 @@ export const restaurantStatus = pgEnum("restaurant_status", [
 	"active",
 	"archived",
 ]);
+
+// Which Dineinly package a restaurant runs (docs/product.md § Dineinly
+// Experiences). Gates ordering/kitchen/bill router behavior restaurant-wide.
+// Menu spans either track; guest/one are Full-Service, counter is
+// Quick-Service.
+export const restaurantExperience = pgEnum("restaurant_experience", [
+	"menu",
+	"guest",
+	"counter",
+	"one",
+]);
 export const menuCategoryStatus = pgEnum("menu_category_status", [
 	"active",
 	"archived",

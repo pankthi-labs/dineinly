@@ -4,7 +4,6 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { Receipt } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { CollapsibleSearch } from "@/components/collapsible-search";
 import { PageHeader } from "@/components/page-header";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
@@ -81,13 +80,11 @@ export default function BillsPage() {
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
-					search={
-						<CollapsibleSearch
-							value={search}
-							onChange={setSearch}
-							label="Search by bill number or table"
-						/>
-					}
+					search={{
+						value: search,
+						onChange: setSearch,
+						label: "Search by bill number or table",
+					}}
 					title="Bills"
 					description="Generate, correct, settle, and close bills for every table."
 				/>

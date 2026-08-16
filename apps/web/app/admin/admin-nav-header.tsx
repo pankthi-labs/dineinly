@@ -22,20 +22,23 @@ const NAV_ROUTES: Partial<Record<NavItem, string>> = {
 export function AdminNavHeader({ active }: { active: NavItem }) {
 	return (
 		<header className="border-divider border-b bg-surface">
-			<div className="flex flex-col gap-6 px-4 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-16 xl:px-24">
+			<div className="flex flex-col gap-6 px-4 py-5 md:flex-row md:items-center md:justify-between md:px-16 xl:px-24">
 				<BrandLogo height={28} />
 
-				<div className="flex items-center gap-6 overflow-x-auto lg:gap-8">
-					<nav aria-label="Admin navigation">
+				<div className="flex min-w-0 items-center gap-6 lg:gap-8">
+					<nav
+						aria-label="Admin navigation"
+						className="min-w-0 overflow-x-auto"
+					>
 						<ul className="flex min-w-max items-center gap-6 text-sm lg:gap-8">
 							{NAV_ITEMS.map((item) => {
 								const isActive = item === active;
 								const route = NAV_ROUTES[item];
 								const itemClass = isActive
-									? "border-accent border-b-2 pb-2 font-medium text-primary"
+									? "border-accent border-b-2 pb-2 font-semibold text-primary"
 									: route
-										? "text-muted transition-colors duration-(--duration-base) ease-out hover:text-secondary"
-										: "cursor-not-allowed text-muted opacity-60";
+										? "font-medium text-muted transition-colors duration-(--duration-base) ease-out hover:text-secondary"
+										: "cursor-not-allowed font-medium text-muted opacity-60";
 
 								return (
 									<li key={item}>
@@ -59,7 +62,9 @@ export function AdminNavHeader({ active }: { active: NavItem }) {
 							})}
 						</ul>
 					</nav>
-					<AdminHeaderActions />
+					<div className="flex shrink-0 items-center">
+						<AdminHeaderActions />
+					</div>
 				</div>
 			</div>
 		</header>

@@ -88,6 +88,7 @@ export const restaurantsRouter = router({
 							row.service_charge_rate,
 						),
 						status: row.status,
+						experience: row.experience,
 						owner: primaryOwner
 							? {
 									staffId: primaryOwner.id,
@@ -147,6 +148,7 @@ export const restaurantsRouter = router({
 				p_service_charge_rate: toServiceChargeRate(
 					input.serviceChargePercent,
 				) as number,
+				p_experience: input.experience,
 				p_owner_name: input.ownerName,
 				p_owner_email: input.ownerEmail,
 				p_owner_mobile: input.ownerMobile,
@@ -177,6 +179,7 @@ export const restaurantsRouter = router({
 				p_service_charge_rate: toServiceChargeRate(
 					input.serviceChargePercent,
 				) as number,
+				p_experience: input.experience,
 				p_owner_name: input.ownerName,
 				p_owner_email: input.ownerEmail,
 				p_owner_mobile: input.ownerMobile,

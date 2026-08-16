@@ -498,6 +498,7 @@ export type Database = {
 					address: string;
 					city: string;
 					created_at: string;
+					experience: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number: string;
 					id: string;
 					name: string;
@@ -511,6 +512,7 @@ export type Database = {
 					address: string;
 					city: string;
 					created_at?: string;
+					experience?: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number: string;
 					id?: string;
 					name: string;
@@ -524,6 +526,7 @@ export type Database = {
 					address?: string;
 					city?: string;
 					created_at?: string;
+					experience?: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number?: string;
 					id?: string;
 					name?: string;
@@ -629,6 +632,7 @@ export type Database = {
 				Args: {
 					p_address: string;
 					p_city: string;
+					p_experience: Database["public"]["Enums"]["restaurant_experience"];
 					p_gst_number: string;
 					p_name: string;
 					p_owner_email: string;
@@ -647,6 +651,7 @@ export type Database = {
 				Args: {
 					p_address: string;
 					p_city: string;
+					p_experience: Database["public"]["Enums"]["restaurant_experience"];
 					p_gst_number: string;
 					p_id: string;
 					p_name: string;
@@ -747,6 +752,7 @@ export type Database = {
 				| "ready"
 				| "served"
 				| "cancelled";
+			restaurant_experience: "menu" | "guest" | "counter" | "one";
 			restaurant_status: "active" | "archived";
 			restaurant_table_status: "active" | "archived";
 			salt: "less salt" | "regular";
@@ -916,6 +922,7 @@ export const Constants = {
 				"served",
 				"cancelled",
 			],
+			restaurant_experience: ["menu", "guest", "counter", "one"],
 			restaurant_status: ["active", "archived"],
 			restaurant_table_status: ["active", "archived"],
 			salt: ["less salt", "regular"],
