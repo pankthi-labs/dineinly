@@ -192,21 +192,23 @@ export function RestaurantFormSheet({
 				) : null}
 
 				<FieldGroup legend="Dineinly Experience">
-					<Field label="Payment timing">
-						<select
-							value={track}
-							onChange={(e) =>
-								handleTrackChange(e.target.value as PaymentTrack)
-							}
-						>
-							<option value="full-service">
-								Pay after the meal (Full-Service)
-							</option>
-							<option value="quick-service">
-								Pay before the meal (Quick-Service)
-							</option>
-						</select>
-					</Field>
+					{isEdit ? null : (
+						<Field label="Payment timing">
+							<select
+								value={track}
+								onChange={(e) =>
+									handleTrackChange(e.target.value as PaymentTrack)
+								}
+							>
+								<option value="full-service">
+									Pay after the meal (Full-Service)
+								</option>
+								<option value="quick-service">
+									Pay before the meal (Quick-Service)
+								</option>
+							</select>
+						</Field>
+					)}
 					<Field label="Experience" error={errors.experience}>
 						<select
 							value={values.experience}

@@ -594,13 +594,26 @@ as $$
 declare
 	v_primary_owner_id uuid;
 	v_primary_owner_status public.staff_status;
+	v_current_experience public.restaurant_experience;
 begin
 	if not public.is_dineinly_admin() then
 		raise exception 'Only Dineinly Admin may update restaurants';
 	end if;
 
-	if not exists (select 1 from public.restaurants where id = p_id) then
+	select experience into v_current_experience
+	from public.restaurants
+	where id = p_id;
+
+	if v_current_experience is null then
 		raise exception 'Restaurant not found';
+	end if;
+
+	-- docs/product.md § Dineinly Experiences: a restaurant only moves within
+	-- its own track (Menu<->Guest<->One, or Menu<->Counter) — crossing from
+	-- Full-Service to Quick-Service or back is a different operating model,
+	-- not a self-serve toggle.
+	if (v_current_experience = 'counter') <> (p_experience = 'counter') then
+		raise exception 'Cannot change payment timing (Full-Service/Quick-Service) on an existing restaurant — only the Dineinly Experience within the current track';
 	end if;
 
 	select id, status
