@@ -1,8 +1,10 @@
 import { TRPCError } from "@trpc/server";
+import type { StaffRole } from "@/lib/auth";
 import { billableQuantity, computeBill } from "@/lib/bill-math";
 import { buildBillPdf } from "@/lib/bill-pdf";
 import type { Context } from "../trpc/context";
 import { authedProcedure, router } from "../trpc/init";
+import { requireStaffRole } from "../trpc/rbac";
 import {
 	cancelOrderItemInput,
 	closeSessionInput,
@@ -18,6 +20,9 @@ import {
 function dbError(message: string, cause: unknown): TRPCError {
 	return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message, cause });
 }
+
+// Every Bills write (docs/product.md § RBAC) excludes Kitchen only.
+const BILLS_WRITE_ROLES: StaffRole[] = ["waiter", "manager", "owner"];
 
 // A day's [start, end) as local-server-time ISO bounds — the app has no
 // per-restaurant timezone setting (core-data-model.md lists no such
@@ -112,12 +117,14 @@ async function assertBillNotSettled(
 	}
 }
 
-// Any active staff member of the restaurant reaches the Bills tab, same
-// reach as Menu Desk/Table Matrix/Kitchen — no role-level split yet (see
-// Tbd.md "Feature-level staff permissions"). staff_all_table_sessions/
-// staff_all_bills/staff_all_cart_items RLS (supabase/migrations/
-// 20260730150634_add_auth_fk_and_rls_policies.sql § 5) scope every query
-// below to the caller's own restaurant.
+// list/get/downloadPdf (read) stay open to any active staff member —
+// staff_all_table_sessions/staff_all_bills/staff_all_cart_items RLS
+// (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 5)
+// scope every query below to the caller's own restaurant. Every write is
+// Waiter/Manager/Owner only (Request/Settle/Close/Force-Terminate/correct —
+// docs/product.md § RBAC all exclude Kitchen), enforced via requireStaffRole
+// below; closeSession's is inside close_session() itself (§ 14 of that
+// migration) since it's a SECURITY INVOKER RPC, not a plain ctx.auth write.
 export const billsRouter = router({
 	// Bills tab list (docs/product.md § Billing & Settlement): one row per
 	// table session, not per bill row — a session that's never had "Request
@@ -496,6 +503,7 @@ export const billsRouter = router({
 				});
 			}
 			const restaurantId = sessionResult.data.restaurant_id;
+			await requireStaffRole(ctx, restaurantId, BILLS_WRITE_ROLES);
 
 			const existing = await ctx.auth
 				.from("bills")
@@ -579,6 +587,11 @@ export const billsRouter = router({
 					message: "Table session not found.",
 				});
 			}
+			await requireStaffRole(
+				ctx,
+				sessionResult.data.restaurant_id,
+				BILLS_WRITE_ROLES,
+			);
 
 			const [existing, restaurantResult] = await Promise.all([
 				ctx.auth
@@ -651,7 +664,7 @@ export const billsRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			const itemResult = await ctx.auth
 				.from("order_items")
-				.select("order_id, quantity, waived_quantity")
+				.select("order_id, restaurant_id, quantity, waived_quantity")
 				.eq("id", input.orderItemId)
 				.maybeSingle();
 			if (itemResult.error)
@@ -662,6 +675,11 @@ export const billsRouter = router({
 					message: "Order item not found.",
 				});
 			}
+			await requireStaffRole(
+				ctx,
+				itemResult.data.restaurant_id,
+				BILLS_WRITE_ROLES,
+			);
 			assertWithinRemaining(
 				"cancel",
 				input.cancelledQuantity,
@@ -712,7 +730,7 @@ export const billsRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			const itemResult = await ctx.auth
 				.from("order_items")
-				.select("order_id, status, quantity, cancelled_quantity")
+				.select("order_id, restaurant_id, status, quantity, cancelled_quantity")
 				.eq("id", input.orderItemId)
 				.maybeSingle();
 			if (itemResult.error)
@@ -723,6 +741,11 @@ export const billsRouter = router({
 					message: "Order item not found.",
 				});
 			}
+			await requireStaffRole(
+				ctx,
+				itemResult.data.restaurant_id,
+				BILLS_WRITE_ROLES,
+			);
 			if (itemResult.data.status === "cancelled") {
 				throw new TRPCError({
 					code: "BAD_REQUEST",
@@ -785,6 +808,7 @@ export const billsRouter = router({
 				});
 			}
 			const restaurantId = sessionResult.data.restaurant_id;
+			await requireStaffRole(ctx, restaurantId, BILLS_WRITE_ROLES);
 
 			const [billResult, ordersResult, userResult] = await Promise.all([
 				ctx.auth

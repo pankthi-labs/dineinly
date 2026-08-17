@@ -15,59 +15,24 @@
 -- rather than through staff_role_for_restaurant, which only ever resolves a
 -- role from an actual row.
 --
--- Deliberately out of scope, per Tbd.md: PIN station login (Kitchen/Floor
--- device pairing) and primary-owner reassignment — both flagged as their own
--- follow-up efforts, neither shown in this feature's design. The primary
--- owner's row is locked here (see is_primary_owner checks below), same as
--- it already is in admin_update_restaurant (§ 6).
+-- PIN station login (Kitchen/Floor device pairing: synthetic station
+-- identities, pairing codes, per-device sessions) stays deliberately out of
+-- scope — its own future effort. set_staff_pin below (§ 15b) ships the
+-- narrower, self-contained piece Tbd.md called out separately: pin_hash
+-- storage + verification infra, usable once station login exists but not
+-- dependent on it. Primary-owner reassignment ships in this migration too
+-- (§ 15c) — the primary owner's row otherwise stays locked in update_staff/
+-- remove_staff below (see is_primary_owner checks), same as it already is
+-- in admin_update_restaurant (§ 6).
+--
+-- staff_role_for_restaurant and is_staff_manager_for_restaurant now live in
+-- supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 5 —
+-- moved there so that migration's own menu/table RLS split (staff_write_
+-- menu_items etc.) can use them too, since that file runs first.
 --
 -- Same hardening as every other function in this file: `set search_path =
 -- ''` with fully schema-qualified references, `execute` revoked from
 -- `public` and granted only to `authenticated`.
-
--- Caller's own active role at a restaurant, or null if they have no active
--- Staff row there (including Dineinly Admin, who has none by design).
--- SECURITY DEFINER, unlike is_active_staff_for_restaurant (§ 5): that helper
--- is never called from a policy ON staff itself, so its own read of staff
--- only ever needs staff_select_own_row's ordinary RLS. This one backs
--- staff_roster_select below, a policy ON staff — running as SECURITY
--- INVOKER would re-trigger staff_roster_select on its own internal read,
--- which calls this function again, infinitely. It's still safe to bypass
--- RLS here: the query only ever matches the caller's own auth.uid(), never
--- an arbitrary row.
-create or replace function public.staff_role_for_restaurant(
-	p_restaurant_id uuid
-)
-returns public.staff_role
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-	select s.role
-	from public.staff s
-	where s.restaurant_id = p_restaurant_id
-		and s.user_id = auth.uid()
-		and s.status = 'active'
-	limit 1;
-$$;
-
-revoke execute on function public.staff_role_for_restaurant(uuid) from public;
-grant execute on function public.staff_role_for_restaurant(uuid) to authenticated;
-
-create or replace function public.is_staff_manager_for_restaurant(
-	p_restaurant_id uuid
-)
-returns boolean
-language sql
-stable
-set search_path = ''
-as $$
-	select public.staff_role_for_restaurant(p_restaurant_id) in ('owner', 'manager');
-$$;
-
-revoke execute on function public.is_staff_manager_for_restaurant(uuid) from public;
-grant execute on function public.is_staff_manager_for_restaurant(uuid) to authenticated;
 
 -- Owner/Manager read the full roster of their own restaurant. Additive to
 -- staff_select_own_row (§ 5) — a Waiter/Kitchen still only ever sees their
@@ -222,3 +187,206 @@ $$;
 
 revoke execute on function public.remove_staff(uuid) from public;
 grant execute on function public.remove_staff(uuid) to authenticated;
+
+-- ============================================================================
+-- 15b. Staff PIN: self-service set/change
+-- ============================================================================
+-- Tbd.md "PIN station login for Kitchen/Floor" split in two: pin_hash
+-- storage + verification (here) versus the pairing-code device-onboarding
+-- UI (still deferred, its own future effort — no station accounts exist
+-- yet, so nothing consumes this PIN for login today). Self-scoped from
+-- auth.uid() rather than a staff_id parameter — a caller can only ever set
+-- their own PIN, so there's no separate ownership check to get wrong, and
+-- no Manager-sets-someone-else's-PIN path to guard against. Any active role
+-- may set one (not restricted to Kitchen/Waiter, the eventual station
+-- users) — cheap to allow, and docs/product.md never restricts who may hold
+-- a PIN, only who's ever prompted for one at a shared device.
+create extension if not exists pgcrypto with schema extensions;
+
+create or replace function public.set_staff_pin(
+	p_restaurant_id uuid,
+	p_pin text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_updated int;
+begin
+	if p_pin !~ '^[0-9]{4,6}$' then
+		raise exception 'PIN must be 4 to 6 digits';
+	end if;
+
+	update public.staff
+	set pin_hash = extensions.crypt(p_pin, extensions.gen_salt('bf')), updated_at = now()
+	where restaurant_id = p_restaurant_id
+		and user_id = auth.uid()
+		and status = 'active';
+
+	get diagnostics v_updated = row_count;
+	if v_updated = 0 then
+		raise exception 'No active staff row found for this restaurant';
+	end if;
+end;
+$$;
+
+revoke execute on function public.set_staff_pin(uuid, text) from public;
+grant execute on function public.set_staff_pin(uuid, text) to authenticated;
+
+-- Dineinly Admin override: reset any staff member's PIN (e.g. a forgotten
+-- PIN, with no self-service recovery flow since a PIN is never tied to an
+-- inbox). Same hash path as set_staff_pin, just admin-checked and
+-- staff_id-scoped instead of self-scoped — no restaurant_id parameter, since
+-- Admin's reach isn't tenant-scoped and staff.id alone already names one row.
+create or replace function public.admin_reset_staff_pin(
+	p_staff_id uuid,
+	p_pin text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_updated int;
+begin
+	if not public.is_dineinly_admin() then
+		raise exception 'Only Dineinly Admin may reset another staff member''s PIN';
+	end if;
+
+	if p_pin !~ '^[0-9]{4,6}$' then
+		raise exception 'PIN must be 4 to 6 digits';
+	end if;
+
+	update public.staff
+	set pin_hash = extensions.crypt(p_pin, extensions.gen_salt('bf')), updated_at = now()
+	where staff.id = p_staff_id
+		and status = 'active';
+
+	get diagnostics v_updated = row_count;
+	if v_updated = 0 then
+		raise exception 'Staff member not found';
+	end if;
+end;
+$$;
+
+revoke execute on function public.admin_reset_staff_pin(uuid, text) from public;
+grant execute on function public.admin_reset_staff_pin(uuid, text) to authenticated;
+
+-- Self-service profile: a staff member edits their own name. Same self-scope
+-- reasoning as set_staff_pin — auth.uid() match, no staff_id parameter, so
+-- there's no separate ownership check to get wrong and no Manager-edits-
+-- someone-else's-name path to guard against. Unlike update_staff (Owner/
+-- Manager only, edits anyone within their reach), this is the "Profile"
+-- surface every staff role reaches regardless of what else they can manage.
+create or replace function public.update_own_staff_profile(
+	p_restaurant_id uuid,
+	p_name text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_updated int;
+begin
+	if length(trim(p_name)) < 2 then
+		raise exception 'Name must be at least 2 characters';
+	end if;
+
+	update public.staff
+	set name = trim(p_name), updated_at = now()
+	where restaurant_id = p_restaurant_id
+		and user_id = auth.uid()
+		and status = 'active';
+
+	get diagnostics v_updated = row_count;
+	if v_updated = 0 then
+		raise exception 'No active staff row found for this restaurant';
+	end if;
+end;
+$$;
+
+revoke execute on function public.update_own_staff_profile(uuid, text) from public;
+grant execute on function public.update_own_staff_profile(uuid, text) to authenticated;
+
+-- ============================================================================
+-- 15c. Owner reassignment
+-- ============================================================================
+-- Moves is_primary_owner from the current holder to another existing
+-- Owner-role staff row — a pure handoff, not a demotion: both rows keep
+-- role = 'owner' throughout. Target must already hold role = 'owner' — a
+-- Waiter/Kitchen/Manager has to be promoted to Owner via update_staff
+-- first, and any role downgrade for the outgoing owner is update_staff's
+-- job too, a separate action the caller takes afterward if they want it.
+-- The current primary owner themselves (or Dineinly Admin) only —
+-- stricter than "any Owner-role staff", since a non-primary co-owner is
+-- still just role = 'owner' and shouldn't be able to transfer someone
+-- else's ownership out from under them.
+create or replace function public.reassign_primary_owner(
+	p_restaurant_id uuid,
+	p_new_owner_staff_id uuid
+)
+returns table (id uuid, role public.staff_role, is_primary_owner boolean)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_is_admin boolean := public.is_dineinly_admin();
+	v_current_owner public.staff;
+	v_target public.staff;
+begin
+	select * into v_current_owner
+	from public.staff
+	where restaurant_id = p_restaurant_id and is_primary_owner;
+	if v_current_owner is null then
+		raise exception 'This restaurant has no primary owner to reassign';
+	end if;
+
+	-- Only the current primary owner themselves (not just any Owner-role
+	-- staff — a non-primary co-owner is still just "owner" role, per the
+	-- data model's single is_primary_owner-per-restaurant constraint) or
+	-- Dineinly Admin may transfer ownership.
+	if not v_is_admin and v_current_owner.user_id is distinct from auth.uid() then
+		raise exception 'Only the current primary owner or Dineinly Admin may reassign ownership';
+	end if;
+
+	select * into v_target
+	from public.staff
+	where id = p_new_owner_staff_id and restaurant_id = p_restaurant_id;
+	if v_target is null then
+		raise exception 'Staff member not found';
+	end if;
+	if v_target.status <> 'active' then
+		raise exception 'Only an active staff member can become the primary owner';
+	end if;
+	if v_target.id = v_current_owner.id then
+		raise exception 'This staff member is already the primary owner';
+	end if;
+	if v_target.role <> 'owner' then
+		raise exception 'Only an existing Owner can become the primary owner — promote them to Owner first';
+	end if;
+
+	-- Clear the outgoing owner's is_primary_owner before setting the new
+	-- one — staff_restaurant_id_primary_owner_idx (packages/db/src/schema/
+	-- staff.ts) allows at most one true per restaurant, checked per
+	-- statement, so the old row must go false first or the new row's own
+	-- update below would collide with it.
+	update public.staff
+	set is_primary_owner = false
+	where staff.id = v_current_owner.id;
+
+	return query
+		update public.staff
+		set is_primary_owner = true
+		where staff.id = v_target.id
+		returning staff.id, staff.role, staff.is_primary_owner;
+end;
+$$;
+
+revoke execute on function public.reassign_primary_owner(uuid, uuid) from public;
+grant execute on function public.reassign_primary_owner(uuid, uuid) to authenticated;

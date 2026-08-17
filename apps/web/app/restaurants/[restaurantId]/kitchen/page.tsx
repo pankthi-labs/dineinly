@@ -3,7 +3,7 @@
 import { ArrowRight, Check, CheckCircle2, Clock, Home } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { PoweredByDineinly } from "@/components/brand-logo";
 import { titleCase } from "@/lib/format";
 import {
@@ -14,6 +14,7 @@ import {
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
+import { useIsAdmin, useRestaurantRole } from "../viewer-context";
 import { AvailabilityPanel } from "./availability-panel";
 
 const CLOCK_TICK_MS = 30_000;
@@ -34,8 +35,26 @@ function batchCountLabel(count: number): string {
 	return `${count} batch${count === 1 ? "" : "es"}`;
 }
 
+// Waiter viewing the queue (View Kitchen Queue ✅, Update Order Status ❌) —
+// same neutral, non-interactive shape as the Ready column's own action slot.
+function renderAwaitingKitchenAction(): ReactNode {
+	return (
+		<div className="mt-1 flex items-center justify-center gap-2 rounded-md bg-surface-raised px-6 py-4 text-muted text-sm">
+			<Clock className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
+			Awaiting Kitchen
+		</div>
+	);
+}
+
 export default function KitchenDisplayPage() {
 	const { restaurantId } = useParams<{ restaurantId: string }>();
+	const isAdmin = useIsAdmin();
+	const restaurantRole = useRestaurantRole();
+	// "Update Order Status (Preparing/Ready)" (docs/product.md § RBAC) is
+	// Kitchen/Manager/Owner — Waiter reaches this page (View Kitchen Queue
+	// ✅) but can't advance a batch. UX only — advanceBatch enforces the
+	// real, server-side version of this same check.
+	const canAdvance = isAdmin || restaurantRole !== "waiter";
 	const [availabilityMode, setAvailabilityMode] = useState<
 		"unavailable" | "available" | null
 	>(null);
@@ -164,37 +183,49 @@ export default function KitchenDisplayPage() {
 					label="Incoming"
 					status="placed"
 					batches={incoming}
-					renderAction={(batch) => (
-						<button
-							type="button"
-							onClick={() => advance(batch, "preparing")}
-							disabled={advanceBatch.isPending}
-							className={ADVANCE_BUTTON_CLASS}
-						>
-							Start Preparing
-							<ArrowRight
-								className="icon-sm"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-						</button>
-					)}
+					renderAction={
+						canAdvance
+							? (batch) => (
+									<button
+										type="button"
+										onClick={() => advance(batch, "preparing")}
+										disabled={advanceBatch.isPending}
+										className={ADVANCE_BUTTON_CLASS}
+									>
+										Start Preparing
+										<ArrowRight
+											className="icon-sm"
+											strokeWidth={1.5}
+											aria-hidden="true"
+										/>
+									</button>
+								)
+							: renderAwaitingKitchenAction
+					}
 				/>
 				<QueueColumn
 					label="Preparing"
 					status="preparing"
 					batches={preparing}
-					renderAction={(batch) => (
-						<button
-							type="button"
-							onClick={() => advance(batch, "ready")}
-							disabled={advanceBatch.isPending}
-							className={ADVANCE_BUTTON_CLASS}
-						>
-							Mark Ready
-							<Check className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
-						</button>
-					)}
+					renderAction={
+						canAdvance
+							? (batch) => (
+									<button
+										type="button"
+										onClick={() => advance(batch, "ready")}
+										disabled={advanceBatch.isPending}
+										className={ADVANCE_BUTTON_CLASS}
+									>
+										Mark Ready
+										<Check
+											className="icon-sm"
+											strokeWidth={1.5}
+											aria-hidden="true"
+										/>
+									</button>
+								)
+							: renderAwaitingKitchenAction
+					}
 				/>
 				<QueueColumn
 					label="Ready"

@@ -61,6 +61,13 @@ export type RestaurantAccess = Viewer & {
 	/** Caller's own active Staff role at this restaurant, or null for
 	 * Dineinly Admin — who has no Staff row anywhere by design. */
 	restaurantRole: StaffRole | null;
+	/** True only for the caller's own row when it's the restaurant's primary
+	 * owner — false for Dineinly Admin (no Staff row) and every other
+	 * viewer, including a non-primary co-owner (role = 'owner' but
+	 * is_primary_owner = false). Gates Owner reassignment (Tbd.md "Owner
+	 * reassignment"): only the current primary owner, not any Owner-role
+	 * staff, may transfer ownership. */
+	isPrimaryOwner: boolean;
 };
 
 /**
@@ -71,15 +78,9 @@ export type RestaurantAccess = Viewer & {
  * always passes.
  *
  * This grants page-level access only — every staff role reaches the same
- * pages once past this gate. Feature-level gating within a page (e.g. a
- * waiter reaching Venue Settings) isn't implemented yet; see Tbd.md
- * "Feature-level staff permissions". Staff Roster is the one exception —
- * app/restaurants/[restaurantId]/staff/layout.tsx reads restaurantRole off
- * this function's return value to additionally gate that one subtree to
- * Owner/Manager, per docs/product.md's RBAC "Manage Staff" row, which is
- * also why that layout calls this function a second time for the same
- * request — deduped by the cache() wrapper below rather than a second round
- * trip to Postgres.
+ * pages once past this gate. Feature-level gating within a page is layered
+ * on top via requireRestaurantRole below, for the subtrees docs/product.md's
+ * RBAC narrows further (Staff Roster, Menu Desk, Table Matrix, Bills).
  */
 export const requireRestaurantAccess = cache(
 	async (restaurantId: string): Promise<RestaurantAccess> => {
@@ -90,7 +91,7 @@ export const requireRestaurantAccess = cache(
 		}
 
 		if (viewer.isAdmin) {
-			return { ...viewer, restaurantRole: null };
+			return { ...viewer, restaurantRole: null, isPrimaryOwner: false };
 		}
 
 		// Scoped to the caller's own row via user_id, not RLS alone —
@@ -100,7 +101,7 @@ export const requireRestaurantAccess = cache(
 		const supabase = await createClient();
 		const { data: staffRow } = await supabase
 			.from("staff")
-			.select("id, role")
+			.select("id, role, is_primary_owner")
 			.eq("restaurant_id", restaurantId)
 			.eq("user_id", viewer.id)
 			.eq("status", "active")
@@ -110,6 +111,35 @@ export const requireRestaurantAccess = cache(
 			redirect("/sign-in");
 		}
 
-		return { ...viewer, restaurantRole: staffRow.role };
+		return {
+			...viewer,
+			restaurantRole: staffRow.role,
+			isPrimaryOwner: staffRow.is_primary_owner,
+		};
 	},
 );
+
+/**
+ * RestaurantAccess, redirecting to the restaurant home page (not /sign-in —
+ * they're already signed in and do have restaurant access, just not to this
+ * feature) unless the caller is Dineinly Admin or their restaurantRole is
+ * one of `allowedRoles`. Layers a feature-level role gate on top of
+ * requireRestaurantAccess's page-level one, for the route-tree subtrees
+ * docs/product.md's RBAC narrows further (Staff Roster, Menu Desk, Table
+ * Matrix, Bills layout.tsx files).
+ */
+export async function requireRestaurantRole(
+	restaurantId: string,
+	allowedRoles: StaffRole[],
+): Promise<RestaurantAccess> {
+	const viewer = await requireRestaurantAccess(restaurantId);
+
+	if (
+		!viewer.isAdmin &&
+		(!viewer.restaurantRole || !allowedRoles.includes(viewer.restaurantRole))
+	) {
+		redirect(`/restaurants/${restaurantId}`);
+	}
+
+	return viewer;
+}

@@ -414,6 +414,49 @@ $$;
 revoke execute on function public.is_active_staff_for_restaurant(uuid) from public;
 grant execute on function public.is_active_staff_for_restaurant(uuid) to authenticated;
 
+-- Caller's own active role at a restaurant, or null if they have no active
+-- Staff row there (including Dineinly Admin, who has none by design). Backs
+-- the feature-level (not just page-level) RBAC split below — Manage Menu/
+-- Manage Tables are Owner/Manager only, unlike the any-active-staff reach
+-- is_active_staff_for_restaurant grants. SECURITY DEFINER: called from
+-- staff_roster_select, a policy ON staff itself (§ 15) — SECURITY INVOKER
+-- would re-trigger that same policy on its own internal read, infinitely.
+-- Safe to bypass RLS here regardless of caller: the query only ever matches
+-- the caller's own auth.uid(), never an arbitrary row.
+create or replace function public.staff_role_for_restaurant(
+	p_restaurant_id uuid
+)
+returns public.staff_role
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+	select s.role
+	from public.staff s
+	where s.restaurant_id = p_restaurant_id
+		and s.user_id = auth.uid()
+		and s.status = 'active'
+	limit 1;
+$$;
+
+revoke execute on function public.staff_role_for_restaurant(uuid) from public;
+grant execute on function public.staff_role_for_restaurant(uuid) to authenticated;
+
+create or replace function public.is_staff_manager_for_restaurant(
+	p_restaurant_id uuid
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+	select public.staff_role_for_restaurant(p_restaurant_id) in ('owner', 'manager');
+$$;
+
+revoke execute on function public.is_staff_manager_for_restaurant(uuid) from public;
+grant execute on function public.is_staff_manager_for_restaurant(uuid) to authenticated;
+
 create policy "staff_select_own_row" on public.staff
 	for select
 	to authenticated
@@ -452,26 +495,45 @@ create policy "staff_all_cart_items" on public.cart_items
 	using (public.is_active_staff_for_restaurant(restaurant_id))
 	with check (public.is_active_staff_for_restaurant(restaurant_id));
 
--- Menu Desk: any active staff member of the restaurant, not just Owner/
--- Manager — a role-level split (Waiter/Kitchen view-only) is the deferred
--- feature-level gating noted above, not modeled here yet.
-create policy "staff_all_menu_categories" on public.menu_categories
-	for all
+-- Menu Desk: "View Menu" (docs/product.md § RBAC) is any active staff
+-- member, but "Manage Menu" is Owner/Manager only — read and write are two
+-- policies, not one, so a Waiter/Kitchen caller keeps seeing the catalog
+-- (Kitchen Display's listAvailability, order queue item names) without
+-- being able to write it. Item availability (Waiter/Kitchen ✅, "Update Item
+-- Availability" row) is carved out of the write restriction below via a
+-- dedicated function, set_menu_item_availability (§ 7).
+create policy "staff_select_menu_categories" on public.menu_categories
+	for select
 	to authenticated
-	using (public.is_active_staff_for_restaurant(restaurant_id))
-	with check (public.is_active_staff_for_restaurant(restaurant_id));
+	using (public.is_active_staff_for_restaurant(restaurant_id));
 
-create policy "staff_all_menu_items" on public.menu_items
+create policy "staff_write_menu_categories" on public.menu_categories
 	for all
 	to authenticated
-	using (public.is_active_staff_for_restaurant(restaurant_id))
-	with check (public.is_active_staff_for_restaurant(restaurant_id));
+	using (public.is_staff_manager_for_restaurant(restaurant_id))
+	with check (public.is_staff_manager_for_restaurant(restaurant_id));
 
-create policy "staff_all_menu_labels" on public.menu_labels
+create policy "staff_select_menu_items" on public.menu_items
+	for select
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id));
+
+create policy "staff_write_menu_items" on public.menu_items
 	for all
 	to authenticated
-	using (public.is_active_staff_for_restaurant(restaurant_id))
-	with check (public.is_active_staff_for_restaurant(restaurant_id));
+	using (public.is_staff_manager_for_restaurant(restaurant_id))
+	with check (public.is_staff_manager_for_restaurant(restaurant_id));
+
+create policy "staff_select_menu_labels" on public.menu_labels
+	for select
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id));
+
+create policy "staff_write_menu_labels" on public.menu_labels
+	for all
+	to authenticated
+	using (public.is_staff_manager_for_restaurant(restaurant_id))
+	with check (public.is_staff_manager_for_restaurant(restaurant_id));
 
 -- Kitchen Display: any active staff member reads and advances this
 -- restaurant's order queue (docs/core-data-model.md "Kitchen advances
@@ -490,15 +552,20 @@ create policy "staff_all_order_items" on public.order_items
 	using (public.is_active_staff_for_restaurant(restaurant_id))
 	with check (public.is_active_staff_for_restaurant(restaurant_id));
 
--- Table labels: read by Kitchen Display (table chips on each batch card)
--- and, eventually, Table Matrix. No staff policy existed on this table at
--- all before — only admin_all_restaurant_tables — so no non-admin staff
--- session could ever see a table's own label, only Dineinly Admin.
-create policy "staff_all_restaurant_tables" on public.restaurant_tables
+-- Table labels: read by Kitchen Display (table chips on each batch card),
+-- Bills, and Table Matrix — any active staff. "Manage Tables & QR Codes"
+-- (docs/product.md § RBAC) is Owner/Manager only, so writes (create, edit,
+-- regenerate QR, hide/show) are a separate, narrower policy.
+create policy "staff_select_restaurant_tables" on public.restaurant_tables
+	for select
+	to authenticated
+	using (public.is_active_staff_for_restaurant(restaurant_id));
+
+create policy "staff_write_restaurant_tables" on public.restaurant_tables
 	for all
 	to authenticated
-	using (public.is_active_staff_for_restaurant(restaurant_id))
-	with check (public.is_active_staff_for_restaurant(restaurant_id));
+	using (public.is_staff_manager_for_restaurant(restaurant_id))
+	with check (public.is_staff_manager_for_restaurant(restaurant_id));
 
 -- ============================================================================
 -- 6. Dineinly Admin restaurant management: atomic multi-table writes
@@ -655,7 +722,7 @@ grant execute on function public.admin_update_restaurant(
 ) to authenticated;
 
 -- ============================================================================
--- 7. Menu Desk: reorder_menu_categories
+-- 7. Menu Desk: reorder_menu_categories, set_menu_item_availability
 -- ============================================================================
 -- Drag-and-drop category reordering (Menu Desk) writes every category's
 -- `sort` in one statement instead of one UPDATE per row from application
@@ -663,9 +730,10 @@ grant execute on function public.admin_update_restaurant(
 -- duplicate or gapped sort values. Same hardening as every other function in
 -- this file: `set search_path = ''` with fully schema-qualified references,
 -- `execute` revoked from `public` and granted only to `authenticated`, and
--- an explicit admin-or-own-restaurant-staff check as the first statement —
--- RLS on menu_categories (§ 5 above) would also block a stranger's write,
--- but failing fast here gives a clear error instead of a silent no-op.
+-- an explicit admin-or-manager check as the first statement — RLS on
+-- menu_categories (§ 5 above, staff_write_menu_categories) would also block
+-- a stranger's write, but failing fast here gives a clear error instead of a
+-- silent no-op.
 
 create or replace function public.reorder_menu_categories(
 	p_restaurant_id uuid,
@@ -681,9 +749,9 @@ declare
 begin
 	if not (
 		public.is_dineinly_admin()
-		or public.is_active_staff_for_restaurant(p_restaurant_id)
+		or public.is_staff_manager_for_restaurant(p_restaurant_id)
 	) then
-		raise exception 'Only Dineinly Admin or this restaurant''s staff may reorder menu categories';
+		raise exception 'Only Dineinly Admin, Owner, or Manager may reorder menu categories';
 	end if;
 
 	if (
@@ -709,6 +777,44 @@ $$;
 
 revoke execute on function public.reorder_menu_categories(uuid, uuid[]) from public;
 grant execute on function public.reorder_menu_categories(uuid, uuid[]) to authenticated;
+
+-- "Update Item Availability (86'd)" (docs/product.md § RBAC) is Waiter,
+-- Kitchen, Manager, and Owner — any active staff — unlike every other menu
+-- write, which staff_write_menu_items (§ 5) restricts to Owner/Manager. This
+-- function is the carve-out: it touches only the availability column, on an
+-- active (not hidden) item, mirroring menu.ts's updateItemState `.eq(
+-- "status", "active")` guard. Any active staff caller reaches it directly
+-- (bypassing staff_write_menu_items), never a broader item edit.
+create or replace function public.set_menu_item_availability(
+	p_restaurant_id uuid,
+	p_item_id uuid,
+	p_availability public.availability
+)
+returns table (id uuid, availability public.availability)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	if not (
+		public.is_dineinly_admin()
+		or public.is_active_staff_for_restaurant(p_restaurant_id)
+	) then
+		raise exception 'Only Dineinly Admin or this restaurant''s staff may update dish availability';
+	end if;
+
+	return query
+		update public.menu_items
+		set availability = p_availability, updated_at = now()
+		where menu_items.id = p_item_id
+			and menu_items.restaurant_id = p_restaurant_id
+			and menu_items.status = 'active'
+		returning menu_items.id, menu_items.availability;
+end;
+$$;
+
+revoke execute on function public.set_menu_item_availability(uuid, uuid, public.availability) from public;
+grant execute on function public.set_menu_item_availability(uuid, uuid, public.availability) to authenticated;
 
 -- ============================================================================
 -- 8. Guest onboarding: resolve_qr_token
@@ -1477,14 +1583,28 @@ security invoker
 set search_path = ''
 as $$
 declare
+	v_restaurant_id uuid;
 	v_bill_status public.bill_status;
 	v_updated int;
 begin
-	if not exists (
-		select 1 from public.table_sessions
-		where id = p_session_id and status = 'active'
-	) then
+	select restaurant_id into v_restaurant_id
+	from public.table_sessions
+	where id = p_session_id and status = 'active';
+
+	if v_restaurant_id is null then
 		raise exception 'Session not found or already closed';
+	end if;
+
+	-- Close Session (docs/product.md § RBAC) is Waiter/Manager/Owner —
+	-- Kitchen has no reach here, same split as Mark Bill Settled and
+	-- Force-Terminate Session. staff_all_table_sessions/staff_all_bills/
+	-- staff_all_cart_items (§ 5) stay any-active-staff for read reach
+	-- (Bills tab list/get); this is the write-side role gate.
+	if not (
+		public.is_dineinly_admin()
+		or public.staff_role_for_restaurant(v_restaurant_id) in ('waiter', 'manager', 'owner')
+	) then
+		raise exception 'Only an active Waiter, Manager, or Owner may close a session';
 	end if;
 
 	select status into v_bill_status

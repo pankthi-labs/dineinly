@@ -4,11 +4,11 @@ Deferred work, tracked in one place. Each entry: what's missing, why it's deferr
 
 ---
 
-## PIN station login for Kitchen/Floor
+## PIN station login for Kitchen/Floor (device pairing half)
 
-Not implemented. Only Owner/Manager email OTP exists (`apps/web/app/sign-in/`). `docs/architecture.md` requires a shared station account + app-level PIN for Kitchen/Floor — no PIN storage, verification, or UI anywhere in the codebase. Staff Roster (invite/edit/remove — `apps/web/app/restaurants/[restaurantId]/staff/`) now exists, but doesn't touch this: no `pin_hash` write path, no device-pairing-code UI (`docs/architecture.md`'s 6-digit pairing flow).
+`pin_hash` storage + set/change now ships two ways: self-service (`set_staff_pin`, § 15b) via the "Profile" header action's PIN field (`apps/web/app/admin/profile-sheet.tsx`, reachable on any restaurant-scoped page), and a Dineinly Admin override (`admin_reset_staff_pin`, § 15b) via "Reset PIN" on any Staff Roster row — for a forgotten PIN, since it's never tied to an inbox. Still missing: the shared station account itself (synthetic `auth.users` identity per restaurant/role) and the 6-digit pairing-code device-onboarding flow (`docs/architecture.md` § Station Account Provisioning) — nothing consumes a staff PIN for login yet, since no station device exists to prompt for one.
 
-**Pick up:** design PIN hash storage + verification, plus the pairing-code device onboarding UI — station account is a Staff concept, but a separate one from the roster CRUD that shipped.
+**Pick up:** design the station account + pairing-code UI — a separate effort from the PIN storage that already shipped.
 
 ---
 
@@ -30,19 +30,21 @@ An `invited` Staff row never expires (`packages/db/src/schema/staff.ts`). Sign-i
 
 ## Feature-level staff permissions
 
-Every active Staff role (Owner/Manager/Kitchen/Floor) can still reach every Menu Desk/Table Matrix/Kitchen/Bills page and action once signed in (`requireRestaurantAccess`, `staff_all_menu_*` RLS — `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 5). There's no role-level split on any of those yet — a Waiter can open Venue Settings, a Kitchen account can edit dishes, same as an Owner.
+Manage Staff, Manage Menu, Manage Tables & QR Codes, Update Order Status, and every Bills action now have per-role gating matching `docs/product.md`'s RBAC matrix:
 
-Staff Roster (`apps/web/app/restaurants/[restaurantId]/staff/`) is the one exception, now that it exists: `staff/layout.tsx` restricts the page to Owner/Manager/Dineinly Admin, and `invite_staff`/`update_staff`/`remove_staff` (`supabase/migrations/20260816164344_add_staff_roster_rpcs.sql`) enforce "Managers may not manage Owners" and lock the primary owner row server-side — the RBAC matrix's "Manage Staff" row specifically, not the other rows.
+- **Menu Desk / Table Matrix** (`menu/layout.tsx`, `tables/layout.tsx`): Owner/Manager/Admin only, both at the page and the RLS layer (`staff_write_menu_*`/`staff_write_restaurant_tables`, `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 5). "Update Item Availability" stays open to any active staff via `set_menu_item_availability` (§ 7 of that migration) — the one carve-out, since Waiter/Kitchen keep that action per the matrix.
+- **Kitchen** (`kitchen.ts` `advanceBatch`): Kitchen/Manager/Owner/Admin only — Waiter views the queue but can't advance it.
+- **Bills** (`bills/layout.tsx`, `bills.ts`): every write excludes Kitchen; `closeSession`'s role check lives inside `close_session()` itself.
 
-**Pick up:** the remaining rows of `docs/product.md`'s RBAC matrix (Menu, Tables, Kitchen, Bills, Analytics, Settings) still need the same per-`staff.role` gating Staff Roster just got, one feature at a time.
+Not yet split: **View Analytics** and **Restaurant Settings** — neither page exists yet (Venue Settings and any analytics view are still unbuilt), so there's nothing to gate.
+
+**Pick up:** apply the same per-`staff.role` pattern to Venue Settings and an Analytics page once either gets built.
 
 ---
 
 ## Owner reassignment
 
-Once a restaurant's owner status flips to `active`, owner fields lock permanently in the edit form (`restaurant-form-sheet.tsx`) — no escape hatch if that owner needs to be replaced. Staff Roster (`apps/web/app/restaurants/[restaurantId]/staff/`) now exists but deliberately excludes this: `update_staff`/`remove_staff` both reject any row where `is_primary_owner` is true, same lock as `restaurant-form-sheet.tsx`'s, rather than half-build a reassignment flow with no design to build it against.
-
-**Pick up:** reassignment is still explicitly a Staff Roster capability per `docs/core-data-model.md` — needs its own design (does it promote an existing staff row, or create a new one; what happens to the outgoing owner's row/status) before building.
+Shipped: `reassign_primary_owner` (`supabase/migrations/20260816164344_add_staff_roster_rpcs.sql` § 15c) hands `is_primary_owner` to another existing Owner-role staff row — a pure handoff, not a demotion, both rows stay `role = 'owner'` — Staff Roster's "Make Primary Owner" row action, shown only on Owner-role rows (a Waiter/Manager/Kitchen must be promoted to Owner via `update_staff` first). A role downgrade for the outgoing owner is a separate `update_staff`/Edit Staff action the caller takes afterward if they want one, not part of this RPC. Caller must be the current primary owner themselves or Dineinly Admin — stricter than any Owner-role staff, since a non-primary co-owner can't transfer someone else's ownership. `update_staff`/`remove_staff` still reject the primary owner row directly (edit/remove never touch it); reassignment is the only path.
 
 ---
 

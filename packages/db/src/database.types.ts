@@ -647,6 +647,10 @@ export type Database = {
 					staff_id: string;
 				}[];
 			};
+			admin_reset_staff_pin: {
+				Args: { p_pin: string; p_staff_id: string };
+				Returns: undefined;
+			};
 			admin_update_restaurant: {
 				Args: {
 					p_address: string;
@@ -727,6 +731,14 @@ export type Database = {
 					staff_id: string;
 				}[];
 			};
+			reassign_primary_owner: {
+				Args: { p_new_owner_staff_id: string; p_restaurant_id: string };
+				Returns: {
+					id: string;
+					is_primary_owner: boolean;
+					role: Database["public"]["Enums"]["staff_role"];
+				}[];
+			};
 			remove_staff: {
 				Args: { p_staff_id: string };
 				Returns: {
@@ -748,12 +760,31 @@ export type Database = {
 				}[];
 			};
 			resolve_staff_signin: { Args: { p_email: string }; Returns: string };
+			set_menu_item_availability: {
+				Args: {
+					p_availability: Database["public"]["Enums"]["availability"];
+					p_item_id: string;
+					p_restaurant_id: string;
+				};
+				Returns: {
+					availability: Database["public"]["Enums"]["availability"];
+					id: string;
+				}[];
+			};
+			set_staff_pin: {
+				Args: { p_pin: string; p_restaurant_id: string };
+				Returns: undefined;
+			};
 			staff_role_for_restaurant: {
 				Args: { p_restaurant_id: string };
 				Returns: Database["public"]["Enums"]["staff_role"];
 			};
 			submit_order: { Args: { p_idempotency_key: string }; Returns: string };
 			try_uuid: { Args: { p_text: string }; Returns: string };
+			update_own_staff_profile: {
+				Args: { p_name: string; p_restaurant_id: string };
+				Returns: undefined;
+			};
 			update_staff: {
 				Args: {
 					p_email: string;

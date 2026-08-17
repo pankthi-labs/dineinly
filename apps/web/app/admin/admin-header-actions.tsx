@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { trpc } from "@/lib/trpc-client";
+import { ProfileSheet } from "./profile-sheet";
 
 const menuItemClass =
 	"flex items-center gap-3 px-4 py-3 text-left text-secondary text-sm no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary focus-visible:bg-surface-elevated focus-visible:text-primary";
@@ -19,13 +21,33 @@ const menuItemClass =
  */
 export function AdminHeaderActions({
 	directoryHref,
+	restaurantId,
 }: {
 	directoryHref?: string;
+	/** Present only for a restaurant-tree viewer who has a Staff row (not
+	 * Dineinly Admin) — "Profile" then edits name + PIN via the staff
+	 * endpoints. Omitted for Dineinly Admin (no Staff row anywhere), whose
+	 * "Profile" edits just their name via auth.updateDisplayName instead. */
+	restaurantId?: string;
 }) {
 	const router = useRouter();
 	const [isOpen, setIsOpen] = useState(false);
+	const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
+	const staffProfile = trpc.staff.myProfile.useQuery(
+		{ restaurantId: restaurantId ?? "" },
+		{ enabled: !!restaurantId },
+	);
+	const adminProfile = trpc.auth.me.useQuery(undefined, {
+		enabled: !restaurantId,
+	});
+	const profileName = restaurantId
+		? staffProfile.data?.name
+		: adminProfile.data?.displayName;
+	const isProfileReady = restaurantId
+		? staffProfile.data != null
+		: adminProfile.data != null;
 
 	// Closes and, unless the close came from a pointer click (the mouse
 	// already sits where it needs to be), returns focus to the trigger —
@@ -100,7 +122,10 @@ export function AdminHeaderActions({
 					<button
 						type="button"
 						className={menuItemClass}
-						onClick={() => close(false)}
+						onClick={() => {
+							setIsProfileSheetOpen(true);
+							close(false);
+						}}
 					>
 						<User className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 						Profile
@@ -114,6 +139,15 @@ export function AdminHeaderActions({
 						Log out
 					</button>
 				</div>
+			) : null}
+
+			{isProfileSheetOpen && isProfileReady ? (
+				<ProfileSheet
+					restaurantId={restaurantId}
+					name={profileName ?? ""}
+					hasPin={!!restaurantId && (staffProfile.data?.hasPin ?? false)}
+					onClose={() => setIsProfileSheetOpen(false)}
+				/>
 			) : null}
 		</div>
 	);

@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { authedProcedure, router } from "../trpc/init";
+import { requireStaffRole } from "../trpc/rbac";
 
 const restaurantIdSchema = z.string().uuid();
 
@@ -11,9 +12,9 @@ const ADVANCE_FROM: Record<"preparing" | "ready", "placed" | "preparing"> = {
 	ready: "preparing",
 };
 
-// Any active staff member of the restaurant reaches the Kitchen Display —
-// no role-level split yet, same reach as Menu Desk (see Tbd.md
-// "Feature-level staff permissions").
+// "View Kitchen Queue" (docs/product.md § RBAC) is any active staff member —
+// listQueue/listAvailability stay open to all. "Update Order Status" is
+// Kitchen/Manager/Owner only; advanceBatch enforces that split below.
 function assertNoQueueError(error: unknown): void {
 	if (!error) return;
 	throw new TRPCError({
@@ -120,6 +121,15 @@ export const kitchenRouter = router({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
+			// "Update Order Status (Preparing/Ready)" (docs/product.md § RBAC)
+			// is Kitchen/Manager/Owner — Waiter can view the queue but not
+			// advance it.
+			await requireStaffRole(ctx, input.restaurantId, [
+				"kitchen",
+				"manager",
+				"owner",
+			]);
+
 			const now = new Date().toISOString();
 			const changes =
 				input.to === "preparing"

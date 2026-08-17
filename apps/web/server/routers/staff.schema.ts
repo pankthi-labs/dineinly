@@ -40,4 +40,40 @@ export const removeStaffInput = z.object({
 	id: staffIdSchema,
 });
 
+export const reassignOwnerInput = z.object({
+	restaurantId: restaurantIdSchema,
+	newOwnerStaffId: staffIdSchema,
+});
+
+// Shared with the client-side PIN forms (profile-sheet.tsx, reset-pin-
+// sheet.tsx) so both validate identically off one pattern.
+export const PIN_PATTERN = /^\d{4,6}$/;
+
+const pinSchema = z
+	.string()
+	.trim()
+	.regex(PIN_PATTERN, "PIN must be 4 to 6 digits");
+
+export const setPinInput = z.object({
+	restaurantId: restaurantIdSchema,
+	pin: pinSchema,
+});
+
+// Dineinly Admin override — resets any staff member's PIN, no restaurant
+// scoping needed (staff_id alone names one row; Admin's reach isn't
+// tenant-scoped). See admin_reset_staff_pin.
+export const adminResetPinInput = z.object({
+	staffId: staffIdSchema,
+	pin: pinSchema,
+});
+
+export const myProfileInput = z.object({
+	restaurantId: restaurantIdSchema,
+});
+
+export const updateOwnProfileInput = z.object({
+	restaurantId: restaurantIdSchema,
+	name: z.string().trim().min(2).max(80),
+});
+
 export type StaffFields = z.infer<typeof staffFieldsSchema>;

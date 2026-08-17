@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
-import { useCanManageStaff, useIsAdmin } from "./viewer-context";
+import {
+	useCanAccessBills,
+	useCanManageStaff,
+	useIsAdmin,
+} from "./viewer-context";
 
 const NAV_ITEMS = [
 	"Home",
@@ -16,15 +20,18 @@ const NAV_ITEMS = [
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Venue Settings isn't built yet — it renders inert. Staff Roster is built
-// but Owner/Manager-only (docs/product.md § RBAC "Manage Staff") — its route
-// is added conditionally below, not here, so a Waiter/Kitchen viewer sees it
-// the same inert way as Venue Settings rather than a route it can't reach.
+// Venue Settings isn't built yet — it renders inert (there's no permission
+// question, the page doesn't exist for anyone). Staff Roster, Menu Desk,
+// Table Matrix, and Bills are role-gated (docs/product.md § RBAC) instead —
+// a viewer without reach doesn't get a route their own page layout would
+// just redirect away from, so RestaurantNavHeader below omits the item from
+// the nav entirely rather than rendering it disabled.
 const NAV_ROUTES: Partial<Record<NavItem, (restaurantId: string) => string>> = {
 	Home: (restaurantId) => `/restaurants/${restaurantId}`,
-	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
 	Kitchen: (restaurantId) => `/restaurants/${restaurantId}/kitchen`,
+	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
 	"Table Matrix": (restaurantId) => `/restaurants/${restaurantId}/tables`,
+	"Staff Roster": (restaurantId) => `/restaurants/${restaurantId}/staff`,
 	Bills: (restaurantId) => `/restaurants/${restaurantId}/bills`,
 };
 
@@ -39,6 +46,17 @@ export function RestaurantNavHeader({
 }) {
 	const isAdmin = useIsAdmin();
 	const canManageStaff = useCanManageStaff();
+	const canManageMenuAndTables = canManageStaff;
+	const canAccessBills = useCanAccessBills();
+	const gatedItems: Partial<Record<NavItem, boolean>> = {
+		"Menu Desk": canManageMenuAndTables,
+		"Table Matrix": canManageMenuAndTables,
+		"Staff Roster": canManageStaff,
+		Bills: canAccessBills,
+	};
+	const visibleItems = NAV_ITEMS.filter(
+		(item) => !(item in gatedItems) || gatedItems[item],
+	);
 
 	return (
 		<header className="border-divider border-b bg-surface">
@@ -53,15 +71,9 @@ export function RestaurantNavHeader({
 						className="no-scrollbar min-w-0 overflow-x-auto"
 					>
 						<ul className="flex min-w-max items-center gap-6 text-sm lg:gap-8">
-							{NAV_ITEMS.map((item) => {
+							{visibleItems.map((item) => {
 								const isActive = item === active;
-								const route =
-									item === "Staff Roster"
-										? canManageStaff
-											? (restaurantId: string) =>
-													`/restaurants/${restaurantId}/staff`
-											: undefined
-										: NAV_ROUTES[item];
+								const route = NAV_ROUTES[item];
 								const itemClass = isActive
 									? "border-accent border-b-2 pb-2 font-semibold text-primary"
 									: route
@@ -93,6 +105,7 @@ export function RestaurantNavHeader({
 					<div className="flex shrink-0 items-center gap-6 lg:gap-8">
 						<AdminHeaderActions
 							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
+							restaurantId={isAdmin ? undefined : restaurantId}
 						/>
 					</div>
 				</div>

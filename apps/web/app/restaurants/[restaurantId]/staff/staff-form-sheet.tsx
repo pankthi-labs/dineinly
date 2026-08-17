@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { Field, FieldGroup, FormSheet } from "@/components/form-sheet";
 import type { StaffRole } from "@/lib/auth";
 import { staffFieldsSchema } from "@/server/routers/staff.schema";
+import { ROLE_LABEL } from "./staff-row";
 
 export type StaffFormValues = z.infer<typeof staffFieldsSchema>;
 
@@ -18,13 +19,6 @@ const EMPTY_VALUES: StaffFormValues = {
 	name: "",
 	email: "",
 	role: "waiter",
-};
-
-const ROLE_LABELS: Record<StaffRole, string> = {
-	waiter: "Waiter",
-	kitchen: "Kitchen",
-	manager: "Manager",
-	owner: "Owner",
 };
 
 type FieldErrors = Partial<Record<keyof StaffFormValues, string>>;
@@ -170,7 +164,7 @@ export function StaffFormSheet({
 						>
 							{availableRoles.map((role) => (
 								<option key={role} value={role}>
-									{ROLE_LABELS[role]}
+									{ROLE_LABEL[role]}
 								</option>
 							))}
 						</select>

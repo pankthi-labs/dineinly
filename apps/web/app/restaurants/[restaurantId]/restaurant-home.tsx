@@ -14,24 +14,38 @@ import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
 import { getGreeting } from "@/lib/greeting";
 import { trpc } from "@/lib/trpc-client";
-import { useCanManageStaff, useIsAdmin } from "./viewer-context";
+import {
+	useCanAccessBills,
+	useCanManageStaff,
+	useIsAdmin,
+} from "./viewer-context";
+
+const CARD_TITLES = [
+	"Menu Desk",
+	"Kitchen",
+	"Table Matrix",
+	"Staff Roster",
+	"Venue Settings",
+	"Bills",
+] as const;
+type CardTitle = (typeof CARD_TITLES)[number];
 
 const navCards: Array<{
-	title: string;
+	title: CardTitle;
 	description: string;
 	icon: LucideIcon;
 	// Cards without an href aren't built yet — rendered inert rather than
-	// linking nowhere. Staff Roster is the one exception: it's built, but
-	// Owner/Manager-only (docs/product.md § RBAC "Manage Staff"), so its href
-	// is added conditionally in the render below rather than here — same
-	// pattern as restaurant-nav-header.tsx.
+	// linking nowhere (no permission question, the page doesn't exist for
+	// anyone). Staff Roster, Menu Desk, Table Matrix, and Bills are role-
+	// gated instead (docs/product.md § RBAC) — visibleCards below drops the
+	// card entirely for a viewer without reach, same pattern as
+	// restaurant-nav-header.tsx.
 	href?: string;
 }> = [
 	{
 		title: "Menu Desk",
 		description: "Updates & specials",
 		icon: BookOpen,
-		href: "menu",
 	},
 	{
 		title: "Kitchen",
@@ -43,7 +57,6 @@ const navCards: Array<{
 		title: "Table Matrix",
 		description: "Live seating status",
 		icon: LayoutGrid,
-		href: "tables",
 	},
 	{
 		title: "Staff Roster",
@@ -59,9 +72,18 @@ const navCards: Array<{
 		title: "Bills",
 		description: "Revenue & settlements",
 		icon: Receipt,
-		href: "bills",
 	},
 ];
+
+// Role-gated cards (docs/product.md § RBAC) resolve their route from the
+// viewer's own `can*` flag; every other card either always links (Kitchen)
+// or has no href yet (Venue Settings — unbuilt).
+const GATED_CARD_ROUTES: Partial<Record<CardTitle, string>> = {
+	"Menu Desk": "menu",
+	"Table Matrix": "tables",
+	"Staff Roster": "staff",
+	Bills: "bills",
+};
 
 export function RestaurantHome({
 	restaurantId,
@@ -73,6 +95,17 @@ export function RestaurantHome({
 	const restaurant = trpc.restaurants.getById.useQuery({ id: restaurantId });
 	const isAdmin = useIsAdmin();
 	const canManageStaff = useCanManageStaff();
+	const canManageMenuAndTables = canManageStaff;
+	const canAccessBills = useCanAccessBills();
+	const cardAccess: Partial<Record<CardTitle, boolean>> = {
+		"Menu Desk": canManageMenuAndTables,
+		"Table Matrix": canManageMenuAndTables,
+		"Staff Roster": canManageStaff,
+		Bills: canAccessBills,
+	};
+	const visibleCards = navCards.filter(
+		(card) => !(card.title in cardAccess) || cardAccess[card.title],
+	);
 
 	if (restaurant.isPending) {
 		return <HomeLoading />;
@@ -99,6 +132,7 @@ export function RestaurantHome({
 					<div className="flex items-center gap-4">
 						<AdminHeaderActions
 							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
+							restaurantId={isAdmin ? undefined : restaurantId}
 						/>
 					</div>
 				</div>
@@ -109,13 +143,8 @@ export function RestaurantHome({
 			</header>
 
 			<main className="grid flex-1 content-start gap-4 sm:gap-6 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
-				{navCards.map(({ title, description, icon: Icon, href }) => {
-					const resolvedHref =
-						title === "Staff Roster"
-							? canManageStaff
-								? "staff"
-								: undefined
-							: href;
+				{visibleCards.map(({ title, description, icon: Icon, href }) => {
+					const resolvedHref = GATED_CARD_ROUTES[title] ?? href;
 					const cardClass =
 						"group flex flex-col gap-4 rounded-xl border border-divider bg-surface p-6 text-left no-underline transition-colors duration-(--duration-base) ease-out sm:gap-6 sm:p-8";
 					const content = (

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { menuItemInputSchema } from "@/lib/menu-item-schema";
 import type { Context } from "../trpc/context";
 import { authedProcedure, router } from "../trpc/init";
+import { requireStaffRole } from "../trpc/rbac";
 
 // Labels are a restaurant-managed vocabulary (see menu_labels), not a fixed
 // enum — this is the runtime check a zod schema can't express.
@@ -66,11 +67,15 @@ const menuItemStateInputSchema = z.object({
 // separate active-only RLS policies.
 //
 // authedProcedure, not adminProcedure — every procedure here is reachable by
-// this restaurant's own staff, not just Dineinly Admin. staff_all_menu_*
-// RLS (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql
-// § 5) is what actually keeps a staff caller scoped to their own
-// restaurant_id; a role-level split (e.g. Waiter/Kitchen view-only) isn't
-// modeled yet — see Tbd.md "Feature-level staff permissions".
+// this restaurant's own staff, not just Dineinly Admin. listForManagement
+// (read) is any active staff, per staff_select_menu_* RLS (supabase/
+// migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 5); every
+// write below is Owner/Manager only ("Manage Menu", docs/product.md § RBAC)
+// — requireStaffRole is a clear error before the request, staff_write_menu_*
+// RLS is the real enforcement underneath it. updateItemState's availability
+// branch is the one exception (Waiter/Kitchen ✅ "Update Item Availability"),
+// so it calls set_menu_item_availability (§ 7 of that migration) instead of
+// a direct table write, and skips the role check.
 export const menuRouter = router({
 	listForManagement: authedProcedure
 		.input(z.object({ restaurantId: restaurantIdSchema }))
@@ -142,6 +147,8 @@ export const menuRouter = router({
 	createCategory: authedProcedure
 		.input(menuCategoryInputSchema)
 		.mutation(async ({ ctx, input }) => {
+			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+
 			const [restaurantResult, lastCategoryResult] = await Promise.all([
 				ctx.auth
 					.from("restaurants")
@@ -196,6 +203,8 @@ export const menuRouter = router({
 	reorderCategories: authedProcedure
 		.input(menuCategoryReorderInputSchema)
 		.mutation(async ({ ctx, input }) => {
+			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+
 			const { data: existing, error: existingError } = await ctx.auth
 				.from("menu_categories")
 				.select("id")
@@ -239,6 +248,8 @@ export const menuRouter = router({
 	createLabel: authedProcedure
 		.input(menuLabelInputSchema)
 		.mutation(async ({ ctx, input }) => {
+			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+
 			const { data, error } = await ctx.auth
 				.from("menu_labels")
 				.insert({ restaurant_id: input.restaurantId, name: input.name })
@@ -262,6 +273,8 @@ export const menuRouter = router({
 	createItem: authedProcedure
 		.input(menuItemInputSchema)
 		.mutation(async ({ ctx, input }) => {
+			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+
 			const { data: category, error: categoryError } = await ctx.auth
 				.from("menu_categories")
 				.select("id")
@@ -320,6 +333,8 @@ export const menuRouter = router({
 	updateItem: authedProcedure
 		.input(menuItemUpdateSchema)
 		.mutation(async ({ ctx, input }) => {
+			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+
 			const { data: category, error: categoryError } = await ctx.auth
 				.from("menu_categories")
 				.select("id")
@@ -387,30 +402,56 @@ export const menuRouter = router({
 	updateItemState: authedProcedure
 		.input(menuItemStateInputSchema)
 		.mutation(async ({ ctx, input }) => {
-			const changes =
-				input.action === "show"
-					? { status: "active" as const }
-					: input.action === "hide"
-						? { status: "archived" as const }
-						: input.action === "mark_sold_out"
-							? { availability: "sold_out" as const }
-							: { availability: "available" as const };
-
 			// Availability only means anything for a dish the guest can see —
 			// a hidden dish must be shown again before its availability changes.
 			const isAvailabilityAction =
 				input.action === "mark_sold_out" || input.action === "mark_available";
 
-			let query = ctx.auth
-				.from("menu_items")
-				.update({ ...changes, updated_at: new Date().toISOString() })
-				.eq("id", input.itemId)
-				.eq("restaurant_id", input.restaurantId);
+			// "Update Item Availability" (Waiter/Kitchen/Manager/Owner) goes
+			// through set_menu_item_availability — any active staff, no role
+			// check here — since staff_write_menu_items RLS now restricts a
+			// direct table write to Owner/Manager only. "hide"/"show" ("Manage
+			// Menu") stay a direct write, gated to Owner/Manager below.
 			if (isAvailabilityAction) {
-				query = query.eq("status", "active");
+				const { data, error } = await ctx.auth.rpc(
+					"set_menu_item_availability",
+					{
+						p_restaurant_id: input.restaurantId,
+						p_item_id: input.itemId,
+						p_availability:
+							input.action === "mark_sold_out" ? "sold_out" : "available",
+					},
+				);
+
+				if (error) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Unable to update the dish.",
+						cause: error,
+					});
+				}
+				const updated = data?.[0];
+				if (!updated) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Show this dish before changing its availability.",
+					});
+				}
+				return { id: updated.id };
 			}
 
-			const { data, error } = await query.select("id").maybeSingle();
+			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+
+			const { data, error } = await ctx.auth
+				.from("menu_items")
+				.update({
+					status: input.action === "show" ? "active" : "archived",
+					updated_at: new Date().toISOString(),
+				})
+				.eq("id", input.itemId)
+				.eq("restaurant_id", input.restaurantId)
+				.select("id")
+				.maybeSingle();
 
 			if (error) {
 				throw new TRPCError({
@@ -422,10 +463,8 @@ export const menuRouter = router({
 
 			if (!data) {
 				throw new TRPCError({
-					code: isAvailabilityAction ? "BAD_REQUEST" : "NOT_FOUND",
-					message: isAvailabilityAction
-						? "Show this dish before changing its availability."
-						: "This dish is no longer available.",
+					code: "NOT_FOUND",
+					message: "This dish is no longer available.",
 				});
 			}
 

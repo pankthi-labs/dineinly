@@ -18,6 +18,7 @@ export default async function RestaurantLayout({
 		<RestaurantViewerProvider
 			isAdmin={viewer.isAdmin}
 			restaurantRole={viewer.restaurantRole}
+			isPrimaryOwner={viewer.isPrimaryOwner}
 		>
 			{children}
 		</RestaurantViewerProvider>

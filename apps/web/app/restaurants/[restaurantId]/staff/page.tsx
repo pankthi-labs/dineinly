@@ -1,7 +1,7 @@
 "use client";
 
 import type { inferRouterOutputs } from "@trpc/server";
-import { Plus, Users } from "lucide-react";
+import { Plus, Search, Users } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
@@ -11,16 +11,31 @@ import type { StaffRole } from "@/lib/auth";
 import { trpc } from "@/lib/trpc-client";
 import type { AppRouter } from "@/server/routers/_app";
 import { RestaurantNavHeader } from "../restaurant-nav-header";
-import { useIsAdmin, useRestaurantRole } from "../viewer-context";
+import {
+	useCanReassignOwner,
+	useIsAdmin,
+	useRestaurantRole,
+} from "../viewer-context";
+import type { ReassignTarget } from "./reassign-owner-dialog";
+import { ReassignOwnerDialog } from "./reassign-owner-dialog";
 import type { RemoveTarget } from "./remove-staff-confirm-dialog";
 import { RemoveStaffConfirmDialog } from "./remove-staff-confirm-dialog";
+import type { ResetPinTarget } from "./reset-pin-sheet";
+import { ResetPinSheet } from "./reset-pin-sheet";
 import type { EditTarget, StaffFormValues } from "./staff-form-sheet";
 import { StaffFormSheet } from "./staff-form-sheet";
-import { StaffRow } from "./staff-row";
+import { ROLE_LABEL, StaffRow } from "./staff-row";
 
 type StaffListItem = inferRouterOutputs<AppRouter>["staff"]["list"][number];
 
 const ALL_ROLES: StaffRole[] = ["waiter", "kitchen", "manager", "owner"];
+const ROLE_FILTERS: Array<{ value: StaffRole | "all"; label: string }> = [
+	{ value: "all", label: "All" },
+	{ value: "owner", label: ROLE_LABEL.owner },
+	{ value: "manager", label: ROLE_LABEL.manager },
+	{ value: "waiter", label: ROLE_LABEL.waiter },
+	{ value: "kitchen", label: ROLE_LABEL.kitchen },
+];
 
 // Owner and Dineinly Admin may touch an Owner-role row or hand out the Owner
 // role; a Manager may not do either — docs/product.md § RBAC: "Managers may
@@ -44,9 +59,10 @@ function availableRolesFor(
 		: ALL_ROLES.filter((role) => role !== "owner");
 }
 
-// The primary owner row is locked (reassignment isn't built, see Tbd.md —
-// "Owner reassignment") — server-enforced identically, for every caller
-// including Admin (update_staff/remove_staff's is_primary_owner check).
+// The primary owner row is locked for edit/remove — reassign_primary_owner
+// is the only way to touch it (see ReassignOwnerDialog below) — server-
+// enforced identically, for every caller including Admin (update_staff/
+// remove_staff's is_primary_owner check).
 function canManageRow(
 	staff: StaffListItem,
 	viewerIsAdmin: boolean,
@@ -68,14 +84,24 @@ export default function StaffRosterPage() {
 	const { restaurantId } = useParams<{ restaurantId: string }>();
 	const viewerIsAdmin = useIsAdmin();
 	const viewerRole = useRestaurantRole();
+	const canReassignOwner = useCanReassignOwner();
 
 	const [sheetMode, setSheetMode] = useState<"closed" | "create" | "edit">(
 		"closed",
 	);
 	const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 	const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
+	const [reassignTarget, setReassignTarget] = useState<ReassignTarget | null>(
+		null,
+	);
+	const [resetPinTarget, setResetPinTarget] = useState<ResetPinTarget | null>(
+		null,
+	);
 	const [toast, setToast] = useState<ToastState | null>(null);
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	const [resetPinError, setResetPinError] = useState<string | null>(null);
+	const [search, setSearch] = useState("");
+	const [roleFilter, setRoleFilter] = useState<StaffRole | "all">("all");
 
 	const utils = trpc.useUtils();
 	const restaurantQuery = trpc.restaurants.getById.useQuery({
@@ -119,6 +145,26 @@ export default function StaffRosterPage() {
 		},
 	});
 
+	const reassignOwnerMutation = trpc.staff.reassignOwner.useMutation({
+		onSuccess: () => {
+			setReassignTarget(null);
+			invalidateAndNotify("Primary owner updated.");
+		},
+		onError: (error) => {
+			setReassignTarget(null);
+			setToast({ message: error.message, tone: "error" });
+		},
+	});
+
+	const adminResetPinMutation = trpc.staff.adminResetPin.useMutation({
+		onSuccess: () => {
+			setResetPinTarget(null);
+			setResetPinError(null);
+			setToast({ message: "PIN reset.", tone: "success" });
+		},
+		onError: (error) => setResetPinError(error.message),
+	});
+
 	function openCreateSheet() {
 		setSubmitError(null);
 		setEditTarget(null);
@@ -143,7 +189,17 @@ export default function StaffRosterPage() {
 	const availableRoles = availableRolesFor(viewerIsAdmin, viewerRole);
 
 	const staffList = listQuery.data ?? [];
-	const sortedStaff = [...staffList].sort(
+	const currentOwner = staffList.find((staff) => staff.is_primary_owner);
+	const searchTerm = search.trim().toLowerCase();
+	const filteredStaff = staffList.filter((staff) => {
+		if (roleFilter !== "all" && staff.role !== roleFilter) return false;
+		if (!searchTerm) return true;
+		return (
+			(staff.name ?? "").toLowerCase().includes(searchTerm) ||
+			staff.email.toLowerCase().includes(searchTerm)
+		);
+	});
+	const sortedStaff = filteredStaff.sort(
 		(a, b) =>
 			statusRank(a) - statusRank(b) ||
 			(a.name ?? a.email).localeCompare(b.name ?? b.email),
@@ -159,6 +215,11 @@ export default function StaffRosterPage() {
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
+					search={{
+						value: search,
+						onChange: setSearch,
+						label: "Search by name or email",
+					}}
 					title="Staff Roster"
 					description="Invite staff, manage roles, and remove access."
 					actions={
@@ -173,7 +234,27 @@ export default function StaffRosterPage() {
 					}
 				/>
 
-				<div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				{staffList.length === 0 ? null : (
+					<div className="mt-8 flex flex-wrap items-center gap-2">
+						{ROLE_FILTERS.map(({ value, label }) => (
+							<button
+								key={value}
+								type="button"
+								onClick={() => setRoleFilter(value)}
+								aria-pressed={roleFilter === value}
+								className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
+									roleFilter === value
+										? "border-accent text-primary"
+										: "border-divider text-secondary hover:text-primary"
+								}`}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				)}
+
+				<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					{listQuery.isPending ? (
 						Array.from({ length: 6 }, (_, i) => (
 							<div
@@ -211,6 +292,15 @@ export default function StaffRosterPage() {
 								Invite your first staff member
 							</button>
 						</div>
+					) : sortedStaff.length === 0 ? (
+						<div className="col-span-full flex flex-col items-center gap-4 rounded-xl border border-divider bg-surface p-16 text-center">
+							<Search
+								className="icon-xl text-muted"
+								strokeWidth={1.5}
+								aria-hidden="true"
+							/>
+							<p className="text-primary">No staff match your search.</p>
+						</div>
 					) : (
 						sortedStaff.map((staff) => (
 							<StaffRow
@@ -221,6 +311,8 @@ export default function StaffRosterPage() {
 									viewerIsAdmin,
 									viewerRole,
 								)}
+								canReassignOwner={canReassignOwner}
+								canResetPin={viewerIsAdmin}
 								onEdit={() => openEditSheet(staff)}
 								onRemove={() =>
 									setRemoveTarget({
@@ -228,6 +320,19 @@ export default function StaffRosterPage() {
 										name: staff.name ?? staff.email,
 									})
 								}
+								onReassign={() =>
+									setReassignTarget({
+										id: staff.id,
+										name: staff.name ?? staff.email,
+									})
+								}
+								onResetPin={() => {
+									setResetPinError(null);
+									setResetPinTarget({
+										id: staff.id,
+										name: staff.name ?? staff.email,
+									});
+								}}
 							/>
 						))
 					)}
@@ -256,6 +361,35 @@ export default function StaffRosterPage() {
 					onCancel={() => setRemoveTarget(null)}
 					onConfirm={() => removeMutation.mutate({ id: removeTarget.id })}
 					isPending={removeMutation.isPending}
+				/>
+			) : null}
+
+			{reassignTarget ? (
+				<ReassignOwnerDialog
+					target={reassignTarget}
+					currentOwnerName={
+						currentOwner?.name ?? currentOwner?.email ?? "the current owner"
+					}
+					onCancel={() => setReassignTarget(null)}
+					onConfirm={() =>
+						reassignOwnerMutation.mutate({
+							restaurantId,
+							newOwnerStaffId: reassignTarget.id,
+						})
+					}
+					isPending={reassignOwnerMutation.isPending}
+				/>
+			) : null}
+
+			{resetPinTarget ? (
+				<ResetPinSheet
+					target={resetPinTarget}
+					onClose={() => setResetPinTarget(null)}
+					onSubmit={(pin) =>
+						adminResetPinMutation.mutate({ staffId: resetPinTarget.id, pin })
+					}
+					isSubmitting={adminResetPinMutation.isPending}
+					submitError={resetPinError}
 				/>
 			) : null}
 

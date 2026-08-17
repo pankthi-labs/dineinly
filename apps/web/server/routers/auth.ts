@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
-import { publicProcedure, router } from "../trpc/init";
-import { resolveSignInInput } from "./auth.schema";
+import { authedProcedure, publicProcedure, router } from "../trpc/init";
+import { resolveSignInInput, updateDisplayNameInput } from "./auth.schema";
 
 // Staff auth flow: the sign-in gate (before OTP is sent) and the
 // post-verify link-up (right after it's confirmed). See
@@ -62,4 +62,37 @@ export const authRouter = router({
 			})),
 		};
 	}),
+
+	// Dineinly Admin's self-service name — Admin has no Staff row anywhere
+	// (RestaurantAccess.restaurantRole is null for them), so the Profile
+	// sheet's staff-backed name/PIN endpoints don't apply; this is their own
+	// equivalent, backed by the same user_metadata.display_name field
+	// getViewer() (apps/web/lib/auth.ts) already reads for the greeting.
+	me: authedProcedure.query(async ({ ctx }) => {
+		const {
+			data: { user },
+		} = await ctx.auth.auth.getUser();
+
+		return {
+			displayName: user?.user_metadata?.display_name ?? null,
+			email: user?.email ?? "",
+		};
+	}),
+
+	updateDisplayName: authedProcedure
+		.input(updateDisplayNameInput)
+		.mutation(async ({ ctx, input }) => {
+			const { error } = await ctx.auth.auth.updateUser({
+				data: { display_name: input.name },
+			});
+
+			if (error) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error.message,
+				});
+			}
+
+			return { success: true };
+		}),
 });

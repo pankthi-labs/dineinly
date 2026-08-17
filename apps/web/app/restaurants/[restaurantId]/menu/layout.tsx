@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { requireRestaurantRole } from "@/lib/auth";
 
-// Manage Staff (docs/product.md § RBAC) is Owner/Manager/Dineinly Admin only.
-export default async function StaffRosterLayout({
+// Manage Menu (docs/product.md § RBAC) is Owner/Manager/Dineinly Admin only.
+export default async function MenuDeskLayout({
 	children,
 	params,
 }: {
