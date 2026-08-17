@@ -50,7 +50,7 @@ export function RestaurantNavHeader({
 				<div className="flex min-w-0 items-center gap-6 lg:gap-8">
 					<nav
 						aria-label="Restaurant navigation"
-						className="min-w-0 overflow-x-auto"
+						className="no-scrollbar min-w-0 overflow-x-auto"
 					>
 						<ul className="flex min-w-max items-center gap-6 text-sm lg:gap-8">
 							{NAV_ITEMS.map((item) => {
