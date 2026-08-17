@@ -10,8 +10,8 @@ const navCards: Array<{
 	title: string;
 	description: string;
 	icon: LucideIcon;
-	// Cards without an href aren't built yet (Dineinly Staff, Dineinly
-	// Settings) — rendered inert rather than linking nowhere.
+	// Cards without an href aren't built yet (Dineinly Settings) — rendered
+	// inert rather than linking nowhere.
 	href?: string;
 }> = [
 	{
@@ -22,8 +22,9 @@ const navCards: Array<{
 	},
 	{
 		title: "Dineinly Staff",
-		description: "Manage admin and staff access",
+		description: "Manage Dineinly Admin access",
 		icon: UserCog,
+		href: "/admin/staff",
 	},
 	{
 		title: "Dineinly Settings",

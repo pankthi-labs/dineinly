@@ -668,6 +668,13 @@ export type Database = {
 				};
 				Returns: string;
 			};
+			assert_restaurant_track_unchanged: {
+				Args: {
+					p_id: string;
+					p_new_experience: Database["public"]["Enums"]["restaurant_experience"];
+				};
+				Returns: undefined;
+			};
 			broadcast_event: {
 				Args: { p_event: string; p_payload: Json; p_topic: string };
 				Returns: undefined;
@@ -730,6 +737,20 @@ export type Database = {
 					role: Database["public"]["Enums"]["staff_role"];
 					staff_id: string;
 				}[];
+			};
+			owner_update_restaurant: {
+				Args: {
+					p_address: string;
+					p_city: string;
+					p_experience: Database["public"]["Enums"]["restaurant_experience"];
+					p_gst_number: string;
+					p_id: string;
+					p_name: string;
+					p_pincode: string;
+					p_service_charge_rate: number;
+					p_state: string;
+				};
+				Returns: string;
 			};
 			reassign_primary_owner: {
 				Args: { p_new_owner_staff_id: string; p_restaurant_id: string };

@@ -19,3 +19,4 @@ process.env.GUEST_JWT_SIGNING_KEY = JSON.stringify({
 // real project — env.ts just needs them present and URL-shaped.
 process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-only-anon-key";
+process.env.SUPABASE_SERVICE_ROLE_KEY = "test-only-service-role-key";

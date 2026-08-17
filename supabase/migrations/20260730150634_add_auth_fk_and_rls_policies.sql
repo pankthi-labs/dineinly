@@ -634,6 +634,44 @@ grant execute on function public.admin_create_restaurant(
 	text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
 ) to authenticated;
 
+-- Shared by admin_update_restaurant and owner_update_restaurant below —
+-- docs/product.md § Dineinly Experiences: a restaurant only moves within its
+-- own track (Menu<->Guest<->One, or Menu<->Counter). Crossing from
+-- Full-Service to Quick-Service or back is a different operating model, not
+-- a self-serve toggle, so both callers reject it identically.
+create or replace function public.assert_restaurant_track_unchanged(
+	p_id uuid,
+	p_new_experience public.restaurant_experience
+)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+	v_current_experience public.restaurant_experience;
+begin
+	select experience into v_current_experience
+	from public.restaurants
+	where id = p_id;
+
+	if v_current_experience is null then
+		raise exception 'Restaurant not found';
+	end if;
+
+	if (v_current_experience = 'counter') <> (p_new_experience = 'counter') then
+		raise exception 'Cannot change payment timing (Full-Service/Quick-Service) — only the Dineinly Experience within the current track';
+	end if;
+end;
+$$;
+
+revoke execute on function public.assert_restaurant_track_unchanged(
+	uuid, public.restaurant_experience
+) from public;
+grant execute on function public.assert_restaurant_track_unchanged(
+	uuid, public.restaurant_experience
+) to authenticated;
+
 -- admin_update_restaurant: updates the restaurant and its owner-contact row
 -- in one transaction. Once the primary owner has signed in, their
 -- name/email/mobile are immutable through this function — reassigning who
@@ -661,27 +699,12 @@ as $$
 declare
 	v_primary_owner_id uuid;
 	v_primary_owner_status public.staff_status;
-	v_current_experience public.restaurant_experience;
 begin
 	if not public.is_dineinly_admin() then
 		raise exception 'Only Dineinly Admin may update restaurants';
 	end if;
 
-	select experience into v_current_experience
-	from public.restaurants
-	where id = p_id;
-
-	if v_current_experience is null then
-		raise exception 'Restaurant not found';
-	end if;
-
-	-- docs/product.md § Dineinly Experiences: a restaurant only moves within
-	-- its own track (Menu<->Guest<->One, or Menu<->Counter) — crossing from
-	-- Full-Service to Quick-Service or back is a different operating model,
-	-- not a self-serve toggle.
-	if (v_current_experience = 'counter') <> (p_experience = 'counter') then
-		raise exception 'Cannot change payment timing (Full-Service/Quick-Service) on an existing restaurant — only the Dineinly Experience within the current track';
-	end if;
+	perform public.assert_restaurant_track_unchanged(p_id, p_experience);
 
 	select id, status
 	into v_primary_owner_id, v_primary_owner_status
@@ -719,6 +742,67 @@ revoke execute on function public.admin_update_restaurant(
 ) from public;
 grant execute on function public.admin_update_restaurant(
 	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
+) to authenticated;
+
+-- owner_update_restaurant: docs/product.md § RBAC "Restaurant Settings" is
+-- Owner + Dineinly Admin only (not Manager) — narrower than every other
+-- restaurant-scoped RPC. Same field set and same track-crossing guard as
+-- admin_update_restaurant, but never touches the owner-contact row — that's
+-- Staff Roster's job (update_own_staff_profile, reassign_primary_owner).
+-- SECURITY DEFINER, unlike admin_update_restaurant: `restaurants` only has a
+-- write policy for Dineinly Admin (admin_all_restaurants) — a plain Owner
+-- has row-level SELECT only (staff_select_own_restaurant), so an invoker-
+-- mode UPDATE would silently affect 0 rows for that caller. Same reasoning
+-- as every staff-roster write RPC (invite_staff, update_staff, etc.,
+-- supabase/migrations/20260816164344_add_staff_roster_rpcs.sql) — the
+-- explicit role check above is what makes bypassing RLS here safe.
+create or replace function public.owner_update_restaurant(
+	p_id uuid,
+	p_name text,
+	p_address text,
+	p_city text,
+	p_gst_number text,
+	p_state text,
+	p_pincode text,
+	p_service_charge_rate numeric,
+	p_experience public.restaurant_experience
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	if not (
+		public.is_dineinly_admin()
+		or public.staff_role_for_restaurant(p_id) = 'owner'
+	) then
+		raise exception 'Only the restaurant owner may update these settings';
+	end if;
+
+	perform public.assert_restaurant_track_unchanged(p_id, p_experience);
+
+	update public.restaurants
+	set
+		name = p_name,
+		address = p_address,
+		city = p_city,
+		gst_number = p_gst_number,
+		state = p_state,
+		pincode = p_pincode,
+		service_charge_rate = p_service_charge_rate,
+		experience = p_experience
+	where id = p_id;
+
+	return p_id;
+end;
+$$;
+
+revoke execute on function public.owner_update_restaurant(
+	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience
+) from public;
+grant execute on function public.owner_update_restaurant(
+	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience
 ) to authenticated;
 
 -- ============================================================================

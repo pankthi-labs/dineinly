@@ -56,6 +56,7 @@ Every table below carries `restaurant_id` (tenant scope, RLS precondition). Soft
 | Cart | Cart Item (`session_id` FK directly) | 1:1 with session, no fields of its own. |
 | Bill Line Item | Order Item (already a snapshot) | Duplicate data — Order Item already has name/qty/price frozen. |
 | Guest Session | JWT claims only, no row | Guest identity is the signed token itself (`restaurant_id`, `table_session_id`); RLS checks `session.status = active`. No DB row needed. |
+| Dineinly Admin identity | Supabase Auth (`auth.users.app_metadata.app_role`), no row | Not tenant-scoped, no lifecycle beyond "has the claim or doesn't" — a table would just duplicate what `auth.users` already is. Managed via the Supabase Auth Admin API (`apps/web/lib/supabase/admin.ts`, `server/routers/admin-staff.ts`), not RLS. See `architecture.md` § Authentication. |
 
 ## Deferred (not in MVP — add when a real need arrives)
 

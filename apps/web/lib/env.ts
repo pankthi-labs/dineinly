@@ -9,6 +9,10 @@ export const env = createEnv({
 		// Private JWK (JSON, RS256) used to sign guest JWTs. See
 		// lib/guest-token.ts and supabase/config.toml `signing_keys_path`.
 		GUEST_JWT_SIGNING_KEY: z.string().min(1),
+		// Bypasses RLS entirely — used only by lib/supabase/admin.ts for the
+		// Supabase Auth Admin API (managing Dineinly Admin identities, which
+		// have no table of their own). Never imported client-side.
+		SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 	},
 	client: {
 		NEXT_PUBLIC_SUPABASE_URL: z.string().url(),

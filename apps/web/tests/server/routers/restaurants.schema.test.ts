@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	createRestaurantInput,
 	restaurantFieldsSchema,
+	updateOwnRestaurantInput,
 } from "@/server/routers/restaurants.schema";
 
 const validRestaurant = {
@@ -91,5 +92,22 @@ describe("createRestaurantInput", () => {
 			ownerEmail: "not-an-email",
 		});
 		expect(result.success).toBe(false);
+	});
+});
+
+describe("updateOwnRestaurantInput", () => {
+	it("requires an id but no owner-contact fields", () => {
+		expect(
+			updateOwnRestaurantInput.safeParse({
+				...validRestaurant,
+				id: "8400b6ac-3f4b-4b1a-9c1a-2a2b6c9d0a11",
+			}).success,
+		).toBe(true);
+	});
+
+	it("rejects a missing id", () => {
+		expect(updateOwnRestaurantInput.safeParse(validRestaurant).success).toBe(
+			false,
+		);
 	});
 });

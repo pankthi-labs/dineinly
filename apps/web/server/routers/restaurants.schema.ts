@@ -42,6 +42,13 @@ export const updateRestaurantInput = restaurantFieldsSchema
 	.merge(ownerContactSchema)
 	.extend({ id: z.string().uuid() });
 
+// Venue Settings (docs/product.md § RBAC "Restaurant Settings" — Owner +
+// Dineinly Admin only): same fields as updateRestaurantInput but never
+// owner-contact — identity changes stay in Staff Roster.
+export const updateOwnRestaurantInput = restaurantFieldsSchema.extend({
+	id: z.string().uuid(),
+});
+
 export const setRestaurantStatusInput = z.object({
 	id: z.string().uuid(),
 	status: z.enum(["active", "archived"]),

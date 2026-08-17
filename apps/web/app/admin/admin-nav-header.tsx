@@ -12,11 +12,11 @@ const NAV_ITEMS = [
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Only Admin Home and Restaurants Directory are built so far — the rest
-// render inert.
+// Dineinly Settings isn't built yet — it renders inert.
 const NAV_ROUTES: Partial<Record<NavItem, string>> = {
 	"Admin Home": "/admin",
 	"Restaurants Directory": "/admin/restaurants",
+	"Dineinly Staff": "/admin/staff",
 };
 
 export function AdminNavHeader({ active }: { active: NavItem }) {

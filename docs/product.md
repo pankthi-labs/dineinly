@@ -12,7 +12,7 @@ Every feature must improve guest experience, staff efficiency, or restaurant vis
 
 Dineinly is sold as packaged experiences so a restaurant can adopt at their own pace, on top of whatever they already run — not as a single all-or-nothing platform. A restaurant picks one experience (not per touchpoint); moving between experiences is a self-serve flag flip on the same restaurant record — same staff, menu, and history, no re-onboarding.
 
-Backed by a `restaurant.experience` field, set at signup and editable by Dineinly Admin from the Restaurants Directory. Ordering/kitchen/bill routers do not yet branch on it — until they do, every tenant gets One's behavior regardless of the stored value. This routing is a prerequisite for shipping any experience beyond One.
+Backed by a `restaurant.experience` field, set at signup and editable from Dineinly Admin's Restaurants Directory or, self-serve, from the restaurant's own Venue Settings (Owner only — see RBAC below). Either path only moves a restaurant within its own track (Full-Service or Quick-Service, see below) — crossing tracks isn't a self-serve toggle. Ordering/kitchen/bill routers do not yet branch on it — until they do, every tenant gets One's behavior regardless of the stored value. This routing is a prerequisite for shipping any experience beyond One.
 
 **Strategic shape:** Menu is the universal entry point. Guest is the adoption wedge — zero integration risk, sells itself on guest experience alone. One is the deep platform, full integration, the ceiling Guest grows into. Counter is a separate vertical entirely, not a deeper Guest — it serves quick-service restaurants, not an upgrade path for dine-in ones.
 

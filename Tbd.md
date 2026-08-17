@@ -35,10 +35,11 @@ Manage Staff, Manage Menu, Manage Tables & QR Codes, Update Order Status, and ev
 - **Menu Desk / Table Matrix** (`menu/layout.tsx`, `tables/layout.tsx`): Owner/Manager/Admin only, both at the page and the RLS layer (`staff_write_menu_*`/`staff_write_restaurant_tables`, `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 5). "Update Item Availability" stays open to any active staff via `set_menu_item_availability` (§ 7 of that migration) — the one carve-out, since Waiter/Kitchen keep that action per the matrix.
 - **Kitchen** (`kitchen.ts` `advanceBatch`): Kitchen/Manager/Owner/Admin only — Waiter views the queue but can't advance it.
 - **Bills** (`bills/layout.tsx`, `bills.ts`): every write excludes Kitchen; `closeSession`'s role check lives inside `close_session()` itself.
+- **Venue Settings** (`settings/layout.tsx`, `restaurants.ts` `updateOwn`): Owner/Admin only, narrower than every other gate above — Manager is excluded, both at the page and inside `owner_update_restaurant` itself.
 
-Not yet split: **View Analytics** and **Restaurant Settings** — neither page exists yet (Venue Settings and any analytics view are still unbuilt), so there's nothing to gate.
+Not yet split: **View Analytics** — the page doesn't exist yet, so there's nothing to gate.
 
-**Pick up:** apply the same per-`staff.role` pattern to Venue Settings and an Analytics page once either gets built.
+**Pick up:** apply the same per-`staff.role` pattern to an Analytics page once it gets built.
 
 ---
 

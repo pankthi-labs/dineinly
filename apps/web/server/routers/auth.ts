@@ -74,6 +74,7 @@ export const authRouter = router({
 		} = await ctx.auth.auth.getUser();
 
 		return {
+			id: user?.id ?? "",
 			displayName: user?.user_metadata?.display_name ?? null,
 			email: user?.email ?? "",
 		};

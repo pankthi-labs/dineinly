@@ -5,6 +5,7 @@ import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
 import {
 	useCanAccessBills,
+	useCanAccessSettings,
 	useCanManageStaff,
 	useIsAdmin,
 } from "./viewer-context";
@@ -20,18 +21,18 @@ const NAV_ITEMS = [
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Venue Settings isn't built yet — it renders inert (there's no permission
-// question, the page doesn't exist for anyone). Staff Roster, Menu Desk,
-// Table Matrix, and Bills are role-gated (docs/product.md § RBAC) instead —
-// a viewer without reach doesn't get a route their own page layout would
-// just redirect away from, so RestaurantNavHeader below omits the item from
-// the nav entirely rather than rendering it disabled.
+// Staff Roster, Menu Desk, Table Matrix, Bills, and Venue Settings are all
+// role-gated (docs/product.md § RBAC) — a viewer without reach doesn't get a
+// route their own page layout would just redirect away from, so
+// RestaurantNavHeader below omits the item from the nav entirely rather than
+// rendering it disabled.
 const NAV_ROUTES: Partial<Record<NavItem, (restaurantId: string) => string>> = {
 	Home: (restaurantId) => `/restaurants/${restaurantId}`,
 	Kitchen: (restaurantId) => `/restaurants/${restaurantId}/kitchen`,
 	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
 	"Table Matrix": (restaurantId) => `/restaurants/${restaurantId}/tables`,
 	"Staff Roster": (restaurantId) => `/restaurants/${restaurantId}/staff`,
+	"Venue Settings": (restaurantId) => `/restaurants/${restaurantId}/settings`,
 	Bills: (restaurantId) => `/restaurants/${restaurantId}/bills`,
 };
 
@@ -48,10 +49,12 @@ export function RestaurantNavHeader({
 	const canManageStaff = useCanManageStaff();
 	const canManageMenuAndTables = canManageStaff;
 	const canAccessBills = useCanAccessBills();
+	const canAccessSettings = useCanAccessSettings();
 	const gatedItems: Partial<Record<NavItem, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
 		"Table Matrix": canManageMenuAndTables,
 		"Staff Roster": canManageStaff,
+		"Venue Settings": canAccessSettings,
 		Bills: canAccessBills,
 	};
 	const visibleItems = NAV_ITEMS.filter(

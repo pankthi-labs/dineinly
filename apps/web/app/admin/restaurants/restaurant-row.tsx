@@ -4,8 +4,8 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
+import { EXPERIENCE_LABELS } from "@/components/restaurant-fields-fieldset";
 import type { AppRouter } from "@/server/routers/_app";
-import { EXPERIENCE_LABELS } from "./restaurant-form-sheet";
 
 type RestaurantListItem =
 	inferRouterOutputs<AppRouter>["restaurants"]["list"]["items"][number];

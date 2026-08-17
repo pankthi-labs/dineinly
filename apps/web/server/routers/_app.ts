@@ -1,4 +1,5 @@
 import { publicProcedure, router } from "../trpc/init";
+import { adminStaffRouter } from "./admin-staff";
 import { authRouter } from "./auth";
 import { billsRouter } from "./bills";
 import { guestRouter } from "./guest";
@@ -17,6 +18,7 @@ export const appRouter = router({
 			serverTime: Date.now(),
 		})),
 	}),
+	adminStaff: adminStaffRouter,
 	auth: authRouter,
 	bills: billsRouter,
 	guest: guestRouter,

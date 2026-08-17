@@ -1,11 +1,13 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
+import { isDineinlyAdmin } from "@/lib/auth";
 import { adminProcedure, authedProcedure, router } from "../trpc/init";
 import {
 	createRestaurantInput,
 	getRestaurantInput,
 	listRestaurantsInput,
 	setRestaurantStatusInput,
+	updateOwnRestaurantInput,
 	updateRestaurantInput,
 } from "./restaurants.schema";
 
@@ -133,6 +135,64 @@ export const restaurantsRouter = router({
 			return data;
 		}),
 
+	// Venue Settings read (docs/product.md § RBAC "Restaurant Settings" —
+	// Owner + Dineinly Admin only, unlike getById's plain name/status which
+	// every staff role may see). staff_select_own_restaurant RLS (supabase/
+	// migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 5) grants
+	// every active staff row-level SELECT regardless of role, so — unlike
+	// getById — the role check has to happen here, not just in the
+	// settings/layout.tsx page gate a caller could bypass by hitting this
+	// procedure directly.
+	getSettings: authedProcedure
+		.input(getRestaurantInput)
+		.query(async ({ ctx, input }) => {
+			const {
+				data: { user },
+			} = await ctx.auth.auth.getUser();
+
+			if (!isDineinlyAdmin(user)) {
+				const { data: role } = await ctx.auth.rpc("staff_role_for_restaurant", {
+					p_restaurant_id: input.id,
+				});
+				if (role !== "owner") {
+					throw new TRPCError({
+						code: "FORBIDDEN",
+						message: "Only the restaurant owner may view these settings.",
+					});
+				}
+			}
+
+			const { data, error } = await ctx.auth
+				.from("restaurants")
+				.select(
+					"id, name, address, city, gst_number, state, pincode, service_charge_rate, experience",
+				)
+				.eq("id", input.id)
+				.maybeSingle();
+
+			if (error) {
+				throw toTRPCError(error, "Unable to load the restaurant.");
+			}
+			if (!data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Restaurant not found.",
+				});
+			}
+
+			return {
+				id: data.id,
+				name: data.name,
+				address: data.address,
+				city: data.city,
+				gstNumber: data.gst_number,
+				state: data.state,
+				pincode: data.pincode,
+				serviceChargePercent: toServiceChargePercent(data.service_charge_rate),
+				experience: data.experience,
+			};
+		}),
+
 	create: adminProcedure
 		.input(createRestaurantInput)
 		.mutation(async ({ ctx, input }) => {
@@ -187,6 +247,38 @@ export const restaurantsRouter = router({
 
 			if (error) {
 				throw toTRPCError(error, "Unable to save the restaurant.");
+			}
+
+			return { id: data };
+		}),
+
+	// Venue Settings write. authedProcedure — owner_update_restaurant
+	// (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql)
+	// does the real authorization check (Owner-role staff or Dineinly
+	// Admin), same pattern as staff.ts's self-service procedures.
+	updateOwn: authedProcedure
+		.input(updateOwnRestaurantInput)
+		.mutation(async ({ ctx, input }) => {
+			const { data, error } = await ctx.auth.rpc("owner_update_restaurant", {
+				p_id: input.id,
+				p_name: input.name,
+				p_address: input.address,
+				p_city: input.city,
+				p_gst_number: input.gstNumber,
+				p_state: input.state,
+				p_pincode: input.pincode,
+				p_service_charge_rate: toServiceChargeRate(
+					input.serviceChargePercent,
+				) as number,
+				p_experience: input.experience,
+			});
+
+			if (error) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: error.message,
+					cause: error,
+				});
 			}
 
 			return { id: data };

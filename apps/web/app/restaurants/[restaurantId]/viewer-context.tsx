@@ -76,3 +76,11 @@ export function useCanAccessBills(): boolean {
 	const { isAdmin, restaurantRole } = useRestaurantViewer();
 	return isAdmin || restaurantRole !== "kitchen";
 }
+
+// Restaurant Settings (docs/product.md § RBAC) is Owner + Dineinly Admin
+// only — narrower than Manage Staff, which Manager also reaches. Client-side
+// UX only — see settings/layout.tsx for the real, server-enforced gate.
+export function useCanAccessSettings(): boolean {
+	const { isAdmin, restaurantRole } = useRestaurantViewer();
+	return isAdmin || restaurantRole === "owner";
+}
