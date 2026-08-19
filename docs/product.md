@@ -109,7 +109,7 @@ Spice, Salt, Ice are the only guest-selectable option groups in the MVP. At item
 - **Cart:** any participant edits freely before confirming (concurrent edits are last-write-wins). Confirming sends the cart to the kitchen as an order (one round) and clears the cart. A session accumulates orders across the meal; the bill aggregates all of them.
 - **Merge:** Waiter/Manager/Owner merges restaurant tables into one session/cart/bill. Not reversible within the session. **MVP only merges a free (session-less) table into an existing session** — two already-active sessions are never merged.
 - **Close:** requires no orders in progress and the bill settled. Any Waiter/Manager/Owner may close — no override needed. Closing finalizes and settles the bill, archives the session, and frees the tables.
-- **Force-terminate:** Waiter/Manager/Owner may force-close an abandoned session (walkout), freeing the tables. Void vs. settle handling of any open bill is `TBD` — decided at implementation, flag before guessing.
+- **Force-terminate:** Waiter/Manager/Owner may force-close an abandoned session (walkout), freeing the tables. Any open or requested bill is voided (deleted) rather than settled — the session's history then shows no bill at all, same as one that was never requested. An already-settled bill is untouched.
 - **MVP limitation:** one bill per session — no split bills.
 
 ---

@@ -32,6 +32,11 @@ export const regenerateTableQrInput = z.object({
 	id: tableIdSchema,
 });
 
+export const mergeTableInput = z.object({
+	tableId: tableIdSchema,
+	sessionId: z.string().uuid(),
+});
+
 export const downloadTableQrPdfInput = z.object({
 	id: tableIdSchema,
 	// The browser's own origin — used only to encode the scannable guest

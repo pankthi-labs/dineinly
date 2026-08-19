@@ -2,6 +2,7 @@ import { publicProcedure, router } from "../trpc/init";
 import { adminStaffRouter } from "./admin-staff";
 import { authRouter } from "./auth";
 import { billsRouter } from "./bills";
+import { floorRouter } from "./floor";
 import { guestRouter } from "./guest";
 import { kitchenRouter } from "./kitchen";
 import { menuRouter } from "./menu";
@@ -21,6 +22,7 @@ export const appRouter = router({
 	adminStaff: adminStaffRouter,
 	auth: authRouter,
 	bills: billsRouter,
+	floor: floorRouter,
 	guest: guestRouter,
 	kitchen: kitchenRouter,
 	menu: menuRouter,

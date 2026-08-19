@@ -693,6 +693,10 @@ export type Database = {
 			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
+			force_terminate_session: {
+				Args: { p_session_id: string };
+				Returns: undefined;
+			};
 			invite_staff: {
 				Args: {
 					p_email: string;
@@ -737,6 +741,10 @@ export type Database = {
 					role: Database["public"]["Enums"]["staff_role"];
 					staff_id: string;
 				}[];
+			};
+			merge_table_into_session: {
+				Args: { p_session_id: string; p_table_id: string };
+				Returns: undefined;
 			};
 			owner_update_restaurant: {
 				Args: {
@@ -799,6 +807,14 @@ export type Database = {
 			staff_role_for_restaurant: {
 				Args: { p_restaurant_id: string };
 				Returns: Database["public"]["Enums"]["staff_role"];
+			};
+			staff_submit_order: {
+				Args: {
+					p_idempotency_key: string;
+					p_restaurant_id: string;
+					p_session_id: string;
+				};
+				Returns: string;
 			};
 			submit_order: { Args: { p_idempotency_key: string }; Returns: string };
 			try_uuid: { Args: { p_text: string }; Returns: string };

@@ -1,5 +1,7 @@
 import { TRPCError } from "@trpc/server";
+import type { Database } from "@workspace/db";
 import { z } from "zod";
+import type { Context } from "../trpc/context";
 import { authedProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
 
@@ -22,6 +24,37 @@ function assertNoQueueError(error: unknown): void {
 		message: "Unable to load the kitchen queue.",
 		cause: error,
 	});
+}
+
+type OrderItemStatus = "placed" | "preparing" | "ready" | "served";
+
+// Shared by advanceBatch and serveBatch below: both move a batch of order
+// items from one expected status to another. `status = from` in the filter
+// guards against a stale double-tap racing an already-advanced item.
+async function updateOrderItemsStatus(
+	ctx: Context,
+	restaurantId: string,
+	orderItemIds: string[],
+	from: OrderItemStatus,
+	changes: Database["public"]["Tables"]["order_items"]["Update"],
+): Promise<{ updatedIds: string[] }> {
+	const { data, error } = await ctx.auth
+		.from("order_items")
+		.update(changes)
+		.eq("restaurant_id", restaurantId)
+		.eq("status", from)
+		.in("id", orderItemIds)
+		.select("id");
+
+	if (error) {
+		throw new TRPCError({
+			code: "INTERNAL_SERVER_ERROR",
+			message: "Unable to update the order.",
+			cause: error,
+		});
+	}
+
+	return { updatedIds: (data ?? []).map((row) => row.id) };
 }
 
 export const kitchenRouter = router({
@@ -136,23 +169,42 @@ export const kitchenRouter = router({
 					? { status: input.to, preparing_at: now }
 					: { status: input.to, ready_at: now };
 
-			const { data, error } = await ctx.auth
-				.from("order_items")
-				.update(changes)
-				.eq("restaurant_id", input.restaurantId)
-				.eq("status", ADVANCE_FROM[input.to])
-				.in("id", input.orderItemIds)
-				.select("id");
+			return updateOrderItemsStatus(
+				ctx,
+				input.restaurantId,
+				input.orderItemIds,
+				ADVANCE_FROM[input.to],
+				changes,
+			);
+		}),
 
-			if (error) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Unable to update the order.",
-					cause: error,
-				});
-			}
+	// Serve Order (docs/product.md § RBAC "Serve Order (set Served)") is
+	// Waiter/Manager/Owner — the inverse split of advanceBatch above, which
+	// excludes Waiter. Ready is the only status this ever moves from: Served
+	// is terminal (order-item.ts / core-data-model.md lifecycle), and
+	// Kitchen never touches this transition at all, not even to view it as
+	// an option — the Ready column offers no advance action for Kitchen.
+	serveBatch: authedProcedure
+		.input(
+			z.object({
+				restaurantId: restaurantIdSchema,
+				orderItemIds: z.array(z.string().uuid()).min(1),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			await requireStaffRole(ctx, input.restaurantId, [
+				"waiter",
+				"manager",
+				"owner",
+			]);
 
-			return { updatedIds: (data ?? []).map((row) => row.id) };
+			return updateOrderItemsStatus(
+				ctx,
+				input.restaurantId,
+				input.orderItemIds,
+				"ready",
+				{ status: "served" },
+			);
 		}),
 
 	listAvailability: authedProcedure

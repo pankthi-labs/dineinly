@@ -49,6 +49,10 @@ export const closeSessionInput = z.object({
 	sessionId: sessionIdSchema,
 });
 
+export const forceTerminateSessionInput = z.object({
+	sessionId: sessionIdSchema,
+});
+
 export const downloadBillPdfInput = z.object({
 	sessionId: sessionIdSchema,
 });

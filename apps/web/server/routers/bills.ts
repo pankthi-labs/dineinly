@@ -9,6 +9,7 @@ import {
 	cancelOrderItemInput,
 	closeSessionInput,
 	downloadBillPdfInput,
+	forceTerminateSessionInput,
 	getBillInput,
 	listBillsInput,
 	requestBillInput,
@@ -929,6 +930,27 @@ export const billsRouter = router({
 		.input(closeSessionInput)
 		.mutation(async ({ ctx, input }) => {
 			const { error } = await ctx.auth.rpc("close_session", {
+				p_session_id: input.sessionId,
+			});
+			if (error) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: error.message,
+					cause: error,
+				});
+			}
+			return { closed: true };
+		}),
+
+	// Force-Terminate Session (walkout): delegates to force_terminate_session()
+	// (§ 14 of the RLS migration) — same shape as closeSession, but voids
+	// (deletes) an unsettled bill and skips every gate Close Session enforces
+	// (bill settled, nothing in progress), since it exists precisely to
+	// override those for an abandoned table.
+	forceTerminate: authedProcedure
+		.input(forceTerminateSessionInput)
+		.mutation(async ({ ctx, input }) => {
+			const { error } = await ctx.auth.rpc("force_terminate_session", {
 				p_session_id: input.sessionId,
 			});
 			if (error) {

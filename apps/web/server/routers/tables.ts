@@ -9,6 +9,7 @@ import {
 	downloadAllTableQrPdfInput,
 	downloadTableQrPdfInput,
 	listTablesInput,
+	mergeTableInput,
 	regenerateTableQrInput,
 	setTableStatusInput,
 	updateTableInput,
@@ -186,6 +187,29 @@ export const tablesRouter = router({
 				fileName: `${toFileNameSegment(data.label)}-qr.pdf`,
 				base64: toBase64Pdf(pdf),
 			};
+		}),
+
+	// Merge Tables (docs/product.md § Shared Table Session): folds a free
+	// table into an already-active session. Delegates to
+	// merge_table_into_session() (§ 14 of the RLS migration) — Waiter/
+	// Manager/Owner reach, wider than every other write in this router
+	// (Owner/Manager only), so it needs its own role check inside the RPC
+	// rather than this router's usual plain RLS-backed write.
+	merge: authedProcedure
+		.input(mergeTableInput)
+		.mutation(async ({ ctx, input }) => {
+			const { error } = await ctx.auth.rpc("merge_table_into_session", {
+				p_table_id: input.tableId,
+				p_session_id: input.sessionId,
+			});
+			if (error) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: error.message,
+					cause: error,
+				});
+			}
+			return { merged: true };
 		}),
 
 	downloadAllQrPdf: authedProcedure

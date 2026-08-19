@@ -25,7 +25,9 @@ export default function BillDetailPage() {
 	}>();
 
 	const [toast, setToast] = useState<ToastState | null>(null);
-	const [confirming, setConfirming] = useState<"settle" | "close" | null>(null);
+	const [confirming, setConfirming] = useState<
+		"settle" | "close" | "terminate" | null
+	>(null);
 	const [isDownloading, setIsDownloading] = useState(false);
 	const [editing, setEditing] = useState<EditingAction>(null);
 	const [pendingQty, setPendingQty] = useState(0);
@@ -107,6 +109,19 @@ export default function BillDetailPage() {
 		onSuccess: () => {
 			setConfirming(null);
 			setToast({ message: "Session closed.", tone: "success" });
+			utils.bills.list.invalidate();
+			router.push(`/restaurants/${restaurantId}/bills`);
+		},
+		onError: (error) => {
+			setConfirming(null);
+			notifyError(error);
+		},
+	});
+
+	const terminateMutation = trpc.bills.forceTerminate.useMutation({
+		onSuccess: () => {
+			setConfirming(null);
+			setToast({ message: "Session force-terminated.", tone: "success" });
 			utils.bills.list.invalidate();
 			router.push(`/restaurants/${restaurantId}/bills`);
 		},
@@ -545,6 +560,17 @@ export default function BillDetailPage() {
 									Session closed.
 								</p>
 							) : null}
+
+							{data.sessionStatus === "active" ? (
+								<button
+									type="button"
+									onClick={() => setConfirming("terminate")}
+									disabled={terminateMutation.isPending}
+									className="rounded-md border border-error px-6 py-3 font-medium text-error text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-60"
+								>
+									Force-Terminate Session
+								</button>
+							) : null}
 						</div>
 					</div>
 				</div>
@@ -662,6 +688,23 @@ export default function BillDetailPage() {
 					onCancel={() => setConfirming(null)}
 					onConfirm={() => closeMutation.mutate({ sessionId })}
 					isPending={closeMutation.isPending}
+				/>
+			) : null}
+
+			{confirming === "terminate" ? (
+				<ConfirmDialog
+					titleId="terminate-session-title"
+					title="Force-terminate this session?"
+					body={
+						data.status === "settled"
+							? "This frees every table in this session. The settled bill stays exactly as it is in your history."
+							: "This frees every table in this session and voids the open bill — it won't appear as revenue. Use this only for an abandoned table (walkout)."
+					}
+					confirmLabel="Force-Terminate"
+					pendingLabel="Terminating…"
+					onCancel={() => setConfirming(null)}
+					onConfirm={() => terminateMutation.mutate({ sessionId })}
+					isPending={terminateMutation.isPending}
 				/>
 			) : null}
 

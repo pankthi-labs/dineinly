@@ -55,6 +55,10 @@ export default function KitchenDisplayPage() {
 	// ✅) but can't advance a batch. UX only — advanceBatch enforces the
 	// real, server-side version of this same check.
 	const canAdvance = isAdmin || restaurantRole !== "waiter";
+	// "Serve Order (set Served)" is the inverse split — Waiter/Manager/Owner,
+	// never Kitchen. UX only — serveBatch enforces the real, server-side
+	// version of this same check.
+	const canServe = isAdmin || restaurantRole !== "kitchen";
 	const [availabilityMode, setAvailabilityMode] = useState<
 		"unavailable" | "available" | null
 	>(null);
@@ -110,6 +114,29 @@ export default function KitchenDisplayPage() {
 			utils.kitchen.listQueue.invalidate({ restaurantId });
 		},
 	});
+	const serveBatch = trpc.kitchen.serveBatch.useMutation({
+		onMutate: async (input) => {
+			await utils.kitchen.listQueue.cancel({ restaurantId });
+			const previous = utils.kitchen.listQueue.getData({ restaurantId });
+			utils.kitchen.listQueue.setData({ restaurantId }, (current) => {
+				if (!current) return current;
+				const serving = new Set(input.orderItemIds);
+				return {
+					...current,
+					items: current.items.filter((item) => !serving.has(item.id)),
+				};
+			});
+			return { previous };
+		},
+		onError: (_error, _input, context) => {
+			if (context?.previous) {
+				utils.kitchen.listQueue.setData({ restaurantId }, context.previous);
+			}
+		},
+		onSettled: () => {
+			utils.kitchen.listQueue.invalidate({ restaurantId });
+		},
+	});
 
 	if (queue.isPending) {
 		return <KitchenLoading />;
@@ -138,6 +165,10 @@ export default function KitchenDisplayPage() {
 			orderItemIds: batch.orderItemIds,
 			to,
 		});
+	}
+
+	function serve(batch: KitchenBatch) {
+		serveBatch.mutate({ restaurantId, orderItemIds: batch.orderItemIds });
 	}
 
 	return (
@@ -232,16 +263,34 @@ export default function KitchenDisplayPage() {
 					status="ready"
 					batches={ready}
 					dimmed
-					renderAction={() => (
-						<div className="mt-1 flex items-center justify-center gap-2 rounded-md bg-surface-raised px-6 py-4 text-primary text-sm">
-							<CheckCircle2
-								className="icon-sm text-success"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-							Awaiting Pickup
-						</div>
-					)}
+					renderAction={
+						canServe
+							? (batch) => (
+									<button
+										type="button"
+										onClick={() => serve(batch)}
+										disabled={serveBatch.isPending}
+										className={ADVANCE_BUTTON_CLASS}
+									>
+										Mark Served
+										<Check
+											className="icon-sm"
+											strokeWidth={1.5}
+											aria-hidden="true"
+										/>
+									</button>
+								)
+							: () => (
+									<div className="mt-1 flex items-center justify-center gap-2 rounded-md bg-surface-raised px-6 py-4 text-primary text-sm">
+										<CheckCircle2
+											className="icon-sm text-success"
+											strokeWidth={1.5}
+											aria-hidden="true"
+										/>
+										Awaiting Pickup
+									</div>
+								)
+					}
 				/>
 			</main>
 

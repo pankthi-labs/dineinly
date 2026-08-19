@@ -97,14 +97,6 @@ Menu Desk has no way to see what a dish/category looks like from the guest order
 
 ---
 
-## Waiter serve flow missing
-
-No mutation anywhere sets `order_items.status = 'served'`. `kitchen.ts`'s `advanceBatch` only moves `placed → preparing → ready` (`ADVANCE_FROM` map, `apps/web/server/routers/kitchen.ts`); nothing moves `ready → served`. Consequence: once the kitchen marks a dish Ready, it sits there forever — the guest-facing status (`apps/web/server/routers/guest.ts` `orders.list`, derived `preparing`/`partially served`/`served`) can never advance past "preparing" in practice, since no item ever reaches `served`.
-
-**Pick up:** Floor/Waiter router + UI to mark item(s) served, gated by the Waiter role once role-level RBAC exists (see "Feature-level staff permissions" above). Known and explicitly out of scope for now.
-
----
-
 ## Request bill has no terminal-status guard
 
 `request_bill()` (`supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 11) lets a guest request the bill at any point, regardless of order item status — same for `docs/core-data-model.md`'s Request Bill lifecycle line. A real dine-in flow should only allow it once every Order Item in the session is `served` or `cancelled` (nothing left `placed`/`preparing`/`ready`).
@@ -117,7 +109,7 @@ No mutation anywhere sets `order_items.status = 'served'`. `kitchen.ts`'s `advan
 
 The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.
 
-**Pick up:** the realtime Broadcast infra now exists (`session:{id}`/`restaurant:{id}` topics, `apps/web/lib/realtime/`) — this only needs a mutation plus a decision on what a waiter-facing "call" surface looks like (toast on Kitchen Display? a separate Floor view? no Floor view exists yet).
+**Pick up:** the realtime Broadcast infra now exists (`session:{id}`/`restaurant:{id}` topics, `apps/web/lib/realtime/`) and the Floor page now exists (`apps/web/app/restaurants/[restaurantId]/floor`) — this only needs a mutation plus a decision on what the notification looks like there.
 
 ---
 
@@ -126,19 +118,3 @@ The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon 
 The guest bill screen has no way to email/export the bill — no guest email capture anywhere in the guest flow (guests never have accounts, per AGENTS.md), no email-sending integration.
 
 **Pick up:** decide how a guest supplies an email (one-off field on the bill screen vs. something persisted) and which email provider to use — not decided yet, don't guess either.
-
----
-
-## Merge tables not implemented
-
-`docs/product.md` describes merging tables (for shared/combined dining parties) as a working action. No merge router procedure or RPC exists in the codebase.
-
-**Pick up:** lower priority than the rest of the Bills tab (Settle bill, Close Session, and correction actions all shipped — `apps/web/server/routers/bills.ts`) — scope once there's a concrete need.
-
----
-
-## Force-terminate session handling — TBD in docs
-
-Void vs. settle handling of an open bill on force-terminate, marked `TBD` in `docs/core-data-model.md` / `docs/product.md`.
-
-**Pick up:** do not guess — flag and ask (`AGENTS.md`).

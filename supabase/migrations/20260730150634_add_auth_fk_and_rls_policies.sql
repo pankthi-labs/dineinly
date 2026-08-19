@@ -1109,6 +1109,120 @@ $$;
 revoke execute on function public.submit_order(text) from public;
 grant execute on function public.submit_order(text) to authenticated;
 
+-- Staff equivalent of submit_order() above, for Order on behalf of guest
+-- (docs/product.md § RBAC "Submit Order": Waiter/Manager/Owner — Dineinly
+-- Admin excluded here, unlike most staff RPCs, since orders.placed_by_type
+-- = 'staff' requires a real staff row via orders_placed_by_staff_id_check,
+-- and Admin never has one). A staff caller has no guest JWT claims to read
+-- tenancy/session from, so both are explicit arguments instead of JWT
+-- claims. Mirrors submit_order()'s idempotency, empty-cart, availability,
+-- and settled-bill guards exactly; only the actor attribution differs.
+create or replace function public.staff_submit_order(
+	p_restaurant_id uuid,
+	p_session_id uuid,
+	p_idempotency_key text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_staff_id uuid;
+	v_order_id uuid;
+begin
+	select id into v_staff_id
+	from public.staff
+	where restaurant_id = p_restaurant_id
+		and user_id = auth.uid()
+		and status = 'active'
+		and role in ('waiter', 'manager', 'owner');
+
+	if v_staff_id is null then
+		raise exception 'Only an active Waiter, Manager, or Owner may place an order';
+	end if;
+
+	if not exists (
+		select 1 from public.table_sessions
+		where id = p_session_id and restaurant_id = p_restaurant_id and status = 'active'
+	) then
+		raise exception 'Table session is not active';
+	end if;
+
+	-- Same rule as submit_order(): a settled bill's amounts are frozen, so a
+	-- new order after that point would silently drift the paid total.
+	if exists (
+		select 1 from public.bills
+		where session_id = p_session_id and status = 'settled'
+	) then
+		raise exception 'This bill has already been settled — close the session before ordering again';
+	end if;
+
+	select id into v_order_id
+	from public.orders
+	where idempotency_key = p_idempotency_key;
+
+	if v_order_id is not null then
+		return v_order_id;
+	end if;
+
+	perform 1 from public.table_sessions where id = p_session_id for update;
+
+	if not exists (
+		select 1 from public.cart_items
+		where restaurant_id = p_restaurant_id and session_id = p_session_id
+	) then
+		raise exception 'Cart is empty';
+	end if;
+
+	if exists (
+		select 1
+		from public.cart_items ci
+		join public.menu_items mi
+			on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id
+		where ci.restaurant_id = p_restaurant_id
+			and ci.session_id = p_session_id
+			and (mi.availability = 'sold_out' or mi.status <> 'active')
+	) then
+		raise exception 'One or more items in this cart are no longer available';
+	end if;
+
+	insert into public.orders (restaurant_id, session_id, placed_by_type, placed_by_staff_id, idempotency_key)
+	values (p_restaurant_id, p_session_id, 'staff', v_staff_id, p_idempotency_key)
+	on conflict (idempotency_key) do nothing
+	returning id into v_order_id;
+
+	if v_order_id is null then
+		select id into v_order_id
+		from public.orders
+		where idempotency_key = p_idempotency_key;
+		return v_order_id;
+	end if;
+
+	insert into public.order_items (
+		restaurant_id, order_id, item_name, unit_price, tax_rate, diet,
+		quantity, spice, salt, ice, menu_item_id
+	)
+	select
+		ci.restaurant_id, v_order_id, mi.name, mi.price, mc.tax_rate, mi.diet,
+		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id
+	from public.cart_items ci
+	join public.menu_items mi
+		on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id
+	join public.menu_categories mc
+		on mc.restaurant_id = mi.restaurant_id and mc.id = mi.category_id
+	where ci.restaurant_id = p_restaurant_id and ci.session_id = p_session_id;
+
+	delete from public.cart_items
+	where restaurant_id = p_restaurant_id and session_id = p_session_id;
+
+	return v_order_id;
+end;
+$$;
+
+revoke execute on function public.staff_submit_order(uuid, uuid, text) from public;
+grant execute on function public.staff_submit_order(uuid, uuid, text) to authenticated;
+
 -- ============================================================================
 -- 10. Staff auth: sign-in gate + post-verify linking
 -- ============================================================================
@@ -1641,7 +1755,8 @@ create policy "menu_topic_select" on realtime.messages
 	);
 
 -- ============================================================================
--- 14. Staff billing: close_session
+-- 14. Staff floor operations: close_session, force_terminate_session,
+--     merge_table_into_session
 -- ============================================================================
 -- Close Session (docs/product.md § Shared Table Session, docs/
 -- core-data-model.md lifecycle invariants): frees every table pointing at
@@ -1652,18 +1767,21 @@ create policy "menu_topic_select" on realtime.messages
 -- "occupied" with nothing left to close, or a session "closed" with a
 -- table still pointing at it.
 --
--- SECURITY INVOKER, not DEFINER, unlike the guest functions above: the
--- caller is always a signed-in staff member or Dineinly Admin, and both
--- already hold real table grants and RLS reach on table_sessions, bills,
--- cart_items, and restaurant_tables (§ 5 staff / § 4 admin above) — no
--- elevated privilege is needed, same reasoning as admin_create_restaurant
--- (§ 6). RLS on the initial select already confines a caller to sessions in
--- their own restaurant, so a session belonging to another tenant reads back
--- as "not found" rather than needing a separate explicit ownership check.
+-- SECURITY DEFINER: table_sessions/bills/cart_items all grant any active
+-- staff write reach (staff_all_table_sessions/staff_all_bills/
+-- staff_all_cart_items, § 5), but staff_write_restaurant_tables (§ 5) is
+-- Owner/Manager only — narrower than the Waiter/Manager/Owner this
+-- function's own role check (below) allows. Under SECURITY INVOKER, a
+-- Waiter caller would pass that role check and then have this function's
+-- own restaurant_tables update silently match zero rows under RLS, closing
+-- the session while leaving its table stuck "occupied". Elevating to
+-- DEFINER makes the explicit role check below the real gate, same
+-- reasoning as merge_table_into_session/force_terminate_session below,
+-- which need the same table_tables write reach for the same role.
 create or replace function public.close_session(p_session_id uuid)
 returns void
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -1715,22 +1833,139 @@ begin
 	set session_id = null
 	where session_id = p_session_id;
 
-	-- SECURITY INVOKER means every write above is still subject to RLS: a
-	-- caller who passed the checks above but lacks staff/admin UPDATE reach
-	-- on table_sessions (a guest JWT is `role: authenticated` too, see
-	-- lib/guest-token.ts) would otherwise have this UPDATE silently match
-	-- zero rows and the function would still report success. Fail loudly
-	-- instead of lying about having closed the session.
 	update public.table_sessions
 	set status = 'closed', closed_at = now()
 	where id = p_session_id;
 
+	-- Defensive, not a permission check anymore (SECURITY DEFINER bypasses
+	-- RLS): guards only against a race with a concurrent close on the same
+	-- session between the initial select and this update.
 	get diagnostics v_updated = row_count;
 	if v_updated = 0 then
-		raise exception 'Not permitted to close this session';
+		raise exception 'Session no longer active';
 	end if;
 end;
 $$;
 
 revoke execute on function public.close_session(uuid) from public;
 grant execute on function public.close_session(uuid) to authenticated;
+
+-- Force-Terminate Session (docs/product.md § Shared Table Session, RBAC:
+-- Waiter/Manager/Owner) — an abandoned session (walkout), closed as an
+-- override of Close Session's normal gates: no bill-settled requirement, no
+-- check for order items still in progress. It exists precisely because a
+-- walkout will never satisfy those gates.
+--
+-- Void vs. settle an open bill was TBD in docs/product.md / core-data-model.md
+-- until resolved (2026-08-19): void. An open or requested bill has nothing
+-- settled to preserve, so it's deleted outright rather than frozen — the
+-- session's history then shows no bill at all, same as one that was never
+-- requested (docs/product.md § Billing & Settlement "Open" state). An
+-- already-`settled` bill is left untouched: it's already frozen and
+-- reflects a real, confirmed payment, so force-terminate behaves exactly
+-- like a normal close for that bill.
+--
+-- SECURITY DEFINER for the same restaurant_tables reach reason as
+-- close_session above.
+create or replace function public.force_terminate_session(p_session_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid;
+	v_updated int;
+begin
+	select restaurant_id into v_restaurant_id
+	from public.table_sessions
+	where id = p_session_id and status = 'active';
+
+	if v_restaurant_id is null then
+		raise exception 'Session not found or already closed';
+	end if;
+
+	if not (
+		public.is_dineinly_admin()
+		or public.staff_role_for_restaurant(v_restaurant_id) in ('waiter', 'manager', 'owner')
+	) then
+		raise exception 'Only an active Waiter, Manager, or Owner may force-terminate a session';
+	end if;
+
+	delete from public.bills
+	where session_id = p_session_id and status <> 'settled';
+
+	delete from public.cart_items where session_id = p_session_id;
+
+	update public.restaurant_tables
+	set session_id = null
+	where session_id = p_session_id;
+
+	update public.table_sessions
+	set status = 'closed', closed_at = now()
+	where id = p_session_id;
+
+	get diagnostics v_updated = row_count;
+	if v_updated = 0 then
+		raise exception 'Session no longer active';
+	end if;
+end;
+$$;
+
+revoke execute on function public.force_terminate_session(uuid) from public;
+grant execute on function public.force_terminate_session(uuid) to authenticated;
+
+-- Merge Tables (docs/product.md § Shared Table Session): folds a free
+-- (session-less) table into an already-active session. MVP only supports
+-- this direction — merging two already-active sessions together is out of
+-- scope, same limitation the product doc states. Waiter/Manager/Owner, same
+-- role split as Close Session/Force-Terminate; SECURITY DEFINER for the
+-- same restaurant_tables reach reason as both.
+create or replace function public.merge_table_into_session(
+	p_table_id uuid,
+	p_session_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid;
+	v_updated int;
+begin
+	select restaurant_id into v_restaurant_id
+	from public.table_sessions
+	where id = p_session_id and status = 'active';
+
+	if v_restaurant_id is null then
+		raise exception 'Table session not found or already closed';
+	end if;
+
+	if not (
+		public.is_dineinly_admin()
+		or public.staff_role_for_restaurant(v_restaurant_id) in ('waiter', 'manager', 'owner')
+	) then
+		raise exception 'Only an active Waiter, Manager, or Owner may merge tables';
+	end if;
+
+	-- `.status = 'active'` excludes a hidden table from ever being merged
+	-- in; `.session_id is null` makes "still free" atomic with the write, so
+	-- a concurrent merge/QR-scan racing this one just means zero rows match
+	-- instead of double-assigning the table.
+	update public.restaurant_tables
+	set session_id = p_session_id
+	where id = p_table_id
+		and restaurant_id = v_restaurant_id
+		and status = 'active'
+		and session_id is null;
+
+	get diagnostics v_updated = row_count;
+	if v_updated = 0 then
+		raise exception 'That table is no longer free to merge';
+	end if;
+end;
+$$;
+
+revoke execute on function public.merge_table_into_session(uuid, uuid) from public;
+grant execute on function public.merge_table_into_session(uuid, uuid) to authenticated;

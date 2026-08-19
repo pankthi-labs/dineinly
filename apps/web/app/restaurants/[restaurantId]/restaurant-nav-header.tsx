@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 	"Menu Desk",
 	"Kitchen",
 	"Table Matrix",
+	"Floor",
 	"Staff Roster",
 	"Venue Settings",
 	"Bills",
@@ -31,6 +32,7 @@ const NAV_ROUTES: Partial<Record<NavItem, (restaurantId: string) => string>> = {
 	Kitchen: (restaurantId) => `/restaurants/${restaurantId}/kitchen`,
 	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
 	"Table Matrix": (restaurantId) => `/restaurants/${restaurantId}/tables`,
+	Floor: (restaurantId) => `/restaurants/${restaurantId}/floor`,
 	"Staff Roster": (restaurantId) => `/restaurants/${restaurantId}/staff`,
 	"Venue Settings": (restaurantId) => `/restaurants/${restaurantId}/settings`,
 	Bills: (restaurantId) => `/restaurants/${restaurantId}/bills`,
@@ -53,6 +55,9 @@ export function RestaurantNavHeader({
 	const gatedItems: Partial<Record<NavItem, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
 		"Table Matrix": canManageMenuAndTables,
+		// Floor (Order on behalf of guest, Merge Tables — docs/product.md §
+		// RBAC) is Waiter/Manager/Owner, same reach as Bills.
+		Floor: canAccessBills,
 		"Staff Roster": canManageStaff,
 		"Venue Settings": canAccessSettings,
 		Bills: canAccessBills,
