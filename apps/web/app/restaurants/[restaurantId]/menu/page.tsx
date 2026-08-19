@@ -313,7 +313,7 @@ export default function RestaurantMenuPage() {
 											</h2>
 											<div
 												aria-hidden="true"
-												className="h-px w-full bg-divider"
+												className="h-px flex-1 bg-divider"
 											/>
 											<ChevronDown
 												aria-hidden="true"

@@ -31,7 +31,13 @@ export function QrModal({
 	}, []);
 
 	async function copyLink() {
-		await navigator.clipboard.writeText(url);
+		try {
+			await navigator.clipboard.writeText(url);
+		} catch {
+			// Clipboard API unavailable (insecure context, denied permission,
+			// unfocused document) — nothing more we can do automatically.
+			return;
+		}
 		setIsCopied(true);
 		setTimeout(() => setIsCopied(false), COPIED_RESET_MS);
 	}

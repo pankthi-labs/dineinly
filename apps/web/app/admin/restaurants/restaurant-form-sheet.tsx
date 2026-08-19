@@ -107,10 +107,21 @@ export function RestaurantFormSheet({
 		});
 	}
 
+	// Once the primary owner has signed in once, their details are only
+	// changeable via Staff Roster (reassign primary owner) — this sheet
+	// doesn't show them at all past that point.
+	const ownerLocked = isEdit && editTarget.ownerStatus === "active";
+
+	// Locked owner fields aren't rendered — and may hold null-backed empty
+	// values from before the owner ever filled out their own profile.
+	// Validating them anyway would silently block submission on fields the
+	// admin can no longer see or fix.
+	const submitSchema = ownerLocked ? restaurantFieldsSchema : formSchema;
+
 	function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 
-		const result = formSchema.safeParse(values);
+		const result = submitSchema.safeParse(values);
 
 		if (!result.success) {
 			const fieldErrors: FieldErrors = {};
@@ -123,18 +134,18 @@ export function RestaurantFormSheet({
 		}
 		setErrors({});
 
+		// When owner fields are locked, result.data is missing them (they
+		// aren't in submitSchema) — fall back to the untouched values already
+		// loaded from the server for those.
+		const payload = { ...values, ...result.data };
+
 		if (!isEdit) {
-			onCreate(result.data);
+			onCreate(payload);
 			return;
 		}
 
-		onUpdate(editTarget.id, result.data);
+		onUpdate(editTarget.id, payload);
 	}
-
-	// Once the primary owner has signed in once, their details are only
-	// changeable via Staff Roster (reassign primary owner) — this sheet
-	// doesn't show them at all past that point.
-	const ownerLocked = isEdit && editTarget.ownerStatus === "active";
 
 	return (
 		<FormSheet
