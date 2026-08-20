@@ -27,7 +27,7 @@ const STATION_EMAIL_SUFFIX = "@stations.dineinly.internal";
 // go through ctx.auth directly (staff_all_cart_items RLS, § 5 of the RLS
 // migration, is any-active-staff) — only submitOrder needs the RPC, for the
 // same idempotent cart-to-order transaction submit_order() gives guests.
-async function requireOwnStaffId(
+export async function requireOwnStaffId(
 	ctx: Context,
 	restaurantId: string,
 ): Promise<string> {
@@ -71,7 +71,30 @@ async function requireOwnStaffId(
 			message: "Enter your PIN to continue.",
 		});
 	}
-	return ctx.stationSession.staffId;
+
+	// The PIN cookie is valid for up to STATION_SESSION_TTL_SECONDS — re-verify
+	// the acting staff row is still active and floor-eligible now, not just
+	// at PIN entry, so a deactivation mid-shift takes effect immediately
+	// instead of waiting out the cookie's expiry.
+	const actingStaffResult = await ctx.auth
+		.from("staff")
+		.select("id")
+		.eq("restaurant_id", restaurantId)
+		.eq("id", ctx.stationSession.staffId)
+		.eq("status", "active")
+		.in("role", FLOOR_ROLES)
+		.maybeSingle();
+	if (actingStaffResult.error) {
+		throw dbError("Unable to identify staff member.", actingStaffResult.error);
+	}
+	if (!actingStaffResult.data) {
+		throw new TRPCError({
+			code: "PRECONDITION_FAILED",
+			message: "Enter your PIN to continue.",
+		});
+	}
+
+	return actingStaffResult.data.id;
 }
 
 export const floorRouter = router({
