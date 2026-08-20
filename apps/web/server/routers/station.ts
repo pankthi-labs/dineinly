@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authedProcedure, publicProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
@@ -155,5 +156,51 @@ export const stationRouter = router({
 				createdAt: row.created_at,
 				revokedAt: row.revoked_at,
 			}));
+		}),
+
+	// Tells the Floor page whether the signed-in identity is a shared
+	// station device (in which case it needs a PIN pad), whether *this*
+	// device was revoked (in which case it needs to bounce back to
+	// /station/pair instead), and, if a PIN session cookie is already
+	// present, who's acting.
+	myStationStatus: authedProcedure
+		.input(z.object({ restaurantId: z.string().uuid() }))
+		.query(async ({ ctx }) => {
+			const {
+				data: { user },
+			} = await ctx.auth.auth.getUser();
+
+			const { data: staffRow } = await ctx.auth
+				.from("staff")
+				.select("email")
+				.eq("user_id", user?.id ?? "")
+				.eq("status", "active")
+				.like("email", "%@stations.dineinly.internal")
+				.maybeSingle();
+
+			const isStation = staffRow != null;
+			if (!isStation) {
+				return { isStation, actingStaffName: null, deviceRevoked: false };
+			}
+
+			let deviceRevoked = false;
+			if (ctx.stationDeviceId) {
+				const { data: revoked } = await ctx.auth.rpc(
+					"is_station_device_revoked",
+					{ p_device_id: ctx.stationDeviceId },
+				);
+				deviceRevoked = revoked ?? false;
+			}
+			if (deviceRevoked || !ctx.stationSession) {
+				return { isStation, actingStaffName: null, deviceRevoked };
+			}
+
+			const { data: named } = await ctx.auth
+				.from("staff")
+				.select("name")
+				.eq("id", ctx.stationSession.staffId)
+				.maybeSingle();
+
+			return { isStation, actingStaffName: named?.name ?? null, deviceRevoked };
 		}),
 });
