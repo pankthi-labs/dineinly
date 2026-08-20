@@ -25,6 +25,7 @@ import { ResetPinSheet } from "./reset-pin-sheet";
 import type { EditTarget, StaffFormValues } from "./staff-form-sheet";
 import { StaffFormSheet } from "./staff-form-sheet";
 import { ROLE_LABEL, StaffRow } from "./staff-row";
+import { StationPanel } from "./station-panel";
 
 type StaffListItem = inferRouterOutputs<AppRouter>["staff"]["list"][number];
 
@@ -337,6 +338,10 @@ export default function StaffRosterPage() {
 						))
 					)}
 				</div>
+
+				{viewerIsAdmin || viewerRole === "owner" || viewerRole === "manager" ? (
+					<StationPanel restaurantId={restaurantId} />
+				) : null}
 			</main>
 
 			{sheetMode !== "closed" ? (
