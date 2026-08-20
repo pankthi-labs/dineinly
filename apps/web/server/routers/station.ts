@@ -65,15 +65,17 @@ export const stationRouter = router({
 			const adminClient = createAdminClient();
 			const email = stationEmail(restaurantId, stationType);
 
-			const existing = await adminClient.auth.admin.listUsers({
-				page: 1,
-				perPage: 1,
-				// @ts-expect-error -- filter isn't in the SDK's listUsers types but
-				// GoTrue accepts it; narrows to an exact-email lookup instead of
-				// paging every user in the project.
-				filter: `email.eq."${email}"`,
-			});
-			let userId = existing.data?.users[0]?.id;
+			const { data: existingStaff, error: existingStaffError } =
+				await adminClient
+					.from("staff")
+					.select("user_id")
+					.eq("restaurant_id", restaurantId)
+					.eq("email", email)
+					.maybeSingle();
+			if (existingStaffError) {
+				throw dbError("Unable to provision the station device.", existingStaffError);
+			}
+			let userId = existingStaff?.user_id;
 
 			if (!userId) {
 				const { data: created, error: createError } =
