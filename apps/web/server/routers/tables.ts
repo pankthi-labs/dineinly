@@ -68,9 +68,10 @@ async function updateFreeTable(
 
 // authedProcedure (any signed-in Dineinly Admin or active staff member of
 // the restaurant), not a stricter Owner/Manager-only check — see
-// docs/architecture.md § Table QR Generation. staff_all_restaurant_tables
-// RLS (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql
-// § 5) scopes every query/mutation here to the caller's own restaurant_id.
+// docs/architecture.md § Table QR Generation. staff_select_restaurant_tables
+// (reads) and staff_write_restaurant_tables (Owner/Manager-only writes) RLS
+// (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 5)
+// scope every query/mutation here to the caller's own restaurant_id.
 export const tablesRouter = router({
 	list: authedProcedure.input(listTablesInput).query(async ({ ctx, input }) => {
 		const { data, error } = await ctx.auth

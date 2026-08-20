@@ -117,9 +117,10 @@ on conflict (id) do nothing;
 -- pointing at the auth identities above — already completed the invite ->
 -- Email OTP -> link_staff_account flow) plus a 5th, Meera Iyer, still
 -- 'invited' with no user_id and no auth.users row of her own: the
--- pre-link state, fixture for testing resolve_staff_signin's 'invited'
--- branch (see supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 10)
--- and the admin restaurants directory's "invited" status badge.
+-- pre-link state, fixture for testing resolve_staff_signin's
+-- shouldCreateUser: true case (see supabase/migrations/
+-- 20260730150634_add_auth_fk_and_rls_policies.sql § 10) and the admin
+-- restaurants directory's "invited" status badge.
 --
 -- is_primary_owner is set only on the owner row, matching what
 -- admin_create_restaurant() always sets on its inserted owner (see

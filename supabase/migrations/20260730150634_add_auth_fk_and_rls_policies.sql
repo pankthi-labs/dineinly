@@ -1237,7 +1237,15 @@ grant execute on function public.staff_submit_order(uuid, uuid, text) to authent
 --     other email) — unconditionally allowing it would turn sign-in into
 --     open self-signup, breaking the invite-only model. Reading auth.users
 --     needs elevated privilege no Postgres role but the table owner has,
---     hence SECURITY DEFINER.
+--     hence SECURITY DEFINER. Returns a single boolean rather than a
+--     three-way existing/invited/unknown result: distinguishing "existing
+--     auth.users row" from "unknown email" in the response would let an
+--     unauthenticated caller enumerate which emails have Dineinly accounts.
+--     The client always proceeds to call signInWithOtp with this flag —
+--     for a genuinely unknown email that call itself fails (GoTrue won't
+--     create or sign in a nonexistent user with shouldCreateUser: false),
+--     so the invite-only gate is enforced without this function adding an
+--     extra oracle beyond what GoTrue's own OTP endpoint already exposes.
 --
 --   - link_staff_account: called right after verifyOtp() succeeds, by the
 --     now-authenticated user, to set staff.user_id/status on their own
@@ -1253,22 +1261,20 @@ grant execute on function public.staff_submit_order(uuid, uuid, text) to authent
 -- `public`.
 
 create or replace function public.resolve_staff_signin(p_email text)
-returns text
+returns boolean
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-	select case
-		when exists (
+	select
+		not exists (
 			select 1 from auth.users where lower(email) = lower(p_email)
-		) then 'existing'
-		when exists (
+		)
+		and exists (
 			select 1 from public.staff
 			where lower(email) = lower(p_email) and status = 'invited'
-		) then 'invited'
-		else 'unknown'
-	end;
+		);
 $$;
 
 revoke execute on function public.resolve_staff_signin(text) from public;

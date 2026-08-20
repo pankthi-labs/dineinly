@@ -12,6 +12,10 @@ export const authRouter = router({
 	// Called from the sign-in page before signInWithOtp. Decides whether
 	// GoTrue may create the auth.users row on first verify (an invited
 	// Staff row) or must not (anything else) — never open self-signup.
+	// Returns only this one boolean, not whether the email matches an
+	// existing account: an "unknown vs existing" distinction here would let
+	// an unauthenticated caller enumerate registered emails. The client
+	// always proceeds to signInWithOtp with this flag either way.
 	resolveSignIn: publicProcedure
 		.input(resolveSignInInput)
 		.mutation(async ({ ctx, input }) => {
@@ -26,10 +30,7 @@ export const authRouter = router({
 				});
 			}
 
-			return {
-				allowed: data !== "unknown",
-				shouldCreateUser: data === "invited",
-			};
+			return { shouldCreateUser: data };
 		}),
 
 	// Called right after verifyOtp() succeeds. Links the caller's own

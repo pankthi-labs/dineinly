@@ -788,7 +788,7 @@ export type Database = {
 					table_session_id: string;
 				}[];
 			};
-			resolve_staff_signin: { Args: { p_email: string }; Returns: string };
+			resolve_staff_signin: { Args: { p_email: string }; Returns: boolean };
 			set_menu_item_availability: {
 				Args: {
 					p_availability: Database["public"]["Enums"]["availability"];

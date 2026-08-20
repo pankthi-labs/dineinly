@@ -53,7 +53,7 @@ export function SignInForm() {
 	// Same generic message whether the email isn't invited or Supabase
 	// itself failed — the resolveSignIn gate must not tell an unauthorized
 	// caller which case it hit (see supabase/migrations/
-	// 20260803042459_add_staff_auth_flow.sql).
+	// 20260730150634_add_auth_fk_and_rls_policies.sql § 10).
 	const SEND_FAILED_MESSAGE = "Couldn't send a code to that email.";
 
 	async function sendOtp() {
@@ -63,9 +63,6 @@ export function SignInForm() {
 			const resolved = await resolveSignIn.mutateAsync({
 				email: normalizedEmail,
 			});
-			if (!resolved.allowed) {
-				return SEND_FAILED_MESSAGE;
-			}
 			shouldCreateUser = resolved.shouldCreateUser;
 		} catch {
 			return SEND_FAILED_MESSAGE;
