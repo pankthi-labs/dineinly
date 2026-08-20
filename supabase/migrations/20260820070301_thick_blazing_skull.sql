@@ -153,8 +153,7 @@ set search_path = ''
 as $$
 declare
 	v_caller_active boolean;
-	v_match record;
-	v_match_count int;
+	v_matches public.staff[];
 begin
 	select exists (
 		select 1 from public.staff s
@@ -165,7 +164,7 @@ begin
 		raise exception 'PIN not recognized';
 	end if;
 
-	select count(*) into v_match_count
+	select array_agg(s) into v_matches
 	from public.staff s
 	where s.restaurant_id = p_restaurant_id
 		and s.role = 'waiter'
@@ -173,19 +172,11 @@ begin
 		and s.pin_hash is not null
 		and s.pin_hash = extensions.crypt(p_pin, s.pin_hash);
 
-	if v_match_count <> 1 then
+	if coalesce(array_length(v_matches, 1), 0) <> 1 then
 		raise exception 'PIN not recognized';
 	end if;
 
-	select s.id, s.name into v_match
-	from public.staff s
-	where s.restaurant_id = p_restaurant_id
-		and s.role = 'waiter'
-		and s.status = 'active'
-		and s.pin_hash is not null
-		and s.pin_hash = extensions.crypt(p_pin, s.pin_hash);
-
-	return query select v_match.id, v_match.name;
+	return query select v_matches[1].id, v_matches[1].name;
 end;
 $$;
 
