@@ -76,25 +76,21 @@ export async function requireOwnStaffId(
 	// the acting staff row is still active and floor-eligible now, not just
 	// at PIN entry, so a deactivation mid-shift takes effect immediately
 	// instead of waiting out the cookie's expiry.
-	const actingStaffResult = await ctx.auth
-		.from("staff")
-		.select("id")
-		.eq("restaurant_id", restaurantId)
-		.eq("id", ctx.stationSession.staffId)
-		.eq("status", "active")
-		.in("role", FLOOR_ROLES)
-		.maybeSingle();
-	if (actingStaffResult.error) {
-		throw dbError("Unable to identify staff member.", actingStaffResult.error);
+	const { data: actingStaff, error: actingStaffError } = await ctx.auth.rpc(
+		"resolve_active_floor_staff",
+		{ p_restaurant_id: restaurantId, p_staff_id: ctx.stationSession.staffId },
+	);
+	if (actingStaffError) {
+		throw dbError("Unable to identify staff member.", actingStaffError);
 	}
-	if (!actingStaffResult.data) {
+	if (!actingStaff?.[0]) {
 		throw new TRPCError({
 			code: "PRECONDITION_FAILED",
 			message: "Enter your PIN to continue.",
 		});
 	}
 
-	return actingStaffResult.data.id;
+	return actingStaff[0].id;
 }
 
 export const floorRouter = router({

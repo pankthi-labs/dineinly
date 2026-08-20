@@ -3,19 +3,22 @@ import type { Context } from "@/server/trpc/context";
 import { requireOwnStaffId } from "@/server/routers/floor";
 
 type StaffQueryResult = { data: { id: string; email?: string } | null; error: unknown };
+type RpcResult = { data: Array<{ id: string; name: string }> | null; error: unknown };
 
 function makeCtx(
 	staffResults: StaffQueryResult[],
 	stationSession: Context["stationSession"] = null,
+	rpcResults: RpcResult[] = [],
 ): Context {
-	let call = 0;
+	let fromCall = 0;
+	let rpcCall = 0;
 	const auth = {
 		auth: {
 			getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
 		},
 		from: vi.fn(() => {
-			const result = staffResults[call] ?? { data: null, error: null };
-			call += 1;
+			const result = staffResults[fromCall] ?? { data: null, error: null };
+			fromCall += 1;
 			const builder = {
 				select: () => builder,
 				eq: () => builder,
@@ -23,6 +26,11 @@ function makeCtx(
 				maybeSingle: async () => result,
 			};
 			return builder;
+		}),
+		rpc: vi.fn(async () => {
+			const result = rpcResults[rpcCall] ?? { data: null, error: null };
+			rpcCall += 1;
+			return result;
 		}),
 	};
 	return {
@@ -47,9 +55,9 @@ describe("requireOwnStaffId", () => {
 					data: { id: "station-1", email: "waiter-rest-1@stations.dineinly.internal" },
 					error: null,
 				},
-				{ data: { id: "waiter-2" }, error: null },
 			],
 			{ staffId: "waiter-2", restaurantId: "rest-1" },
+			[{ data: [{ id: "waiter-2", name: "Waiter Two" }], error: null }],
 		);
 		await expect(requireOwnStaffId(ctx, "rest-1")).resolves.toBe("waiter-2");
 	});
@@ -88,9 +96,9 @@ describe("requireOwnStaffId", () => {
 					data: { id: "station-1", email: "waiter-rest-1@stations.dineinly.internal" },
 					error: null,
 				},
-				{ data: null, error: null },
 			],
 			{ staffId: "waiter-2", restaurantId: "rest-1" },
+			[{ data: null, error: null }],
 		);
 		await expect(requireOwnStaffId(ctx, "rest-1")).rejects.toThrow(
 			"Enter your PIN to continue.",

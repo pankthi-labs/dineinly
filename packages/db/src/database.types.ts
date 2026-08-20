@@ -890,6 +890,13 @@ export type Database = {
         Returns: undefined
       }
       request_bill: { Args: never; Returns: string }
+      resolve_active_floor_staff: {
+        Args: { p_restaurant_id: string; p_staff_id: string }
+        Returns: {
+          id: string
+          name: string
+        }[]
+      }
       resolve_qr_token: {
         Args: { p_qr_token: string }
         Returns: {

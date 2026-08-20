@@ -195,12 +195,11 @@ export const stationRouter = router({
 				return { isStation, actingStaffName: null, deviceRevoked };
 			}
 
-			const { data: named } = await ctx.auth
-				.from("staff")
-				.select("name")
-				.eq("id", ctx.stationSession.staffId)
-				.maybeSingle();
+			const { data: named } = await ctx.auth.rpc("resolve_active_floor_staff", {
+				p_restaurant_id: ctx.stationSession.restaurantId,
+				p_staff_id: ctx.stationSession.staffId,
+			});
 
-			return { isStation, actingStaffName: named?.name ?? null, deviceRevoked };
+			return { isStation, actingStaffName: named?.[0]?.name ?? null, deviceRevoked };
 		}),
 });

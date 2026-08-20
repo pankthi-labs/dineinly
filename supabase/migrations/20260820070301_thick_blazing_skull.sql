@@ -258,3 +258,32 @@ $$;
 
 revoke execute on function public.is_station_device_revoked(uuid) from public;
 grant execute on function public.is_station_device_revoked(uuid) to authenticated;
+
+-- Lets one active staff member resolve another active, floor-eligible
+-- staff member's identity at the same restaurant — needed because a
+-- station device's own session can't SELECT another staff row directly
+-- (RLS only permits a caller's own row, or an Owner/Manager's roster
+-- view). Used to resolve the PIN-unlocked waiter's name/id, both for
+-- display (myStationStatus) and for re-verifying floor attribution
+-- (requireOwnStaffId).
+create or replace function public.resolve_active_floor_staff(
+	p_restaurant_id uuid,
+	p_staff_id uuid
+)
+returns table (id uuid, name text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+	select s.id, s.name
+	from public.staff s
+	where s.id = p_staff_id
+		and s.restaurant_id = p_restaurant_id
+		and s.status = 'active'
+		and s.role in ('waiter', 'manager', 'owner')
+		and public.is_active_staff_for_restaurant(p_restaurant_id);
+$$;
+
+revoke execute on function public.resolve_active_floor_staff(uuid, uuid) from public;
+grant execute on function public.resolve_active_floor_staff(uuid, uuid) to authenticated;
