@@ -31,11 +31,10 @@ export default function StationPairPage() {
 		setError(null);
 
 		try {
-			const { email, tokenHash, restaurantId, deviceId } =
+			const { tokenHash, restaurantId, deviceId } =
 				await redeemMutation.mutateAsync({ code });
 			const { error: verifyError } = await supabase.auth.verifyOtp({
-				email,
-				token: tokenHash,
+				token_hash: tokenHash,
 				type: "magiclink",
 			});
 			if (verifyError) {
