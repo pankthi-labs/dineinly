@@ -11,13 +11,22 @@ export function StationPanel({ restaurantId }: { restaurantId: string }) {
 	const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(
 		null,
 	);
+	const [error, setError] = useState<string | null>(null);
 	const utils = trpc.useUtils();
 	const devicesQuery = trpc.station.listDevices.useQuery({ restaurantId });
 	const generateMutation = trpc.station.generatePairingCode.useMutation({
-		onSuccess: (data) => setPairing(data),
+		onSuccess: (data) => {
+			setError(null);
+			setPairing(data);
+		},
+		onError: (error) => setError(error.message),
 	});
 	const revokeMutation = trpc.station.revokeDevice.useMutation({
-		onSuccess: () => utils.station.listDevices.invalidate({ restaurantId }),
+		onSuccess: () => {
+			setError(null);
+			utils.station.listDevices.invalidate({ restaurantId });
+		},
+		onError: (error) => setError(error.message),
 	});
 
 	const devices = (devicesQuery.data ?? []).filter((d) => !d.revokedAt);
@@ -58,27 +67,57 @@ export function StationPanel({ restaurantId }: { restaurantId: string }) {
 				</div>
 			) : null}
 
-			<ul className="mt-4 divide-y divide-divider">
-				{devices.length === 0 ? (
-					<li className="py-3 text-muted text-sm">No floor tablets paired yet.</li>
-				) : (
-					devices.map((device) => (
-						<li key={device.id} className="flex items-center justify-between py-3">
-							<span className="text-primary text-sm">
-								Paired {new Date(device.createdAt).toLocaleString()}
-							</span>
-							<button
-								type="button"
-								onClick={() => revokeMutation.mutate({ deviceId: device.id })}
-								disabled={revokeMutation.isPending}
-								className="text-error text-sm hover:opacity-80 disabled:cursor-not-allowed"
-							>
-								Revoke
-							</button>
-						</li>
-					))
-				)}
-			</ul>
+			{error ? (
+				<div className="mt-4 rounded-md border border-divider bg-surface p-4">
+					<p role="alert" className="text-error text-sm">
+						{error}
+					</p>
+					<button
+						type="button"
+						onClick={() => setError(null)}
+						className="mt-3 text-secondary text-sm hover:text-primary"
+					>
+						Dismiss
+					</button>
+				</div>
+			) : null}
+
+			{devicesQuery.isError ? (
+				<div className="mt-4 rounded-xl border border-divider bg-surface p-8 text-center">
+					<p role="alert" className="text-error text-sm">
+						Couldn't load floor tablets: {devicesQuery.error.message}
+					</p>
+					<button
+						type="button"
+						onClick={() => devicesQuery.refetch()}
+						className="mt-4 text-accent text-caps hover:opacity-80"
+					>
+						Retry
+					</button>
+				</div>
+			) : (
+				<ul className="mt-4 divide-y divide-divider">
+					{devices.length === 0 ? (
+						<li className="py-3 text-muted text-sm">No floor tablets paired yet.</li>
+					) : (
+						devices.map((device) => (
+							<li key={device.id} className="flex items-center justify-between py-3">
+								<span className="text-primary text-sm">
+									Paired {new Date(device.createdAt).toLocaleString()}
+								</span>
+								<button
+									type="button"
+									onClick={() => revokeMutation.mutate({ deviceId: device.id })}
+									disabled={revokeMutation.isPending}
+									className="text-error text-sm hover:opacity-80 disabled:cursor-not-allowed"
+								>
+									Revoke
+								</button>
+							</li>
+						))
+					)}
+				</ul>
+			)}
 		</section>
 	);
 }
