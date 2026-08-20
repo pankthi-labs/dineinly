@@ -51,3 +51,4 @@ graphify-out/
 
 # claude code local overrides (personal, never shared)
 .claude/settings.local.json
+.worktrees/
