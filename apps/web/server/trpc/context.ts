@@ -4,6 +4,11 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { type GuestClaims, verifyGuestToken } from "@/lib/guest-token";
 import { createClient as createAuthClient } from "@/lib/supabase/server";
+import {
+	STATION_DEVICE_ID_COOKIE,
+	STATION_SESSION_COOKIE,
+	verifyStationSessionToken,
+} from "@/lib/station-session";
 
 // Cookie carrying the guest session's signed JWT (see lib/guest-token.ts).
 // Every procedure reads guest identity from ctx.guest, derived here once.
@@ -15,6 +20,16 @@ export async function createContext() {
 	const guest: GuestClaims | null = guestToken
 		? await verifyGuestToken(guestToken)
 		: null;
+
+	const stationSessionToken = cookieStore.get(STATION_SESSION_COOKIE)?.value;
+	const stationSession = stationSessionToken
+		? await verifyStationSessionToken(stationSessionToken)
+		: null;
+
+	// Plain, unsigned — just an identifier for is_station_device_revoked(),
+	// not a credential. See lib/station-session.ts's comment on why this one
+	// doesn't need signing.
+	const stationDeviceId = cookieStore.get(STATION_DEVICE_ID_COOKIE)?.value ?? null;
 
 	// Anon-key client, scoped to this request. Forwarding the guest JWT as
 	// the bearer token is what makes RLS evaluate the guest's claims (see
@@ -65,6 +80,8 @@ export async function createContext() {
 		guestToken: guest ? (guestToken ?? null) : null,
 		supabase,
 		auth,
+		stationSession,
+		stationDeviceId,
 	};
 }
 

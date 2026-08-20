@@ -16,6 +16,8 @@ function dbError(message: string, cause: unknown): TRPCError {
 
 const FLOOR_ROLES = ["waiter", "manager", "owner"] as const;
 
+const STATION_EMAIL_SUFFIX = "@stations.dineinly.internal";
+
 // Order on behalf of guest (docs/product.md § RBAC "Add to Cart"/"Submit
 // Order": Waiter/Manager/Owner). The cart itself is the same shared,
 // session-scoped table guest.ts's cart procedures read and write — "any
@@ -35,7 +37,7 @@ async function requireOwnStaffId(
 
 	const staffResult = await ctx.auth
 		.from("staff")
-		.select("id")
+		.select("id, email")
 		.eq("restaurant_id", restaurantId)
 		.eq("user_id", user?.id ?? "")
 		.eq("status", "active")
@@ -54,7 +56,22 @@ async function requireOwnStaffId(
 				"Only an active Waiter, Manager, or Owner may order for a guest.",
 		});
 	}
-	return staffResult.data.id;
+
+	if (!staffResult.data.email.endsWith(STATION_EMAIL_SUFFIX)) {
+		return staffResult.data.id;
+	}
+
+	// A shared station device's own Staff row is never the actor — the PIN-
+	// resolved "acting" waiter is (docs/architecture.md § Station Account
+	// Provisioning: PIN grants no DB access, attribution only). No valid
+	// PIN cookie means nobody has unlocked this device yet.
+	if (!ctx.stationSession || ctx.stationSession.restaurantId !== restaurantId) {
+		throw new TRPCError({
+			code: "PRECONDITION_FAILED",
+			message: "Enter your PIN to continue.",
+		});
+	}
+	return ctx.stationSession.staffId;
 }
 
 export const floorRouter = router({
