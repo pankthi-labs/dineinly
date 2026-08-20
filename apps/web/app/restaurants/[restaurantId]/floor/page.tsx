@@ -100,7 +100,11 @@ export default function FloorPage() {
 				<div className="fixed inset-0 z-(--z-overlay) flex items-center justify-center bg-glass p-4">
 					<div className="w-full max-w-xs rounded-xl border border-divider bg-surface-elevated p-8">
 						<h2 className="text-center text-lg text-primary">Enter your PIN</h2>
-						<form onSubmit={handlePinSubmit} noValidate className="mt-6 space-y-4">
+						<form
+							onSubmit={handlePinSubmit}
+							noValidate
+							className="mt-6 space-y-4"
+						>
 							<input
 								type="password"
 								inputMode="numeric"
@@ -109,7 +113,9 @@ export default function FloorPage() {
 								placeholder="••••"
 								value={pin}
 								disabled={isVerifyingPin}
-								onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))}
+								onChange={(event) =>
+									setPin(event.target.value.replace(/\D/g, ""))
+								}
 								className="w-full rounded-sm border border-divider bg-surface px-3 py-3 text-center text-2xl text-primary tracking-widest"
 							/>
 							{pinError ? (

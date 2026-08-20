@@ -8,9 +8,10 @@ import { trpc } from "@/lib/trpc-client";
 // architecture.md § Station Account Provisioning; PIN issuance itself
 // stays self-service (profile-sheet.tsx), unchanged by this panel.
 export function StationPanel({ restaurantId }: { restaurantId: string }) {
-	const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(
-		null,
-	);
+	const [pairing, setPairing] = useState<{
+		code: string;
+		expiresAt: string;
+	} | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const utils = trpc.useUtils();
 	const devicesQuery = trpc.station.listDevices.useQuery({ restaurantId });
@@ -56,7 +57,9 @@ export function StationPanel({ restaurantId }: { restaurantId: string }) {
 					<p className="mt-2 font-medium text-3xl text-primary tracking-widest">
 						{pairing.code}
 					</p>
-					<p className="mt-1 text-muted text-xs">Expires at {pairing.expiresAt}</p>
+					<p className="mt-1 text-muted text-xs">
+						Expires at {pairing.expiresAt}
+					</p>
 					<button
 						type="button"
 						onClick={() => setPairing(null)}
@@ -98,10 +101,15 @@ export function StationPanel({ restaurantId }: { restaurantId: string }) {
 			) : (
 				<ul className="mt-4 divide-y divide-divider">
 					{devices.length === 0 ? (
-						<li className="py-3 text-muted text-sm">No floor tablets paired yet.</li>
+						<li className="py-3 text-muted text-sm">
+							No floor tablets paired yet.
+						</li>
 					) : (
 						devices.map((device) => (
-							<li key={device.id} className="flex items-center justify-between py-3">
+							<li
+								key={device.id}
+								className="flex items-center justify-between py-3"
+							>
 								<span className="text-primary text-sm">
 									Paired {new Date(device.createdAt).toLocaleString()}
 								</span>

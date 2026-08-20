@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Context } from "@/server/trpc/context";
 import { requireOwnStaffId } from "@/server/routers/floor";
+import type { Context } from "@/server/trpc/context";
 
-type StaffQueryResult = { data: { id: string; email?: string } | null; error: unknown };
-type RpcResult = { data: Array<{ id: string; name: string }> | null; error: unknown };
+type StaffQueryResult = {
+	data: { id: string; email?: string } | null;
+	error: unknown;
+};
+type RpcResult = {
+	data: Array<{ id: string; name: string }> | null;
+	error: unknown;
+};
 
 function makeCtx(
 	staffResults: StaffQueryResult[],
@@ -43,7 +49,10 @@ function makeCtx(
 describe("requireOwnStaffId", () => {
 	it("returns the staff id directly for a named (non-station) waiter", async () => {
 		const ctx = makeCtx([
-			{ data: { id: "staff-1", email: "real-waiter@example.com" }, error: null },
+			{
+				data: { id: "staff-1", email: "real-waiter@example.com" },
+				error: null,
+			},
 		]);
 		await expect(requireOwnStaffId(ctx, "rest-1")).resolves.toBe("staff-1");
 	});
@@ -52,7 +61,10 @@ describe("requireOwnStaffId", () => {
 		const ctx = makeCtx(
 			[
 				{
-					data: { id: "station-1", email: "waiter-rest-1@stations.dineinly.internal" },
+					data: {
+						id: "station-1",
+						email: "waiter-rest-1@stations.dineinly.internal",
+					},
 					error: null,
 				},
 			],
@@ -65,7 +77,10 @@ describe("requireOwnStaffId", () => {
 	it("rejects a station device with no PIN session unlocked", async () => {
 		const ctx = makeCtx([
 			{
-				data: { id: "station-1", email: "waiter-rest-1@stations.dineinly.internal" },
+				data: {
+					id: "station-1",
+					email: "waiter-rest-1@stations.dineinly.internal",
+				},
 				error: null,
 			},
 		]);
@@ -78,7 +93,10 @@ describe("requireOwnStaffId", () => {
 		const ctx = makeCtx(
 			[
 				{
-					data: { id: "station-1", email: "waiter-rest-1@stations.dineinly.internal" },
+					data: {
+						id: "station-1",
+						email: "waiter-rest-1@stations.dineinly.internal",
+					},
 					error: null,
 				},
 			],
@@ -93,7 +111,10 @@ describe("requireOwnStaffId", () => {
 		const ctx = makeCtx(
 			[
 				{
-					data: { id: "station-1", email: "waiter-rest-1@stations.dineinly.internal" },
+					data: {
+						id: "station-1",
+						email: "waiter-rest-1@stations.dineinly.internal",
+					},
 					error: null,
 				},
 			],

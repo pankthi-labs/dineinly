@@ -34,7 +34,10 @@ let cachedKey: Promise<jose.CryptoKey> | undefined;
 
 function secretKey(): Promise<jose.CryptoKey> {
 	cachedKey ??= jose.importJWK(
-		{ kty: "oct", k: Buffer.from(env.STATION_PIN_SECRET).toString("base64url") },
+		{
+			kty: "oct",
+			k: Buffer.from(env.STATION_PIN_SECRET).toString("base64url"),
+		},
 		STATION_SESSION_ALG,
 	) as Promise<jose.CryptoKey>;
 	return cachedKey;

@@ -173,12 +173,9 @@ export const stationPairingCodesRelations = relations(
 	}),
 );
 
-export const stationDevicesRelations = relations(
-	stationDevices,
-	({ one }) => ({
-		restaurant: one(restaurants, {
-			fields: [stationDevices.restaurantId],
-			references: [restaurants.id],
-		}),
+export const stationDevicesRelations = relations(stationDevices, ({ one }) => ({
+	restaurant: one(restaurants, {
+		fields: [stationDevices.restaurantId],
+		references: [restaurants.id],
 	}),
-);
+}));

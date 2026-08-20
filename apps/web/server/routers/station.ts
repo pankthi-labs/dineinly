@@ -74,7 +74,10 @@ export const stationRouter = router({
 					.eq("email", email)
 					.maybeSingle();
 			if (existingStaffError) {
-				throw dbError("Unable to provision the station device.", existingStaffError);
+				throw dbError(
+					"Unable to provision the station device.",
+					existingStaffError,
+				);
 			}
 			let userId = existingStaff?.user_id;
 
@@ -200,6 +203,10 @@ export const stationRouter = router({
 				p_staff_id: ctx.stationSession.staffId,
 			});
 
-			return { isStation, actingStaffName: named?.[0]?.name ?? null, deviceRevoked };
+			return {
+				isStation,
+				actingStaffName: named?.[0]?.name ?? null,
+				deviceRevoked,
+			};
 		}),
 });
