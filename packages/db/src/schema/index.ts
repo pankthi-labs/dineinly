@@ -10,4 +10,6 @@ export * from "./relations.js";
 export * from "./restaurant.js";
 export * from "./restaurant-table.js";
 export * from "./staff.js";
+export * from "./station-device.js";
+export * from "./station-pairing-code.js";
 export * from "./table-session.js";

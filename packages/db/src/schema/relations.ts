@@ -9,6 +9,8 @@ import { orderItems } from "./order-item.js";
 import { restaurants } from "./restaurant.js";
 import { restaurantTables } from "./restaurant-table.js";
 import { staff } from "./staff.js";
+import { stationDevices } from "./station-device.js";
+import { stationPairingCodes } from "./station-pairing-code.js";
 import { tableSessions } from "./table-session.js";
 
 export const restaurantsRelations = relations(restaurants, ({ many }) => ({
@@ -22,6 +24,8 @@ export const restaurantsRelations = relations(restaurants, ({ many }) => ({
 	orders: many(orders),
 	orderItems: many(orderItems),
 	bills: many(bills),
+	stationPairingCodes: many(stationPairingCodes),
+	stationDevices: many(stationDevices),
 }));
 
 export const staffRelations = relations(staff, ({ one, many }) => ({
@@ -158,3 +162,23 @@ export const billsRelations = relations(bills, ({ one }) => ({
 		references: [staff.id],
 	}),
 }));
+
+export const stationPairingCodesRelations = relations(
+	stationPairingCodes,
+	({ one }) => ({
+		restaurant: one(restaurants, {
+			fields: [stationPairingCodes.restaurantId],
+			references: [restaurants.id],
+		}),
+	}),
+);
+
+export const stationDevicesRelations = relations(
+	stationDevices,
+	({ one }) => ({
+		restaurant: one(restaurants, {
+			fields: [stationDevices.restaurantId],
+			references: [restaurants.id],
+		}),
+	}),
+);
