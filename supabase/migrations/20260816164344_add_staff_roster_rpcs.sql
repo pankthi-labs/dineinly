@@ -222,6 +222,8 @@ begin
 		raise exception 'PIN must be 4 to 6 digits';
 	end if;
 
+	perform pg_advisory_xact_lock(hashtext(p_restaurant_id::text));
+
 	-- pin_hash is salted bcrypt, so this can't be a DB unique index — a PIN
 	-- must resolve to exactly one person on a shared device
 	-- (resolve_staff_by_pin), so check for a collision the app-level way:
