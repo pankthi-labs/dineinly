@@ -17,6 +17,12 @@ export async function GET(
 ) {
 	const { qrToken } = await params;
 
+	// request.url resolves against the dev server's bind address (0.0.0.0
+	// when started with `next dev -H 0.0.0.0` for LAN/phone testing) rather
+	// than the Host header the client actually sent, producing redirects to
+	// an unreachable address. Build the origin from the Host header instead.
+	const origin = `${request.headers.get("x-forwarded-proto") ?? "http"}://${request.headers.get("host")}`;
+
 	// No guest session exists yet at this point, so this is a plain anon-key
 	// client — resolve_qr_token is the one function granted to `anon`
 	// (supabase/migrations/20260730150634_..._policies.sql § 8).
@@ -34,7 +40,7 @@ export async function GET(
 	// error/redirect condition — it's just "no data" — so this reuses that
 	// same neutral empty state instead of a dedicated invalid-QR page.
 	if (error || !data) {
-		return NextResponse.redirect(new URL("/guest/menu", request.url));
+		return NextResponse.redirect(new URL("/guest/menu", origin));
 	}
 
 	const token = await mintGuestToken({
@@ -44,10 +50,10 @@ export async function GET(
 		app_role: "guest",
 	});
 
-	const response = NextResponse.redirect(new URL("/guest/menu", request.url));
+	const response = NextResponse.redirect(new URL("/guest/menu", origin));
 	response.cookies.set(GUEST_TOKEN_COOKIE, token, {
 		httpOnly: true,
-		secure: true,
+		secure: origin.startsWith("https:"),
 		sameSite: "lax",
 		maxAge: GUEST_TOKEN_MIN_TTL_SECONDS,
 		path: "/",
