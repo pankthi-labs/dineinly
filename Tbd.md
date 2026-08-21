@@ -4,14 +4,6 @@ Deferred work, tracked in one place. Each entry: what's missing, why it's deferr
 
 ---
 
-## PIN station login for Kitchen/Floor (device pairing half)
-
-`pin_hash` storage + set/change now ships two ways: self-service (`set_staff_pin`, § 15b) via the "Profile" header action's PIN field (`apps/web/app/admin/profile-sheet.tsx`, reachable on any restaurant-scoped page), and a Dineinly Admin override (`admin_reset_staff_pin`, § 15b) via "Reset PIN" on any Staff Roster row — for a forgotten PIN, since it's never tied to an inbox. Still missing: the shared station account itself (synthetic `auth.users` identity per restaurant/role) and the 6-digit pairing-code device-onboarding flow (`docs/architecture.md` § Station Account Provisioning) — nothing consumes a staff PIN for login yet, since no station device exists to prompt for one.
-
-**Pick up:** design the station account + pairing-code UI — a separate effort from the PIN storage that already shipped.
-
----
-
 ## No app-level OTP rate limiting
 
 No lockout after N failed OTP attempts, no app-level throttling on `resolveSignIn` or `verifyOtp` (`apps/web/server/routers/auth.ts`). Relies entirely on Supabase GoTrue's own defaults.
@@ -32,12 +24,6 @@ Manage Staff, Manage Menu, Manage Tables & QR Codes, Update Order Status, and ev
 Not yet split: **View Analytics** — the page doesn't exist yet, so there's nothing to gate.
 
 **Pick up:** apply the same per-`staff.role` pattern to an Analytics page once it gets built.
-
----
-
-## Owner reassignment
-
-Shipped: `reassign_primary_owner` (`supabase/migrations/20260816164344_add_staff_roster_rpcs.sql` § 15c) hands `is_primary_owner` to another existing Owner-role staff row — a pure handoff, not a demotion, both rows stay `role = 'owner'` — Staff Roster's "Make Primary Owner" row action, shown only on Owner-role rows (a Waiter/Manager/Kitchen must be promoted to Owner via `update_staff` first). A role downgrade for the outgoing owner is a separate `update_staff`/Edit Staff action the caller takes afterward if they want one, not part of this RPC. Caller must be the current primary owner themselves or Dineinly Admin — stricter than any Owner-role staff, since a non-primary co-owner can't transfer someone else's ownership. `update_staff`/`remove_staff` still reject the primary owner row directly (edit/remove never touch it); reassignment is the only path.
 
 ---
 
