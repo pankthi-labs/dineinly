@@ -57,6 +57,14 @@ pnpm dev                    # turbo dev -> next dev
 
 App runs at **http://127.0.0.1:3000**.
 
+### Testing on a real phone
+
+`pnpm dev` runs `next dev -H 0.0.0.0`, binding all interfaces so a phone on the same Wi-Fi/LAN can reach the dev server — needed to test the guest QR flow (scan, order, bill) on an actual device instead of a desktop browser.
+
+1. Find your machine's LAN IP (`ipconfig getifaddr en0` on macOS, or check System Settings → Wi-Fi).
+2. On the phone, browse to `http://<LAN-IP>:3000` — same origin the QR redirect (`apps/web/app/qr/[qrToken]/route.ts`) builds from the request's `Host` header, so scanned QR codes resolve correctly from the phone without extra config.
+3. Both devices must be on the same network; corporate/guest Wi-Fi that isolates clients from each other will block this.
+
 ## Environment
 
 The app (`apps/web`) validates five env vars at startup via `apps/web/lib/env.ts` (invalid or

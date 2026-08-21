@@ -97,14 +97,6 @@ Menu Desk has no way to see what a dish/category looks like from the guest order
 
 ---
 
-## Request bill has no terminal-status guard
-
-`request_bill()` (`supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 11) lets a guest request the bill at any point, regardless of order item status — same for `docs/core-data-model.md`'s Request Bill lifecycle line. A real dine-in flow should only allow it once every Order Item in the session is `served` or `cancelled` (nothing left `placed`/`preparing`/`ready`).
-
-**Pick up:** intentionally left unguarded for now — blocks dev testing, since seeded/test sessions rarely have every item served. Add the check (in `request_bill()` or `guest.bill.get`) once dev/testing can produce fully-served sessions on demand.
-
----
-
 ## No Call Waiter action on the bill
 
 The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.

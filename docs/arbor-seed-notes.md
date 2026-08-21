@@ -178,11 +178,12 @@ rows are internally consistent, not a claim about the real rounding rule.
 
 ## Explicitly not seeded
 
-**Force-terminated ("walkout") session** — void vs. settle handling of an
-open bill on force-terminate is `TBD` (`docs/core-data-model.md`,
-`docs/product.md`). Per `AGENTS.md` ("flag TBD, don't guess"), no walkout
-scenario was seeded rather than inventing a resulting DB state that might
-not match whatever gets decided.
+**Force-terminated ("walkout") session** — `close_session()`'s void-vs-settle
+handling of an open bill on force-terminate is implemented (`docs/core-data-model.md`
+§ Lifecycle invariants: an open/requested Bill is deleted (voided), an
+already-settled one is left untouched). No walkout scenario is seeded here
+simply because it hasn't been prioritized, not because the behavior is
+undecided.
 
 ## Regenerating
 
