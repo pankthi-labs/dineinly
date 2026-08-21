@@ -50,11 +50,15 @@ export function SignInForm() {
 		return () => clearInterval(timer);
 	}, [resendCooldown]);
 
-	// Same generic message whether the email isn't invited or Supabase
-	// itself failed — the resolveSignIn gate must not tell an unauthorized
-	// caller which case it hit (see supabase/migrations/
-	// 20260730150634_add_auth_fk_and_rls_policies.sql § 10).
-	const SEND_FAILED_MESSAGE = "Couldn't send a code to that email.";
+	// Same generic message whether the email isn't invited, its invite
+	// expired (24h, resolve_staff_signin), or Supabase itself failed — the
+	// resolveSignIn gate must not tell an unauthorized caller which case it
+	// hit (see supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql
+	// § 10). The second sentence is always shown regardless of cause, so it
+	// gives an expired invitee somewhere to go without adding a new way to
+	// tell expired/unknown/existing apart.
+	const SEND_FAILED_MESSAGE =
+		"Couldn't send a code to that email. If you're expecting an invite, ask your manager to resend it.";
 
 	async function sendOtp() {
 		const normalizedEmail = email.trim().toLowerCase();

@@ -204,6 +204,7 @@ CREATE TABLE "staff" (
 	"role" "staff_role" NOT NULL,
 	"pin_hash" text,
 	"status" "staff_status" DEFAULT 'invited' NOT NULL,
+	"invited_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"is_primary_owner" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,

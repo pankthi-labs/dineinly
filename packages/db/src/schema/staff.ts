@@ -5,6 +5,7 @@ import {
 	index,
 	pgTable,
 	text,
+	timestamp,
 	unique,
 	uniqueIndex,
 	uuid,
@@ -49,6 +50,17 @@ export const staff = pgTable(
 		role: staffRole("role").notNull(),
 		pinHash: text("pin_hash"),
 		status: staffStatus("status").notNull().default("invited"),
+		// Set at insert and on every re-invite (invite_staff,
+		// admin_create_restaurant, admin_update_restaurant,
+		// resend_staff_invite). An invited row can only complete its first
+		// sign-in within 24h of this timestamp (resolve_staff_signin,
+		// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql
+		// § 10) — past that, Owner/Manager/Admin must resend before the
+		// invitee can sign in. Left untouched once status flips to active;
+		// not read again after that point.
+		invitedAt: timestamp("invited_at", { withTimezone: true, mode: "string" })
+			.notNull()
+			.defaultNow(),
 		// At most one true per restaurant among role = owner — the
 		// Restaurants Directory's single owner contact. Immutable via
 		// admin_update_restaurant once this row's status is 'active';

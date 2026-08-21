@@ -1427,6 +1427,13 @@
           "notNull": true,
           "default": "'invited'"
         },
+        "invited_at": {
+          "name": "invited_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
         "is_primary_owner": {
           "name": "is_primary_owner",
           "type": "boolean",

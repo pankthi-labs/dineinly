@@ -8,6 +8,7 @@ import {
 	myProfileInput,
 	reassignOwnerInput,
 	removeStaffInput,
+	resendInviteInput,
 	setPinInput,
 	updateOwnProfileInput,
 	updateStaffInput,
@@ -50,7 +51,7 @@ export const staffRouter = router({
 	list: authedProcedure.input(listStaffInput).query(async ({ ctx, input }) => {
 		const { data, error } = await ctx.auth
 			.from("staff")
-			.select("id, name, email, role, status, is_primary_owner")
+			.select("id, name, email, role, status, invited_at, is_primary_owner")
 			.eq("restaurant_id", input.restaurantId)
 			.order("name", { ascending: true });
 
@@ -99,6 +100,24 @@ export const staffRouter = router({
 		.input(removeStaffInput)
 		.mutation(async ({ ctx, input }) => {
 			const { data, error } = await ctx.auth.rpc("remove_staff", {
+				p_staff_id: input.id,
+			});
+
+			if (error) {
+				throw rpcError(error);
+			}
+
+			return data[0];
+		}),
+
+	// Restarts an invited row's 24h sign-in window (resend_staff_invite,
+	// supabase/migrations/20260816164344_add_staff_roster_rpcs.sql § 15).
+	// Same auth reach as invite: Admin, or an Owner/Manager who isn't
+	// resending an Owner's invite as a Manager.
+	resendInvite: authedProcedure
+		.input(resendInviteInput)
+		.mutation(async ({ ctx, input }) => {
+			const { data, error } = await ctx.auth.rpc("resend_staff_invite", {
 				p_staff_id: input.id,
 			});
 

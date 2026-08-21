@@ -162,6 +162,11 @@ export default function StaffRosterPage() {
 		},
 	});
 
+	const resendInviteMutation = trpc.staff.resendInvite.useMutation({
+		onSuccess: () => invalidateAndNotify("Invite resent — valid for 24 hours."),
+		onError: (error) => setToast({ message: error.message, tone: "error" }),
+	});
+
 	const adminResetPinMutation = trpc.staff.adminResetPin.useMutation({
 		onSuccess: () => {
 			setResetPinTarget(null);
@@ -339,6 +344,9 @@ export default function StaffRosterPage() {
 										name: staff.name ?? staff.email,
 									});
 								}}
+								onResendInvite={() =>
+									resendInviteMutation.mutate({ id: staff.id })
+								}
 							/>
 						))
 					)}

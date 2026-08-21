@@ -40,6 +40,10 @@ export const removeStaffInput = z.object({
 	id: staffIdSchema,
 });
 
+export const resendInviteInput = z.object({
+	id: staffIdSchema,
+});
+
 export const reassignOwnerInput = z.object({
 	restaurantId: restaurantIdSchema,
 	newOwnerStaffId: staffIdSchema,

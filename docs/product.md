@@ -79,7 +79,7 @@ Permissions are defined precisely in RBAC below; this is persona context only.
 
 - **QR codes:** Owner/Manager generates and downloads one QR per restaurant table, from the Table Matrix. Each table's QR can be regenerated (rotates the token — the old printed QR stops working immediately; any active session on the table is unaffected). Download is per-table or all-at-once for the restaurant.
 - **Table Matrix:** create, edit (label), and hide (soft-delete) restaurant tables. A hidden table drops off the matrix and its QR stops resolving for guests — scanning it lands on the same neutral empty state as any invalid QR. It can be shown again later; hiding never deletes the row or its `qr_token`, so nothing needs reprinting on restore. An occupied table's config is off-limits mid-service: Edit, Regenerate, and Hide are all unavailable while a session is active — only Show QR remains. The card doesn't offer the disabled actions at all, and the same rule is enforced server-side.
-- **Staff invites:** Owner/Manager invites by email; invitee verifies via Email OTP. Managers may invite Managers, Waiters, Kitchen — never Owners.
+- **Staff invites:** Owner/Manager invites by email; invitee verifies via Email OTP. Managers may invite Managers, Waiters, Kitchen — never Owners. An invite is only valid for 24 hours (Staff Roster shows it as "Expired" past that); Owner/Manager resends from the roster row, restarting the window, same reach as inviting.
 - **Daily auth** follows the role model (see `architecture.md` → Authentication).
 - **Menu** is created manually via Manage Menu — no import in MVP.
 

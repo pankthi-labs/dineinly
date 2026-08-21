@@ -19,6 +19,8 @@ const STATUS_COLOR: Record<StaffListItem["status"], string> = {
 	removed: "text-muted",
 };
 
+const INVITE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export const ROLE_LABEL: Record<StaffRole, string> = {
 	waiter: "Waiter",
 	kitchen: "Kitchen Staff",
@@ -35,6 +37,7 @@ export function StaffRow({
 	onRemove,
 	onReassign,
 	onResetPin,
+	onResendInvite,
 }: {
 	staff: StaffListItem;
 	/** False for the primary owner (locked — edit/remove both reject that
@@ -51,9 +54,14 @@ export function StaffRow({
 	onRemove: () => void;
 	onReassign: () => void;
 	onResetPin: () => void;
+	onResendInvite: () => void;
 }) {
 	const isRemoved = staff.status === "removed";
 	const isActive = staff.status === "active";
+	const isInvited = staff.status === "invited";
+	const isExpired =
+		isInvited &&
+		Date.now() - new Date(staff.invited_at).getTime() > INVITE_WINDOW_MS;
 	// Only an existing Owner-role row is eligible — a Waiter/Manager/Kitchen
 	// staff member must be promoted to Owner first (server-enforced too,
 	// reassign_primary_owner's own role check).
@@ -67,7 +75,11 @@ export function StaffRow({
 	// Account Provisioning).
 	const isStation = staff.email.endsWith(STATION_EMAIL_SUFFIX);
 	const showResetPin = isActive && canResetPin && !isStation;
-	const hasActions = canManageThisRow || showReassign || showResetPin;
+	// Same reach as invite_staff/canManageThisRow — resend_staff_invite
+	// enforces the actual Manager-can't-touch-Owner rule server-side.
+	const showResendInvite = isInvited && canManageThisRow;
+	const hasActions =
+		canManageThisRow || showReassign || showResetPin || showResendInvite;
 
 	return (
 		<div
@@ -77,6 +89,9 @@ export function StaffRow({
 				<span className={`text-caps ${STATUS_COLOR[staff.status]}`}>
 					{STATUS_LABEL[staff.status]}
 				</span>
+				{isExpired ? (
+					<span className="text-accent-secondary text-caps">Expired</span>
+				) : null}
 				{staff.is_primary_owner ? (
 					<span className="text-accent-secondary text-caps">Primary Owner</span>
 				) : null}
@@ -114,6 +129,16 @@ export function StaffRow({
 								Remove
 							</button>
 						</>
+					) : null}
+					{showResendInvite ? (
+						<button
+							type="button"
+							onClick={onResendInvite}
+							aria-label={`Resend invite to ${staff.name ?? staff.email}`}
+							className="shrink-0 text-secondary hover:text-primary"
+						>
+							Resend Invite
+						</button>
 					) : null}
 					{showReassign ? (
 						<button

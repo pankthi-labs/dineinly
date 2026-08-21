@@ -619,8 +619,8 @@ begin
 	-- account. user_id stays null until they complete their first Email
 	-- OTP sign-in (staff auth flow — not yet built, see docs/architecture.md
 	-- § Authentication, "Invited staff can't sign in yet").
-	insert into public.staff (restaurant_id, email, name, mobile, role, status, is_primary_owner)
-	values (v_restaurant_id, p_owner_email, p_owner_name, p_owner_mobile, 'owner', 'invited', true)
+	insert into public.staff (restaurant_id, email, name, mobile, role, status, invited_at, is_primary_owner)
+	values (v_restaurant_id, p_owner_email, p_owner_name, p_owner_mobile, 'owner', 'invited', now(), true)
 	returning id into v_staff_id;
 
 	return query select v_restaurant_id, v_staff_id;
@@ -725,11 +725,15 @@ begin
 	where id = p_id;
 
 	if v_primary_owner_id is null then
-		insert into public.staff (restaurant_id, email, name, mobile, role, status, is_primary_owner)
-		values (p_id, p_owner_email, p_owner_name, p_owner_mobile, 'owner', 'invited', true);
+		insert into public.staff (restaurant_id, email, name, mobile, role, status, invited_at, is_primary_owner)
+		values (p_id, p_owner_email, p_owner_name, p_owner_mobile, 'owner', 'invited', now(), true);
 	elsif v_primary_owner_status <> 'active' then
+		-- Still invited: re-editing counts as re-inviting, since there's no
+		-- separate "resend" action on the Restaurants Directory — bump
+		-- invited_at the same way resend_staff_invite does (§ 15) so saving
+		-- this form always restarts the invitee's 24h sign-in window.
 		update public.staff
-		set name = p_owner_name, email = p_owner_email, mobile = p_owner_mobile
+		set name = p_owner_name, email = p_owner_email, mobile = p_owner_mobile, invited_at = now()
 		where id = v_primary_owner_id;
 	end if;
 
@@ -1273,7 +1277,16 @@ as $$
 		)
 		and exists (
 			select 1 from public.staff
-			where lower(email) = lower(p_email) and status = 'invited'
+			where lower(email) = lower(p_email)
+				and status = 'invited'
+				-- Invite window: 24h from invited_at (invite_staff,
+				-- admin_create_restaurant, admin_update_restaurant, or
+				-- resend_staff_invite, § 15). Past that, this resolves the
+				-- same as "never invited" — no separate error surfaces, since
+				-- distinguishing them here would let an unauthenticated
+				-- caller learn this email was invited at all (see the
+				-- function comment above on the existing/unknown collapse).
+				and invited_at > now() - interval '24 hours'
 		);
 $$;
 

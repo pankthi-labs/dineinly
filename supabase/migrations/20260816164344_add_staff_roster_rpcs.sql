@@ -72,14 +72,71 @@ begin
 	end if;
 
 	return query
-		insert into public.staff (restaurant_id, name, email, role, status)
-		values (p_restaurant_id, p_name, p_email, p_role, 'invited')
+		insert into public.staff (restaurant_id, name, email, role, status, invited_at)
+		values (p_restaurant_id, p_name, p_email, p_role, 'invited', now())
 		returning staff.id, staff.name, staff.email, staff.role, staff.status;
 end;
 $$;
 
 revoke execute on function public.invite_staff(uuid, text, text, public.staff_role) from public;
 grant execute on function public.invite_staff(uuid, text, text, public.staff_role) to authenticated;
+
+-- Resends an invite by restarting its 24h sign-in window (invited_at =
+-- now()) — resolve_staff_signin (supabase/migrations/
+-- 20260730150634_add_auth_fk_and_rls_policies.sql § 10) rejects the row
+-- once invited_at is more than 24h old. No email is actually sent here or
+-- anywhere else in this flow: an "invite" is just this row existing, and
+-- the OTP email fires only when the invitee submits /sign-in — resending
+-- just makes that submission work again. Same caller authorization as
+-- invite_staff (Admin, or Owner/Manager — a Manager still can't touch an
+-- Owner-role row), since resending is the same trust boundary as inviting.
+create or replace function public.resend_staff_invite(p_staff_id uuid)
+returns table (
+	id uuid,
+	name text,
+	email text,
+	role public.staff_role,
+	status public.staff_status,
+	invited_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_is_admin boolean := public.is_dineinly_admin();
+	v_restaurant_id uuid;
+	v_target_role public.staff_role;
+	v_caller_role public.staff_role;
+begin
+	select restaurant_id, role into v_restaurant_id, v_target_role
+	from public.staff
+	where id = p_staff_id and status = 'invited';
+
+	if v_restaurant_id is null then
+		raise exception 'No pending invite found for that staff member';
+	end if;
+
+	v_caller_role := public.staff_role_for_restaurant(v_restaurant_id);
+
+	if not v_is_admin and (v_caller_role is null or v_caller_role not in ('owner', 'manager')) then
+		raise exception 'Only an active Owner or Manager may resend an invite';
+	end if;
+
+	if not v_is_admin and v_caller_role = 'manager' and v_target_role = 'owner' then
+		raise exception 'Managers may not resend an Owner invite';
+	end if;
+
+	return query
+		update public.staff
+		set invited_at = now()
+		where staff.id = p_staff_id
+		returning staff.id, staff.name, staff.email, staff.role, staff.status, staff.invited_at;
+end;
+$$;
+
+revoke execute on function public.resend_staff_invite(uuid) from public;
+grant execute on function public.resend_staff_invite(uuid) to authenticated;
 
 -- Name/role are always editable by an authorized caller; email only while
 -- still 'invited'. Once linked (status = active) auth.uid() is what actually

@@ -20,14 +20,6 @@ No lockout after N failed OTP attempts, no app-level throttling on `resolveSignI
 
 ---
 
-## No invite-expiry concept
-
-An `invited` Staff row never expires (`packages/db/src/schema/staff.ts`). Sign-in can't distinguish "your invite expired" from any other failure — all collapse to the generic `SEND_FAILED_MESSAGE` by design (see comment at `apps/web/app/sign-in/sign-in-form.tsx`).
-
-**Pick up:** decide whether invites should expire and after how long before adding an `invited_at`/expiry column and differentiated messaging.
-
----
-
 ## Feature-level staff permissions
 
 Manage Staff, Manage Menu, Manage Tables & QR Codes, Update Order Status, and every Bills action now have per-role gating matching `docs/product.md`'s RBAC matrix:

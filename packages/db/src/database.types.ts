@@ -553,6 +553,7 @@ export type Database = {
 					created_at: string;
 					email: string;
 					id: string;
+					invited_at: string;
 					is_primary_owner: boolean;
 					mobile: string | null;
 					name: string | null;
@@ -567,6 +568,7 @@ export type Database = {
 					created_at?: string;
 					email: string;
 					id?: string;
+					invited_at?: string;
 					is_primary_owner?: boolean;
 					mobile?: string | null;
 					name?: string | null;
@@ -581,6 +583,7 @@ export type Database = {
 					created_at?: string;
 					email?: string;
 					id?: string;
+					invited_at?: string;
 					is_primary_owner?: boolean;
 					mobile?: string | null;
 					name?: string | null;
@@ -923,6 +926,17 @@ export type Database = {
 				Returns: undefined;
 			};
 			request_bill: { Args: never; Returns: string };
+			resend_staff_invite: {
+				Args: { p_staff_id: string };
+				Returns: {
+					email: string;
+					id: string;
+					invited_at: string;
+					name: string;
+					role: Database["public"]["Enums"]["staff_role"];
+					status: Database["public"]["Enums"]["staff_status"];
+				}[];
+			};
 			resolve_active_floor_staff: {
 				Args: { p_restaurant_id: string; p_staff_id: string };
 				Returns: {
