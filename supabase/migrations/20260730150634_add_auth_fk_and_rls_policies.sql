@@ -1087,11 +1087,11 @@ begin
 
 	insert into public.order_items (
 		restaurant_id, order_id, item_name, unit_price, tax_rate, diet,
-		quantity, spice, salt, ice, menu_item_id
+		quantity, spice, salt, ice, menu_item_id, added_by_staff_id
 	)
 	select
 		ci.restaurant_id, v_order_id, mi.name, mi.price, mc.tax_rate, mi.diet,
-		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id
+		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id, ci.added_by_staff_id
 	from public.cart_items ci
 	join public.menu_items mi
 		on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id
@@ -1201,11 +1201,11 @@ begin
 
 	insert into public.order_items (
 		restaurant_id, order_id, item_name, unit_price, tax_rate, diet,
-		quantity, spice, salt, ice, menu_item_id
+		quantity, spice, salt, ice, menu_item_id, added_by_staff_id
 	)
 	select
 		ci.restaurant_id, v_order_id, mi.name, mi.price, mc.tax_rate, mi.diet,
-		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id
+		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id, ci.added_by_staff_id
 	from public.cart_items ci
 	join public.menu_items mi
 		on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id

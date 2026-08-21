@@ -15,6 +15,7 @@ import { id } from "./helpers.js";
 import { menuItems } from "./menu-item.js";
 import { orders } from "./order.js";
 import { restaurants } from "./restaurant.js";
+import { staff } from "./staff.js";
 
 // Kitchen fulfillment line. Snapshots name/price/diet/taxRate at order time —
 // later menu or category edits never alter past orders or bills. Also serves
@@ -65,6 +66,11 @@ export const orderItems = pgTable(
 		// Plain column — the real constraint is the composite FK below, so
 		// menu_item_id can never name an item from another restaurant.
 		menuItemId: uuid("menu_item_id"),
+		// Snapshot of cart_items.addedByStaffId at order time — null when the
+		// line was guest-added. cart_items rows are deleted once an order is
+		// placed (submit_order/staff_submit_order), so without this copy the
+		// per-item PIN attribution is lost the moment the cart clears.
+		addedByStaffId: uuid("added_by_staff_id"),
 	},
 	(table) => [
 		index("order_items_order_id_idx").on(table.orderId),
@@ -88,6 +94,11 @@ export const orderItems = pgTable(
 			columns: [table.restaurantId, table.menuItemId],
 			foreignColumns: [menuItems.restaurantId, menuItems.id],
 			name: "order_items_restaurant_id_menu_item_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.restaurantId, table.addedByStaffId],
+			foreignColumns: [staff.restaurantId, staff.id],
+			name: "order_items_restaurant_id_added_by_staff_id_fkey",
 		}).onDelete("set null"),
 		check(
 			"order_items_quantity_check",

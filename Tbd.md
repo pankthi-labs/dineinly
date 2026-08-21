@@ -118,3 +118,16 @@ The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon 
 The guest bill screen has no way to email/export the bill — no guest email capture anywhere in the guest flow (guests never have accounts, per AGENTS.md), no email-sending integration.
 
 **Pick up:** decide how a guest supplies an email (one-off field on the bill screen vs. something persisted) and which email provider to use — not decided yet, don't guess either.
+
+---
+
+## No DB-level test coverage for RPCs
+
+Every test in `apps/web/tests/` is a mocked unit test (`ctx.auth`/`ctx.supabase` stubbed) — nothing runs a Postgres function against a real Postgres and checks what it actually returns. Two Critical bugs shipped past typecheck + the full unit suite during the station PIN login work because of exactly this gap: an RLS policy that was too permissive, and an RPC returning a shape its caller didn't handle. Both were only caught by hand-testing against the local DB.
+
+**Pick up:** Supabase CLI has this built in — no new framework to evaluate. `supabase test new <name>` scaffolds a pgTAP file under `supabase/tests/database/`; `supabase test db` spins up a fresh shadow DB, replays every migration, and runs them. Start with the two bug classes that already bit us:
+
+- **RLS**: `tests.create_supabase_user()` / `tests.authenticate_as()` (pgTAP helpers Supabase ships) to assert a policy blocks the cross-tenant/cross-role case it's supposed to block, not just that it allows the intended one.
+- **RPC return shape**: call each SECURITY DEFINER function directly (`select * from public.some_rpc(...)`) and assert on the columns/types actually returned, not just that it doesn't error — a mismatch between what the RPC returns and what the TS caller destructures is invisible to `tsc` since `database.types.ts` is generated *from* the RPC, not checked against a spec.
+
+Prioritize the RPCs with the most callers and the least obvious failure mode first: `resolve_staff_by_pin`, `resolve_staff_signin`, `staff_submit_order`/`submit_order`, `claim_station_staff`. No CI wiring decision needed yet — get the local `supabase test db` loop working first.

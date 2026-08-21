@@ -319,6 +319,7 @@ export type Database = {
 			};
 			order_items: {
 				Row: {
+					added_by_staff_id: string | null;
 					cancelled_quantity: number;
 					diet: Database["public"]["Enums"]["diet"];
 					ice: Database["public"]["Enums"]["ice"] | null;
@@ -338,6 +339,7 @@ export type Database = {
 					waived_quantity: number;
 				};
 				Insert: {
+					added_by_staff_id?: string | null;
 					cancelled_quantity?: number;
 					diet: Database["public"]["Enums"]["diet"];
 					ice?: Database["public"]["Enums"]["ice"] | null;
@@ -357,6 +359,7 @@ export type Database = {
 					waived_quantity?: number;
 				};
 				Update: {
+					added_by_staff_id?: string | null;
 					cancelled_quantity?: number;
 					diet?: Database["public"]["Enums"]["diet"];
 					ice?: Database["public"]["Enums"]["ice"] | null;
@@ -376,6 +379,13 @@ export type Database = {
 					waived_quantity?: number;
 				};
 				Relationships: [
+					{
+						foreignKeyName: "order_items_restaurant_id_added_by_staff_id_fkey";
+						columns: ["restaurant_id", "added_by_staff_id"];
+						isOneToOne: false;
+						referencedRelation: "staff";
+						referencedColumns: ["restaurant_id", "id"];
+					},
 					{
 						foreignKeyName: "order_items_restaurant_id_menu_item_id_fkey";
 						columns: ["restaurant_id", "menu_item_id"];
@@ -771,8 +781,27 @@ export type Database = {
 				Args: { p_session_id: string };
 				Returns: boolean;
 			};
+			claim_station_staff: {
+				Args: {
+					p_email: string;
+					p_restaurant_id: string;
+					p_station_type: Database["public"]["Enums"]["station_type"];
+				};
+				Returns: {
+					needs_user: boolean;
+					staff_id: string;
+					user_id: string;
+				}[];
+			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
+			finish_station_provisioning: {
+				Args: {
+					p_restaurant_id: string;
+					p_station_type: Database["public"]["Enums"]["station_type"];
+				};
+				Returns: string;
+			};
 			force_terminate_session: {
 				Args: { p_session_id: string };
 				Returns: undefined;
@@ -835,6 +864,10 @@ export type Database = {
 					role: Database["public"]["Enums"]["staff_role"];
 					staff_id: string;
 				}[];
+			};
+			link_station_user: {
+				Args: { p_staff_id: string; p_user_id: string };
+				Returns: undefined;
 			};
 			list_station_devices: {
 				Args: { p_restaurant_id: string };

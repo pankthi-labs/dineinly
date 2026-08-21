@@ -999,6 +999,12 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "added_by_staff_id": {
+          "name": "added_by_staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -1103,6 +1109,21 @@
           ],
           "onUpdate": "no action",
           "onDelete": "set null"
+        },
+        "order_items_restaurant_id_added_by_staff_id_fkey": {
+          "name": "order_items_restaurant_id_added_by_staff_id_fkey",
+          "tableFrom": "order_items",
+          "tableTo": "staff",
+          "columnsFrom": [
+            "restaurant_id",
+            "added_by_staff_id"
+          ],
+          "columnsTo": [
+            "restaurant_id",
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},

@@ -149,12 +149,14 @@ grant execute on function public.redeem_pairing_code(text) to authenticated, ano
 
 -- Called from an already-paired station's own session (caller must already
 -- hold an active Staff row at p_restaurant_id) to identify which named
--- waiter is now acting on the device. Never returns pin_hash, never
--- distinguishes "no match" from "ambiguous match" — both raise the same
--- generic error, same posture as every other auth check in this codebase.
--- Excludes the station's own row implicitly: a station account never has
--- pin_hash set (nothing sets one for it), so crypt() against a null
--- pin_hash never matches.
+-- staff member is now acting on the device — Waiter, Manager, or Owner, the
+-- same roles product.md grants "Submit Order" to (matches
+-- resolve_active_floor_staff's role set below). Never returns pin_hash,
+-- never distinguishes "no match" from "ambiguous match" — both raise the
+-- same generic error, same posture as every other auth check in this
+-- codebase. Excludes the station's own row implicitly: a station account
+-- never has pin_hash set (nothing sets one for it), so crypt() against a
+-- null pin_hash never matches.
 create or replace function public.resolve_staff_by_pin(
 	p_restaurant_id uuid,
 	p_pin text
@@ -180,7 +182,7 @@ begin
 	select array_agg(s) into v_matches
 	from public.staff s
 	where s.restaurant_id = p_restaurant_id
-		and s.role = 'waiter'
+		and s.role in ('waiter', 'manager', 'owner')
 		and s.status = 'active'
 		and s.pin_hash is not null
 		and s.pin_hash = extensions.crypt(p_pin, s.pin_hash);
@@ -300,3 +302,79 @@ $$;
 
 revoke execute on function public.resolve_active_floor_staff(uuid, uuid) from public;
 grant execute on function public.resolve_active_floor_staff(uuid, uuid) to authenticated;
+
+-- Atomically claims (or revives) the synthetic per-restaurant-per-station-
+-- type Staff row a paired device attaches to — replaces what was a raw
+-- select-then-update-or-insert from the server's admin client. The insert
+-- targets staff_restaurant_id_email_idx (the same partial unique index
+-- Staff Roster invites rely on), so a first-ever pairing race between two
+-- concurrent redemptions for the same restaurant+station type resolves
+-- inside one atomic statement instead of the app racing a check against an
+-- insert. Service-role-only, same as redeem_pairing_code's caller
+-- (apps/web/server/routers/station.ts) — never granted to anon/authenticated.
+create or replace function public.claim_station_staff(
+	p_restaurant_id uuid,
+	p_station_type public.station_type,
+	p_email text
+)
+returns table (staff_id uuid, user_id uuid, needs_user boolean)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_staff public.staff;
+begin
+	insert into public.staff (restaurant_id, email, role, status)
+	values (p_restaurant_id, p_email, p_station_type::text::public.staff_role, 'active')
+	on conflict (restaurant_id, email) where status <> 'removed'
+	do update set status = 'active'
+	returning * into v_staff;
+
+	return query select v_staff.id, v_staff.user_id, v_staff.user_id is null;
+end;
+$$;
+
+revoke execute on function public.claim_station_staff(uuid, public.station_type, text) from public;
+grant execute on function public.claim_station_staff(uuid, public.station_type, text) to service_role;
+
+-- Attaches the station's auth.users identity to its claimed Staff row —
+-- called only when claim_station_staff reported needs_user = true, right
+-- after the caller mints that identity via the Auth Admin API (SQL can't
+-- call that itself). The guard (user_id is null) makes a redundant call a
+-- no-op rather than an overwrite.
+create or replace function public.link_station_user(
+	p_staff_id uuid,
+	p_user_id uuid
+)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+	update public.staff
+	set user_id = p_user_id
+	where id = p_staff_id and user_id is null;
+$$;
+
+revoke execute on function public.link_station_user(uuid, uuid) from public;
+grant execute on function public.link_station_user(uuid, uuid) to service_role;
+
+-- Mints this pairing's device row — every successful redemption gets one,
+-- whether or not claim_station_staff's Staff row was new.
+create or replace function public.finish_station_provisioning(
+	p_restaurant_id uuid,
+	p_station_type public.station_type
+)
+returns uuid
+language sql
+security definer
+set search_path = ''
+as $$
+	insert into public.station_devices (restaurant_id, station_type)
+	values (p_restaurant_id, p_station_type)
+	returning id;
+$$;
+
+revoke execute on function public.finish_station_provisioning(uuid, public.station_type) from public;
+grant execute on function public.finish_station_provisioning(uuid, public.station_type) to service_role;

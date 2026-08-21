@@ -159,6 +159,7 @@ CREATE TABLE "order_items" (
 	"preparing_at" timestamp with time zone,
 	"ready_at" timestamp with time zone,
 	"menu_item_id" uuid,
+	"added_by_staff_id" uuid,
 	CONSTRAINT "order_items_quantity_check" CHECK ("order_items"."quantity" > 0 AND "order_items"."quantity" <= 99),
 	CONSTRAINT "order_items_unit_price_check" CHECK ("order_items"."unit_price" >= 0),
 	CONSTRAINT "order_items_tax_rate_check" CHECK ("order_items"."tax_rate" between 0 and 1),
@@ -237,6 +238,7 @@ ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_placed_by_staff_id_fke
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_order_id_fkey" FOREIGN KEY ("restaurant_id","order_id") REFERENCES "public"."orders"("restaurant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_menu_item_id_fkey" FOREIGN KEY ("restaurant_id","menu_item_id") REFERENCES "public"."menu_items"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_added_by_staff_id_fkey" FOREIGN KEY ("restaurant_id","added_by_staff_id") REFERENCES "public"."staff"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "restaurant_tables" ADD CONSTRAINT "restaurant_tables_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "restaurant_tables" ADD CONSTRAINT "restaurant_tables_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "staff" ADD CONSTRAINT "staff_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

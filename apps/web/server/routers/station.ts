@@ -70,36 +70,25 @@ export const stationRouter = router({
 			const adminClient = createAdminClient();
 			const email = stationEmail(restaurantId, stationType);
 
-			const { data: existingStaff, error: existingStaffError } =
-				await adminClient
-					.from("staff")
-					.select("id, user_id, status")
-					.eq("restaurant_id", restaurantId)
-					.eq("email", email)
-					.maybeSingle();
-			if (existingStaffError) {
-				throw dbError(
-					"Unable to provision the station device.",
-					existingStaffError,
-				);
+			// Atomic claim-or-revive of this restaurant+station-type's synthetic
+			// Staff row (claim_station_staff, supabase/migrations) — replaces a
+			// raw select-then-update-or-insert from this admin client, closing the
+			// race where two concurrent first-ever pairings could both see no
+			// existing row.
+			const { data: claimed, error: claimError } = await adminClient.rpc(
+				"claim_station_staff",
+				{
+					p_restaurant_id: restaurantId,
+					p_station_type: stationType,
+					p_email: email,
+				},
+			);
+			if (claimError || !claimed?.[0]) {
+				throw dbError("Unable to provision the station device.", claimError);
 			}
-			let userId = existingStaff?.user_id;
+			const { staff_id: staffId, needs_user: needsUser } = claimed[0];
 
-			if (existingStaff?.user_id && existingStaff.status !== "active") {
-				// Pairing revives the station's own row rather than provisioning a
-				// second one: the synthetic email's auth identity outlives a
-				// removal, so a fresh createUser would collide on it and leave the
-				// restaurant unable to pair at all.
-				const { error: reviveError } = await adminClient
-					.from("staff")
-					.update({ status: "active" })
-					.eq("id", existingStaff.id);
-				if (reviveError) {
-					throw dbError("Unable to provision the station device.", reviveError);
-				}
-			}
-
-			if (!userId) {
+			if (needsUser) {
 				const { data: created, error: createError } =
 					await adminClient.auth.admin.createUser({
 						email,
@@ -108,17 +97,16 @@ export const stationRouter = router({
 				if (createError || !created.user) {
 					throw dbError("Unable to provision the station device.", createError);
 				}
-				userId = created.user.id;
 
-				const { error: staffError } = await adminClient.from("staff").insert({
-					restaurant_id: restaurantId,
-					user_id: userId,
-					email,
-					role: stationType,
-					status: "active",
-				});
-				if (staffError) {
-					throw dbError("Unable to provision the station device.", staffError);
+				const { error: linkUserError } = await adminClient.rpc(
+					"link_station_user",
+					{ p_staff_id: staffId, p_user_id: created.user.id },
+				);
+				if (linkUserError) {
+					throw dbError(
+						"Unable to provision the station device.",
+						linkUserError,
+					);
 				}
 			}
 
@@ -131,20 +119,19 @@ export const stationRouter = router({
 				throw dbError("Unable to pair this device.", linkError);
 			}
 
-			const { data: device, error: deviceError } = await adminClient
-				.from("station_devices")
-				.insert({ restaurant_id: restaurantId, station_type: stationType })
-				.select("id")
-				.single();
-			if (deviceError || !device) {
-				throw dbError("Unable to pair this device.", deviceError);
+			const { data: deviceId, error: finishError } = await adminClient.rpc(
+				"finish_station_provisioning",
+				{ p_restaurant_id: restaurantId, p_station_type: stationType },
+			);
+			if (finishError || !deviceId) {
+				throw dbError("Unable to pair this device.", finishError);
 			}
 
 			// Signed here, not on the device: the device stores this token as its
 			// identity cookie, and requireOwnStaffId only trusts a device id it
 			// can verify came from a real redemption.
 			const deviceToken = await mintStationDeviceToken({
-				deviceId: device.id,
+				deviceId,
 				restaurantId,
 			});
 
@@ -152,7 +139,7 @@ export const stationRouter = router({
 				email,
 				tokenHash: link.properties.hashed_token,
 				restaurantId,
-				deviceId: device.id,
+				deviceId,
 				deviceToken,
 			};
 		}),
