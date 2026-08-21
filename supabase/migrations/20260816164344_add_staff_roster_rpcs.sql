@@ -201,6 +201,8 @@ grant execute on function public.remove_staff(uuid) to authenticated;
 -- may set one (not restricted to Kitchen/Waiter, the eventual station
 -- users) — cheap to allow, and docs/product.md never restricts who may hold
 -- a PIN, only who's ever prompted for one at a shared device.
+-- Kiosk-mode redemption (Task 5, apps/web/server/routers/station.ts) now
+-- depends on the PIN uniqueness this function enforces.
 create extension if not exists pgcrypto with schema extensions;
 
 create or replace function public.set_staff_pin(
@@ -214,9 +216,32 @@ set search_path = ''
 as $$
 declare
 	v_updated int;
+	v_collision boolean;
 begin
 	if p_pin !~ '^[0-9]{4,6}$' then
 		raise exception 'PIN must be 4 to 6 digits';
+	end if;
+
+	perform pg_advisory_xact_lock(hashtext(p_restaurant_id::text));
+
+	-- pin_hash is salted bcrypt, so this can't be a DB unique index — a PIN
+	-- must resolve to exactly one person on a shared device
+	-- (resolve_staff_by_pin), so check for a collision the app-level way:
+	-- compare the candidate against every other active waiter/kitchen row's
+	-- hash. Restaurant staff counts are small, so this stays cheap.
+	select exists (
+		select 1
+		from public.staff s
+		where s.restaurant_id = p_restaurant_id
+			and s.role in ('waiter', 'kitchen')
+			and s.status = 'active'
+			and s.user_id is distinct from auth.uid()
+			and s.pin_hash is not null
+			and s.pin_hash = extensions.crypt(p_pin, s.pin_hash)
+	) into v_collision;
+
+	if v_collision then
+		raise exception 'That PIN is already in use at this restaurant — choose a different one';
 	end if;
 
 	update public.staff

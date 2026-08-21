@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import type { StaffRole } from "@/lib/auth";
+import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import { trpc } from "@/lib/trpc-client";
 import type { AppRouter } from "@/server/routers/_app";
 import { RestaurantNavHeader } from "../restaurant-nav-header";
@@ -25,6 +26,7 @@ import { ResetPinSheet } from "./reset-pin-sheet";
 import type { EditTarget, StaffFormValues } from "./staff-form-sheet";
 import { StaffFormSheet } from "./staff-form-sheet";
 import { ROLE_LABEL, StaffRow } from "./staff-row";
+import { StationPanel } from "./station-panel";
 
 type StaffListItem = inferRouterOutputs<AppRouter>["staff"]["list"][number];
 
@@ -68,6 +70,10 @@ function canManageRow(
 	viewerIsAdmin: boolean,
 	viewerRole: StaffRole | null,
 ): boolean {
+	// A shared station device's own row is managed from Floor Tablets
+	// (station-panel.tsx) — pairing and revoking, never edit/remove. Removing
+	// it here would leave the restaurant unable to pair a tablet at all.
+	if (staff.email.endsWith(STATION_EMAIL_SUFFIX)) return false;
 	if (staff.is_primary_owner) return false;
 	return isOwnerLevel(viewerIsAdmin, viewerRole) || staff.role !== "owner";
 }
@@ -337,6 +343,10 @@ export default function StaffRosterPage() {
 						))
 					)}
 				</div>
+
+				{viewerIsAdmin || viewerRole === "owner" || viewerRole === "manager" ? (
+					<StationPanel restaurantId={restaurantId} />
+				) : null}
 			</main>
 
 			{sheetMode !== "closed" ? (

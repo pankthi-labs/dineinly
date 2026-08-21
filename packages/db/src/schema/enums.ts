@@ -10,6 +10,12 @@ export const staffRole = pgEnum("staff_role", [
 	"owner",
 ]);
 
+// Which kind of shared device a station identity represents (docs/
+// architecture.md § Station Account Provisioning). Kitchen ships later —
+// this column exists now so that follow-up needs no migration of its own,
+// just a new enum value.
+export const stationType = pgEnum("station_type", ["waiter"]);
+
 // Staff lifecycle. Soft-delete via status, not a deleted_at column.
 export const staffStatus = pgEnum("staff_status", [
 	"invited",

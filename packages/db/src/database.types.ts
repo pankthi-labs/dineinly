@@ -591,6 +591,86 @@ export type Database = {
 					},
 				];
 			};
+			station_devices: {
+				Row: {
+					created_at: string;
+					id: string;
+					restaurant_id: string;
+					revoked_at: string | null;
+					station_type: Database["public"]["Enums"]["station_type"];
+				};
+				Insert: {
+					created_at?: string;
+					id?: string;
+					restaurant_id: string;
+					revoked_at?: string | null;
+					station_type: Database["public"]["Enums"]["station_type"];
+				};
+				Update: {
+					created_at?: string;
+					id?: string;
+					restaurant_id?: string;
+					revoked_at?: string | null;
+					station_type?: Database["public"]["Enums"]["station_type"];
+				};
+				Relationships: [
+					{
+						foreignKeyName: "station_devices_restaurant_id_restaurants_id_fk";
+						columns: ["restaurant_id"];
+						isOneToOne: false;
+						referencedRelation: "restaurants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
+			station_pairing_codes: {
+				Row: {
+					code_hash: string;
+					created_at: string;
+					created_by_staff_id: string;
+					expires_at: string;
+					id: string;
+					redeemed_at: string | null;
+					restaurant_id: string;
+					station_type: Database["public"]["Enums"]["station_type"];
+				};
+				Insert: {
+					code_hash: string;
+					created_at?: string;
+					created_by_staff_id: string;
+					expires_at: string;
+					id?: string;
+					redeemed_at?: string | null;
+					restaurant_id: string;
+					station_type: Database["public"]["Enums"]["station_type"];
+				};
+				Update: {
+					code_hash?: string;
+					created_at?: string;
+					created_by_staff_id?: string;
+					expires_at?: string;
+					id?: string;
+					redeemed_at?: string | null;
+					restaurant_id?: string;
+					station_type?: Database["public"]["Enums"]["station_type"];
+				};
+				Relationships: [
+					{
+						foreignKeyName: "station_pairing_codes_created_by_staff_id_staff_id_fk";
+						columns: ["created_by_staff_id"];
+						isOneToOne: false;
+						referencedRelation: "staff";
+						referencedColumns: ["id"];
+					},
+					{
+						foreignKeyName: "station_pairing_codes_restaurant_id_restaurants_id_fk";
+						columns: ["restaurant_id"];
+						isOneToOne: false;
+						referencedRelation: "restaurants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			table_sessions: {
 				Row: {
 					closed_at: string | null;
@@ -697,6 +777,16 @@ export type Database = {
 				Args: { p_session_id: string };
 				Returns: undefined;
 			};
+			generate_pairing_code: {
+				Args: {
+					p_restaurant_id: string;
+					p_station_type: Database["public"]["Enums"]["station_type"];
+				};
+				Returns: {
+					code: string;
+					expires_at: string;
+				}[];
+			};
 			invite_staff: {
 				Args: {
 					p_email: string;
@@ -725,6 +815,10 @@ export type Database = {
 				Args: { p_restaurant_id: string };
 				Returns: boolean;
 			};
+			is_station_device_revoked: {
+				Args: { p_device_id: string };
+				Returns: boolean;
+			};
 			jwt_is_guest_for_restaurant: {
 				Args: { p_restaurant_id: string };
 				Returns: boolean;
@@ -740,6 +834,15 @@ export type Database = {
 					restaurant_id: string;
 					role: Database["public"]["Enums"]["staff_role"];
 					staff_id: string;
+				}[];
+			};
+			list_station_devices: {
+				Args: { p_restaurant_id: string };
+				Returns: {
+					created_at: string;
+					id: string;
+					revoked_at: string;
+					station_type: Database["public"]["Enums"]["station_type"];
 				}[];
 			};
 			merge_table_into_session: {
@@ -768,6 +871,13 @@ export type Database = {
 					role: Database["public"]["Enums"]["staff_role"];
 				}[];
 			};
+			redeem_pairing_code: {
+				Args: { p_code: string };
+				Returns: {
+					restaurant_id: string;
+					station_type: Database["public"]["Enums"]["station_type"];
+				}[];
+			};
 			remove_staff: {
 				Args: { p_staff_id: string };
 				Returns: {
@@ -780,6 +890,13 @@ export type Database = {
 				Returns: undefined;
 			};
 			request_bill: { Args: never; Returns: string };
+			resolve_active_floor_staff: {
+				Args: { p_restaurant_id: string; p_staff_id: string };
+				Returns: {
+					id: string;
+					name: string;
+				}[];
+			};
 			resolve_qr_token: {
 				Args: { p_qr_token: string };
 				Returns: {
@@ -788,7 +905,21 @@ export type Database = {
 					table_session_id: string;
 				}[];
 			};
+			resolve_staff_by_pin: {
+				Args: { p_pin: string; p_restaurant_id: string };
+				Returns: {
+					name: string;
+					staff_id: string;
+				}[];
+			};
 			resolve_staff_signin: { Args: { p_email: string }; Returns: boolean };
+			revoke_station_device: {
+				Args: { p_device_id: string };
+				Returns: {
+					id: string;
+					revoked_at: string;
+				}[];
+			};
 			set_menu_item_availability: {
 				Args: {
 					p_availability: Database["public"]["Enums"]["availability"];
@@ -873,6 +1004,7 @@ export type Database = {
 			spice: "mild" | "regular" | "extra spicy";
 			staff_role: "waiter" | "kitchen" | "manager" | "owner";
 			staff_status: "invited" | "active" | "removed";
+			station_type: "waiter";
 		};
 		CompositeTypes: {
 			[_ in never]: never;
@@ -1043,6 +1175,7 @@ export const Constants = {
 			spice: ["mild", "regular", "extra spicy"],
 			staff_role: ["waiter", "kitchen", "manager", "owner"],
 			staff_status: ["invited", "active", "removed"],
+			station_type: ["waiter"],
 		},
 	},
 } as const;

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import type { Context } from "../trpc/context";
 import { authedProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
@@ -25,7 +26,7 @@ const FLOOR_ROLES = ["waiter", "manager", "owner"] as const;
 // go through ctx.auth directly (staff_all_cart_items RLS, § 5 of the RLS
 // migration, is any-active-staff) — only submitOrder needs the RPC, for the
 // same idempotent cart-to-order transaction submit_order() gives guests.
-async function requireOwnStaffId(
+export async function requireOwnStaffId(
 	ctx: Context,
 	restaurantId: string,
 ): Promise<string> {
@@ -35,7 +36,7 @@ async function requireOwnStaffId(
 
 	const staffResult = await ctx.auth
 		.from("staff")
-		.select("id")
+		.select("id, email")
 		.eq("restaurant_id", restaurantId)
 		.eq("user_id", user?.id ?? "")
 		.eq("status", "active")
@@ -54,7 +55,61 @@ async function requireOwnStaffId(
 				"Only an active Waiter, Manager, or Owner may order for a guest.",
 		});
 	}
-	return staffResult.data.id;
+
+	if (!staffResult.data.email.endsWith(STATION_EMAIL_SUFFIX)) {
+		return staffResult.data.id;
+	}
+
+	// A shared station device's own Staff row is never the actor — the PIN-
+	// resolved "acting" waiter is (docs/architecture.md § Station Account
+	// Provisioning: PIN grants no DB access, attribution only). No valid
+	// PIN cookie means nobody has unlocked this device yet.
+	if (!ctx.stationSession || ctx.stationSession.restaurantId !== restaurantId) {
+		throw new TRPCError({
+			code: "PRECONDITION_FAILED",
+			message: "Enter your PIN to continue.",
+		});
+	}
+
+	// The PIN cookie is valid for up to STATION_SESSION_TTL_SECONDS — re-verify
+	// the acting staff row is still active and floor-eligible now, not just
+	// at PIN entry, so a deactivation mid-shift takes effect immediately
+	// instead of waiting out the cookie's expiry.
+	const { data: actingStaff, error: actingStaffError } = await ctx.auth.rpc(
+		"resolve_active_floor_staff",
+		{ p_restaurant_id: restaurantId, p_staff_id: ctx.stationSession.staffId },
+	);
+	if (actingStaffError) {
+		throw dbError("Unable to identify staff member.", actingStaffError);
+	}
+	if (!actingStaff?.[0]) {
+		throw new TRPCError({
+			code: "PRECONDITION_FAILED",
+			message: "Enter your PIN to continue.",
+		});
+	}
+
+	// Revocation is a server-side boundary, not just the Floor page's
+	// redirect: a revoked tablet must stop mutating even if it never
+	// re-renders. The device id comes from a signed cookie (lib/station-
+	// session.ts), so a device can't rename itself out of a revocation.
+	if (ctx.stationDeviceId) {
+		const { data: revoked, error: revokedError } = await ctx.auth.rpc(
+			"is_station_device_revoked",
+			{ p_device_id: ctx.stationDeviceId },
+		);
+		if (revokedError) {
+			throw dbError("Unable to verify this device.", revokedError);
+		}
+		if (revoked) {
+			throw new TRPCError({
+				code: "PRECONDITION_FAILED",
+				message: "This device was removed. Pair it again.",
+			});
+		}
+	}
+
+	return actingStaff[0].id;
 }
 
 export const floorRouter = router({

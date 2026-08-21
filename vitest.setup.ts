@@ -15,6 +15,10 @@ process.env.GUEST_JWT_SIGNING_KEY = JSON.stringify({
 	alg: "RS256",
 });
 
+// HMAC secret for station session tokens (lib/station-session.ts). Tests
+// only round-trip our own mint/verify, so a dummy 32+ byte value is sufficient.
+process.env.STATION_PIN_SECRET = "test-only-station-pin-secret-with-32-chars";
+
 // Nothing in the suite talks to Supabase, so these never need to resolve to a
 // real project — env.ts just needs them present and URL-shaped.
 process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";

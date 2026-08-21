@@ -2,8 +2,8 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { type FormEvent, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
@@ -28,10 +28,44 @@ export default function FloorPage() {
 	const [toast, setToast] = useState<ToastState | null>(null);
 
 	const utils = trpc.useUtils();
+	const router = useRouter();
 	const restaurantQuery = trpc.restaurants.getById.useQuery({
 		id: restaurantId,
 	});
 	const listQuery = trpc.tables.list.useQuery({ restaurantId });
+	const statusQuery = trpc.station.myStationStatus.useQuery({ restaurantId });
+	const [pin, setPin] = useState("");
+	const [pinError, setPinError] = useState<string | null>(null);
+	const [isVerifyingPin, setIsVerifyingPin] = useState(false);
+
+	useEffect(() => {
+		if (statusQuery.data?.deviceRevoked) {
+			router.replace("/station/pair");
+		}
+	}, [statusQuery.data?.deviceRevoked, router]);
+
+	async function handlePinSubmit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setIsVerifyingPin(true);
+		setPinError(null);
+		const response = await fetch("/station/pin", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ restaurantId, pin }),
+		});
+		setIsVerifyingPin(false);
+		if (!response.ok) {
+			setPinError("PIN not recognized.");
+			return;
+		}
+		setPin("");
+		utils.station.myStationStatus.invalidate({ restaurantId });
+	}
+
+	async function handleSwitchUser() {
+		await fetch("/station/pin", { method: "DELETE" });
+		utils.station.myStationStatus.invalidate({ restaurantId });
+	}
 
 	const supabase = createClient();
 	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
@@ -60,11 +94,87 @@ export default function FloorPage() {
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
+			{/* A failed status check can't be treated as "not a station" — the
+			PIN pad would stay hidden while every mutation kept rejecting, so the
+			page has to say so and offer a retry. */}
+			{statusQuery.isError ? (
+				<div className="fixed inset-0 z-(--z-overlay) flex items-center justify-center bg-glass p-4">
+					<div className="w-full max-w-xs rounded-xl border border-divider bg-surface-elevated p-8 text-center">
+						<p role="alert" className="text-error text-sm">
+							Couldn't check this device's status.
+						</p>
+						<button
+							type="button"
+							onClick={() => statusQuery.refetch()}
+							className="mt-4 text-accent text-caps hover:opacity-80"
+						>
+							Retry
+						</button>
+					</div>
+				</div>
+			) : null}
+
+			{statusQuery.data?.isStation &&
+			!statusQuery.data.deviceRevoked &&
+			!statusQuery.data.actingStaffName ? (
+				<div className="fixed inset-0 z-(--z-overlay) flex items-center justify-center bg-glass p-4">
+					<div className="w-full max-w-xs rounded-xl border border-divider bg-surface-elevated p-8">
+						<h2 className="text-center text-lg text-primary">Enter your PIN</h2>
+						<form
+							onSubmit={handlePinSubmit}
+							noValidate
+							className="mt-6 space-y-4"
+						>
+							<input
+								type="password"
+								inputMode="numeric"
+								autoComplete="off"
+								maxLength={6}
+								placeholder="••••"
+								value={pin}
+								disabled={isVerifyingPin}
+								onChange={(event) =>
+									setPin(event.target.value.replace(/\D/g, ""))
+								}
+								className="w-full rounded-sm border border-divider bg-surface px-3 py-3 text-center text-2xl text-primary tracking-widest"
+							/>
+							{pinError ? (
+								<p role="alert" className="text-center text-error text-sm">
+									{pinError}
+								</p>
+							) : null}
+							<button
+								type="submit"
+								disabled={isVerifyingPin || pin.length < 4}
+								className="flex h-12 w-full items-center justify-center rounded-md bg-accent font-medium text-background text-sm disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
+							>
+								{isVerifyingPin ? "Checking…" : "Unlock"}
+							</button>
+						</form>
+					</div>
+				</div>
+			) : null}
+
 			<RestaurantNavHeader
 				restaurantId={restaurantId}
 				restaurantName={restaurantQuery.data?.name ?? ""}
 				active="Floor"
 			/>
+
+			{statusQuery.data?.actingStaffName ? (
+				<div className="flex items-center justify-end gap-3 px-4 pt-4 lg:px-16 xl:px-24">
+					<span className="text-secondary text-sm">
+						Acting as {statusQuery.data.actingStaffName}
+					</span>
+					<button
+						type="button"
+						onClick={handleSwitchUser}
+						className="text-accent text-sm hover:opacity-80"
+					>
+						Switch User
+					</button>
+				</div>
+			) : null}
 
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader

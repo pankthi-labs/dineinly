@@ -8,6 +8,7 @@ import { kitchenRouter } from "./kitchen";
 import { menuRouter } from "./menu";
 import { restaurantsRouter } from "./restaurants";
 import { staffRouter } from "./staff";
+import { stationRouter } from "./station";
 import { tablesRouter } from "./tables";
 
 // health.ping proves the wiring end to end (route handler → context → env
@@ -28,6 +29,7 @@ export const appRouter = router({
 	menu: menuRouter,
 	restaurants: restaurantsRouter,
 	staff: staffRouter,
+	station: stationRouter,
 	tables: tablesRouter,
 });
 

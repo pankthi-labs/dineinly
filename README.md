@@ -40,6 +40,10 @@ supabase gen signing-key --algorithm RS256 > /tmp/key.json
 echo "[$(cat /tmp/key.json)]" > supabase/signing_keys.json     # config.toml expects a JSON array
 # Paste the same key (unwrapped, not the array) as GUEST_JWT_SIGNING_KEY in .env
 
+# Generate the station-cookie HMAC secret and paste it as STATION_PIN_SECRET in .env.
+# App-only (never reaches Supabase), so any high-entropy string of 32+ chars works:
+openssl rand -base64 48
+
 pnpm db:start                # boots local Postgres/Auth/Storage/Realtime via Docker
                              # first run pulls Docker images, takes a few minutes
 
@@ -55,13 +59,15 @@ App runs at **http://127.0.0.1:3000**.
 
 ## Environment
 
-The app (`apps/web`) validates three env vars at startup via `apps/web/lib/env.ts` (invalid or
+The app (`apps/web`) validates five env vars at startup via `apps/web/lib/env.ts` (invalid or
 missing fails fast, not mid-request), read from the **monorepo root** `.env`:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=            # from `supabase status -o env`
+SUPABASE_SERVICE_ROLE_KEY=                # from `supabase status -o env` — bypasses RLS, server-only
 GUEST_JWT_SIGNING_KEY=                    # private JWK (RS256) — see "Setup from scratch" above
+STATION_PIN_SECRET=                       # HMAC secret, min 32 chars — see "Setup from scratch" above
 ```
 
 `DATABASE_URL` is also in `.env` but is a **CLI-only** var — `packages/db/drizzle.config.ts` and

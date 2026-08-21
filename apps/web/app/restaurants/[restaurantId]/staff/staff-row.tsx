@@ -2,6 +2,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import type { StaffRole } from "@/lib/auth";
+import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import type { AppRouter } from "@/server/routers/_app";
 
 type StaffListItem = inferRouterOutputs<AppRouter>["staff"]["list"][number];
@@ -61,7 +62,11 @@ export function StaffRow({
 		canReassignOwner &&
 		!staff.is_primary_owner &&
 		staff.role === "owner";
-	const showResetPin = isActive && canResetPin;
+	// A shared station device never carries a PIN of its own — the PIN
+	// belongs to whichever waiter unlocks it (docs/architecture.md § Station
+	// Account Provisioning).
+	const isStation = staff.email.endsWith(STATION_EMAIL_SUFFIX);
+	const showResetPin = isActive && canResetPin && !isStation;
 	const hasActions = canManageThisRow || showReassign || showResetPin;
 
 	return (
@@ -77,7 +82,7 @@ export function StaffRow({
 				) : null}
 			</div>
 			<h3 className="truncate text-lg text-primary">
-				{staff.name ?? staff.email}
+				{isStation ? "Floor Tablet (Shared)" : (staff.name ?? staff.email)}
 			</h3>
 			<div className="flex flex-wrap gap-x-6 gap-y-1 text-secondary text-sm">
 				<span>{ROLE_LABEL[staff.role]}</span>

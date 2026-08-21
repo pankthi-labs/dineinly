@@ -42,13 +42,13 @@ A station account is a `Staff` row with `role = kitchen` or `role = waiter`, bac
 
 Every kitchen display in a restaurant shares the same `kitchen` identity; every floor tablet shares the same `waiter` identity. What's per-device is the pairing, not the identity:
 
-1. **Pairing code.** An Owner or Manager, from Staff Roster settings, generates a one-time pairing code (6 digits, ~10-minute TTL) scoped to their restaurant and a station type (kitchen or waiter). The server mints this code; it is never derived from or equal to any password.
+1. **Pairing code.** An Owner or Manager, from Staff Roster settings, generates a one-time pairing code (8 digits from a CSPRNG, ~10-minute TTL) scoped to their restaurant and a station type (kitchen or waiter). The server mints this code; it is never derived from or equal to any password.
 2. **Device entry.** On first boot, the kitchen display or floor tablet shows an "Enter pairing code" screen. The Manager types the code into the device (or the device scans a QR encoding it). No password is ever typed on the device.
 3. **Session issuance.** The server validates the code, exchanges it for a session on that restaurant's station identity, and issues the device its own long-lived refresh token — kiosk-style, no re-login expected. The pairing code is single-use and burns immediately on redemption or at TTL expiry, whichever comes first.
 4. **Per-device revocation.** Each physical device gets its own device record and refresh token, even though all devices for a station type share the same underlying `auth.users` identity. A lost or stolen tablet is revoked individually from Staff Roster settings — this invalidates only that device's session, not the station identity itself, so every other kitchen display or floor tablet keeps working unaffected.
 5. **Attribution stays separate.** Once a device is paired, individual staff identify via PIN (`Staff.pin_hash`) as already described above — attribution/audit/UI only, no DB auth power, no relationship to pairing.
 
-Not yet built — no migration, router, or UI exists for pairing-code issuance, redemption, or per-device session tracking. This section is the agreed design to build against, not a description of shipped code.
+Built for the `waiter` station type: pairing-code issuance/redemption, per-device records, and revocation live in `supabase/migrations/20260820070301_thick_blazing_skull.sql` (the RPCs and their RLS) and `apps/web/server/routers/station.ts` (the router), with the Owner/Manager UI in `apps/web/app/restaurants/[restaurantId]/staff/station-panel.tsx` and the device-facing screen at `apps/web/app/station/pair/`. The code is the source of truth for the details. The `kitchen` station type reuses the same machinery but has no UI wired to it yet.
 
 - **Invited staff can sign in.** Dineinly Admin's Restaurants Directory creates a restaurant's owner as a Staff row (`role = owner, status = invited, user_id = null`); `/sign-in` (`apps/web/app/sign-in/page.tsx`) then gets them from that invitation to a live session in two steps, both backed by `supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql` § 10 and wrapped by `server/routers/auth.ts`:
   1. Before calling `signInWithOtp`, the client calls `auth.resolveSignIn`, which runs `resolve_staff_signin(email)` — a `SECURITY DEFINER` function (the caller has no session yet, so no other way to read `auth.users`) that returns a single boolean: `shouldCreateUser: true` only when the email matches an `invited` Staff row with no `auth.users` row yet. It never distinguishes "existing account" from "unknown email" in its response — doing so would let an unauthenticated caller enumerate registered emails — so the client always proceeds to `signInWithOtp` with this flag; for a genuinely unknown email, GoTrue itself rejects the sign-in since it won't create a user with `shouldCreateUser: false`. Unconditional `shouldCreateUser: true` would make sign-in open self-registration; this pre-check is what keeps it invite-only.
@@ -78,7 +78,9 @@ Rules:
 
 ## Route Structure
 
-Four route trees under `apps/web/app/`, one per identity type above, plus one resolve-only route. **Before adding any page, place it in the tree matching who views it — don't invent a fifth tree, and don't write a new auth check inline in a page.** All gating logic lives in `apps/web/lib/auth.ts`; check there before writing a new one.
+Four route trees under `apps/web/app/`, one per identity type above, plus one resolve-only route and one device-onboarding route. **Before adding any page, place it in the tree matching who views it — don't invent a fifth tree, and don't write a new auth check inline in a page.** All gating logic lives in `apps/web/lib/auth.ts`; check there before writing a new one.
+
+`app/station/` is the sanctioned exception, and the only one: it authenticates a *device*, not a viewer, so it belongs to none of the four identity trees — an unpaired tablet has no session at all, and `restaurants/[restaurantId]/layout.tsx` would redirect it away before it could reach a pairing form. It holds the unauthenticated pairing screen and the PIN-unlock cookie endpoint, nothing viewer-facing. See `docs/superpowers/specs/2026-08-20-waiter-station-pin-login-design.md`.
 
 | Tree | Who | Gate | Credential |
 |---|---|---|---|
