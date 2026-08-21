@@ -187,7 +187,7 @@ export default function KitchenDisplayPage() {
 					<button
 						type="button"
 						onClick={() => setAvailabilityMode("unavailable")}
-						className="shrink-0 whitespace-nowrap rounded-md border border-accent-secondary px-6 py-3 font-medium text-accent-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
+						className="shrink-0 whitespace-nowrap rounded-md border border-warning px-6 py-3 font-medium text-sm text-warning transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
 					>
 						Mark Unavailable
 					</button>

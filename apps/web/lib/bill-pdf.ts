@@ -14,8 +14,10 @@ const LINE_HEIGHT = 16;
 // StandardFonts.Helvetica only encodes WinAnsi (roughly Latin-1) — the ₹
 // symbol and any non-Latin item/restaurant name throw at draw time rather
 // than rendering. Everything drawn goes through this first so an unusual
-// character degrades to "?" instead of 500ing the whole download.
-function pdfSafe(text: string): string {
+// character degrades to "?" instead of 500ing the whole download. Shared
+// with the QR PDF builder (apps/web/lib/qr-pdf.ts), which draws
+// restaurant-authored table labels under the same font.
+export function pdfSafe(text: string): string {
 	return Array.from(text)
 		.map((char) => {
 			const code = char.codePointAt(0) ?? 0;

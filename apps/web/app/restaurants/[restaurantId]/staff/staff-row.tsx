@@ -13,8 +13,11 @@ const STATUS_LABEL: Record<StaffListItem["status"], string> = {
 	removed: "Removed",
 };
 
+// Invited is neutral, not a warning state — an open invite needs nothing from
+// the roster's viewer. The row's separate "Expired" badge is what carries the
+// warning token once the 24h window lapses.
 const STATUS_COLOR: Record<StaffListItem["status"], string> = {
-	invited: "text-accent-support",
+	invited: "text-secondary",
 	active: "text-success",
 	removed: "text-muted",
 };
@@ -90,7 +93,7 @@ export function StaffRow({
 					{STATUS_LABEL[staff.status]}
 				</span>
 				{isExpired ? (
-					<span className="text-accent-secondary text-caps">Expired</span>
+					<span className="text-caps text-warning">Expired</span>
 				) : null}
 				{staff.is_primary_owner ? (
 					<span className="text-accent-secondary text-caps">Primary Owner</span>

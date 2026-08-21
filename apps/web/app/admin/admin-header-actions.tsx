@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc-client";
 import { ProfileSheet } from "./profile-sheet";
 
 const menuItemClass =
-	"flex items-center gap-3 px-4 py-3 text-left text-secondary text-sm no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary focus-visible:bg-surface-elevated focus-visible:text-primary";
+	"flex items-center gap-3 px-4 py-3 text-left text-caps text-secondary no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary focus-visible:bg-surface-elevated focus-visible:text-primary";
 
 /**
  * One "More" dropdown for every header utility action — Restaurants

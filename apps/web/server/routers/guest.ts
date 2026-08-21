@@ -1,7 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { billableQuantity, computeBill } from "@/lib/bill-math";
+import { billableQuantity, computeBill, ratePercent } from "@/lib/bill-math";
 import { ICE_OPTIONS, SALT_OPTIONS, SPICE_OPTIONS } from "@/lib/menu-options";
+import { listCartItems, upsertCartItem } from "../cart";
+import { dbError } from "../trpc/errors";
 import { guestProcedure, router } from "../trpc/init";
 
 const preferencesInput = z.object({
@@ -9,10 +11,6 @@ const preferencesInput = z.object({
 	salt: z.enum(SALT_OPTIONS).nullish(),
 	ice: z.enum(ICE_OPTIONS).nullish(),
 });
-
-function dbError(message: string, cause: unknown): TRPCError {
-	return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message, cause });
-}
 
 // docs/product.md § Dineinly Experiences: Menu is view-only (no ordering, no
 // order history). Guest adds ordering and a plain order history, but no live
@@ -108,55 +106,13 @@ export const guestRouter = router({
 		// Shared, session-scoped cart (docs/product.md: "any participant edits
 		// freely"). RLS (guest_*_session_cart_items) already scopes every read
 		// and write below to this guest's own active session.
-		list: guestProcedure.query(async ({ ctx }) => {
-			const cartResult = await ctx.supabase
-				.from("cart_items")
-				.select("id, menu_item_id, quantity, spice, salt, ice")
-				.eq("restaurant_id", ctx.guest.restaurant_id)
-				.eq("session_id", ctx.guest.table_session_id)
-				.order("created_at", { ascending: true });
-
-			if (cartResult.error) {
-				throw dbError("Unable to load the cart.", cartResult.error);
-			}
-
-			const rows = cartResult.data ?? [];
-			const menuItemIds = [...new Set(rows.map((row) => row.menu_item_id))];
-
-			const itemsResult =
-				menuItemIds.length === 0
-					? { data: [], error: null }
-					: await ctx.supabase
-							.from("menu_items")
-							.select("id, name, price, availability, status")
-							.eq("restaurant_id", ctx.guest.restaurant_id)
-							.in("id", menuItemIds);
-
-			if (itemsResult.error) {
-				throw dbError("Unable to load the cart.", itemsResult.error);
-			}
-
-			const itemsById = new Map(
-				(itemsResult.data ?? []).map((item) => [item.id, item]),
-			);
-
-			return rows.map((row) => {
-				const menuItem = itemsById.get(row.menu_item_id);
-				return {
-					id: row.id,
-					menuItemId: row.menu_item_id,
-					quantity: row.quantity,
-					spice: row.spice,
-					salt: row.salt,
-					ice: row.ice,
-					name: menuItem?.name ?? "",
-					price: menuItem?.price ?? 0,
-					available:
-						menuItem?.availability === "available" &&
-						menuItem?.status === "active",
-				};
-			});
-		}),
+		list: guestProcedure.query(async ({ ctx }) =>
+			listCartItems(
+				ctx.supabase,
+				ctx.guest.restaurant_id,
+				ctx.guest.table_session_id,
+			),
+		),
 
 		// Add to Cart. Merges into an existing line when one already matches
 		// this exact menu item + preference combination (so repeated taps on a
@@ -173,49 +129,16 @@ export const guestRouter = router({
 			.mutation(async ({ ctx, input }) => {
 				requireOrderingEnabled(ctx.experience);
 
-				let existingQuery = ctx.supabase
-					.from("cart_items")
-					.select("id, quantity")
-					.eq("restaurant_id", ctx.guest.restaurant_id)
-					.eq("session_id", ctx.guest.table_session_id)
-					.eq("menu_item_id", input.menuItemId);
-				existingQuery = input.spice
-					? existingQuery.eq("spice", input.spice)
-					: existingQuery.is("spice", null);
-				existingQuery = input.salt
-					? existingQuery.eq("salt", input.salt)
-					: existingQuery.is("salt", null);
-				existingQuery = input.ice
-					? existingQuery.eq("ice", input.ice)
-					: existingQuery.is("ice", null);
-
-				const { data: existingRow, error: selectError } =
-					await existingQuery.maybeSingle();
-				if (selectError) {
-					throw dbError("Unable to update the cart.", selectError);
-				}
-
-				const { error } = existingRow
-					? await ctx.supabase
-							.from("cart_items")
-							.update({
-								quantity: Math.min(99, existingRow.quantity + input.quantity),
-							})
-							.eq("id", existingRow.id)
-					: await ctx.supabase.from("cart_items").insert({
-							restaurant_id: ctx.guest.restaurant_id,
-							session_id: ctx.guest.table_session_id,
-							menu_item_id: input.menuItemId,
-							quantity: input.quantity,
-							spice: input.spice ?? null,
-							salt: input.salt ?? null,
-							ice: input.ice ?? null,
-							added_by_type: "guest",
-						});
-
-				if (error) {
-					throw dbError("Unable to update the cart.", error);
-				}
+				await upsertCartItem(ctx.supabase, {
+					restaurantId: ctx.guest.restaurant_id,
+					sessionId: ctx.guest.table_session_id,
+					menuItemId: input.menuItemId,
+					quantity: input.quantity,
+					spice: input.spice,
+					salt: input.salt,
+					ice: input.ice,
+					addedByType: "guest",
+				});
 			}),
 
 		// Quantity 0 removes the line — the card stepper's "−" past 1 and the
@@ -465,10 +388,7 @@ export const guestRouter = router({
 				billId: billResult.data?.id ?? null,
 				billNumber: billResult.data?.bill_number ?? null,
 				status,
-				// service_charge_rate is numeric(5,4), so as a percent it
-				// carries at most 2 decimals — rounding there keeps float
-				// round-trip noise out of the guest-facing label.
-				serviceChargeRatePercent: Math.round(serviceChargeRate * 10000) / 100,
+				serviceChargeRatePercent: ratePercent(serviceChargeRate),
 				...totals,
 			};
 		}),

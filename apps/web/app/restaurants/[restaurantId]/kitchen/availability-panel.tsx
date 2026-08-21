@@ -140,7 +140,7 @@ export function AvailabilityPanel({
 										{checked ? (
 											<Check
 												className="icon-xs text-background"
-												strokeWidth={3}
+												strokeWidth={1.5}
 												aria-hidden="true"
 											/>
 										) : null}

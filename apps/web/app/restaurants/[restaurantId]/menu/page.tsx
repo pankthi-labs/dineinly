@@ -477,11 +477,11 @@ function MenuItemCard({
 							</div>
 						</div>
 					</div>
-					<div className="flex flex-wrap gap-4 border-divider border-t p-5 lg:p-6">
+					<div className="flex flex-wrap gap-4 border-divider border-t p-5 text-caps lg:p-6">
 						<button
 							type="button"
 							onClick={onEdit}
-							className="font-medium text-accent text-sm"
+							className="text-secondary hover:text-primary"
 						>
 							Edit dish
 						</button>
@@ -491,7 +491,7 @@ function MenuItemCard({
 								updateState(item.status === "archived" ? "show" : "hide")
 							}
 							disabled={updateItemState.isPending}
-							className={`font-medium text-sm disabled:cursor-not-allowed disabled:opacity-60 ${item.status === "archived" ? "text-accent" : "text-accent-secondary"}`}
+							className="text-accent-secondary hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
 						>
 							{item.status === "archived" ? "Show dish" : "Hide dish"}
 						</button>
@@ -506,7 +506,7 @@ function MenuItemCard({
 									)
 								}
 								disabled={updateItemState.isPending}
-								className="font-medium text-primary text-sm disabled:cursor-not-allowed disabled:opacity-60"
+								className="text-secondary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
 							>
 								{item.availability === "sold_out"
 									? "Mark available"

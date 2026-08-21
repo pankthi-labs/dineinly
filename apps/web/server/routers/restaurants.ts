@@ -1,6 +1,7 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
 import { isDineinlyAdmin } from "@/lib/auth";
+import { ratePercent } from "@/lib/bill-math";
 import { adminProcedure, authedProcedure, router } from "../trpc/init";
 import {
 	createRestaurantInput,
@@ -33,7 +34,7 @@ type PrimaryOwnerRow = {
 };
 
 function toServiceChargePercent(rate: number | null): number | null {
-	return rate === null ? null : Math.round(rate * 10000) / 100;
+	return rate === null ? null : ratePercent(rate);
 }
 
 function toServiceChargeRate(percent: number | null): number | null {

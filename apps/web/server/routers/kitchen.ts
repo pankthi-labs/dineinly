@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import type { Database } from "@workspace/db";
 import { z } from "zod";
 import type { Context } from "../trpc/context";
+import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
 
@@ -27,6 +28,79 @@ function assertNoQueueError(error: unknown): void {
 }
 
 type OrderItemStatus = "placed" | "preparing" | "ready" | "served";
+
+// Counter-experience gate (docs/core-data-model.md § Lifecycle invariants):
+// placed -> preparing additionally requires the session's Bill to be
+// settled, for counter-experience restaurants only — kitchen never starts
+// on an unpaid counter order. Full-Service experiences (guest/one) have no
+// such gate. Raises for the whole batch if any item in it belongs to a
+// session whose bill isn't settled yet, same all-or-nothing shape
+// submit_order() uses for its own availability guard.
+async function assertCounterBillsSettled(
+	ctx: Context,
+	restaurantId: string,
+	orderItemIds: string[],
+): Promise<void> {
+	const restaurantResult = await ctx.auth
+		.from("restaurants")
+		.select("experience")
+		.eq("id", restaurantId)
+		.maybeSingle();
+	if (restaurantResult.error) {
+		throw dbError("Unable to update the order.", restaurantResult.error);
+	}
+	if (restaurantResult.data?.experience !== "counter") return;
+
+	const itemsResult = await ctx.auth
+		.from("order_items")
+		.select("order_id")
+		.eq("restaurant_id", restaurantId)
+		.in("id", orderItemIds);
+	if (itemsResult.error) {
+		throw dbError("Unable to update the order.", itemsResult.error);
+	}
+	const orderIds = [
+		...new Set((itemsResult.data ?? []).map((row) => row.order_id)),
+	];
+	if (orderIds.length === 0) return;
+
+	const ordersResult = await ctx.auth
+		.from("orders")
+		.select("session_id")
+		.eq("restaurant_id", restaurantId)
+		.in("id", orderIds);
+	if (ordersResult.error) {
+		throw dbError("Unable to update the order.", ordersResult.error);
+	}
+	const sessionIds = [
+		...new Set((ordersResult.data ?? []).map((row) => row.session_id)),
+	];
+	if (sessionIds.length === 0) return;
+
+	const billsResult = await ctx.auth
+		.from("bills")
+		.select("session_id, status")
+		.eq("restaurant_id", restaurantId)
+		.in("session_id", sessionIds);
+	if (billsResult.error) {
+		throw dbError("Unable to update the order.", billsResult.error);
+	}
+	const settledSessionIds = new Set(
+		(billsResult.data ?? [])
+			.filter((bill) => bill.status === "settled")
+			.map((bill) => bill.session_id),
+	);
+	const hasUnpaidSession = sessionIds.some(
+		(sessionId) => !settledSessionIds.has(sessionId),
+	);
+	if (hasUnpaidSession) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message:
+				"This order hasn't been paid yet — settle the bill before the kitchen can start.",
+		});
+	}
+}
 
 // Shared by advanceBatch and serveBatch below: both move a batch of order
 // items from one expected status to another. `status = from` in the filter
@@ -162,6 +236,14 @@ export const kitchenRouter = router({
 				"manager",
 				"owner",
 			]);
+
+			if (input.to === "preparing") {
+				await assertCounterBillsSettled(
+					ctx,
+					input.restaurantId,
+					input.orderItemIds,
+				);
+			}
 
 			const now = new Date().toISOString();
 			const changes =

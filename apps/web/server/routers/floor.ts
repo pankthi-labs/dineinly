@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
+import { listCartItems, upsertCartItem } from "../cart";
 import type { Context } from "../trpc/context";
+import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
 import {
@@ -10,10 +12,6 @@ import {
 	setCartItemQuantityInput,
 	submitFloorOrderInput,
 } from "./floor.schema";
-
-function dbError(message: string, cause: unknown): TRPCError {
-	return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message, cause });
-}
 
 const FLOOR_ROLES = ["waiter", "manager", "owner"] as const;
 
@@ -117,49 +115,7 @@ export const floorRouter = router({
 		list: authedProcedure.input(listCartInput).query(async ({ ctx, input }) => {
 			await requireStaffRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
 
-			const cartResult = await ctx.auth
-				.from("cart_items")
-				.select("id, menu_item_id, quantity, spice, salt, ice")
-				.eq("restaurant_id", input.restaurantId)
-				.eq("session_id", input.sessionId)
-				.order("created_at", { ascending: true });
-			if (cartResult.error) {
-				throw dbError("Unable to load the cart.", cartResult.error);
-			}
-
-			const rows = cartResult.data ?? [];
-			const menuItemIds = [...new Set(rows.map((row) => row.menu_item_id))];
-			const itemsResult =
-				menuItemIds.length === 0
-					? { data: [], error: null }
-					: await ctx.auth
-							.from("menu_items")
-							.select("id, name, price, availability, status")
-							.eq("restaurant_id", input.restaurantId)
-							.in("id", menuItemIds);
-			if (itemsResult.error) {
-				throw dbError("Unable to load the cart.", itemsResult.error);
-			}
-
-			const itemsById = new Map(
-				(itemsResult.data ?? []).map((item) => [item.id, item]),
-			);
-			return rows.map((row) => {
-				const menuItem = itemsById.get(row.menu_item_id);
-				return {
-					id: row.id,
-					menuItemId: row.menu_item_id,
-					quantity: row.quantity,
-					spice: row.spice,
-					salt: row.salt,
-					ice: row.ice,
-					name: menuItem?.name ?? "",
-					price: menuItem?.price ?? 0,
-					available:
-						menuItem?.availability === "available" &&
-						menuItem?.status === "active",
-				};
-			});
+			return listCartItems(ctx.auth, input.restaurantId, input.sessionId);
 		}),
 
 		// Merges into an existing line on an exact menu item + preference match,
@@ -186,49 +142,17 @@ export const floorRouter = router({
 					});
 				}
 
-				let existingQuery = ctx.auth
-					.from("cart_items")
-					.select("id, quantity")
-					.eq("restaurant_id", input.restaurantId)
-					.eq("session_id", input.sessionId)
-					.eq("menu_item_id", input.menuItemId);
-				existingQuery = input.spice
-					? existingQuery.eq("spice", input.spice)
-					: existingQuery.is("spice", null);
-				existingQuery = input.salt
-					? existingQuery.eq("salt", input.salt)
-					: existingQuery.is("salt", null);
-				existingQuery = input.ice
-					? existingQuery.eq("ice", input.ice)
-					: existingQuery.is("ice", null);
-
-				const { data: existingRow, error: selectError } =
-					await existingQuery.maybeSingle();
-				if (selectError) {
-					throw dbError("Unable to update the cart.", selectError);
-				}
-
-				const { error } = existingRow
-					? await ctx.auth
-							.from("cart_items")
-							.update({
-								quantity: Math.min(99, existingRow.quantity + input.quantity),
-							})
-							.eq("id", existingRow.id)
-					: await ctx.auth.from("cart_items").insert({
-							restaurant_id: input.restaurantId,
-							session_id: input.sessionId,
-							menu_item_id: input.menuItemId,
-							quantity: input.quantity,
-							spice: input.spice ?? null,
-							salt: input.salt ?? null,
-							ice: input.ice ?? null,
-							added_by_type: "staff",
-							added_by_staff_id: staffId,
-						});
-				if (error) {
-					throw dbError("Unable to update the cart.", error);
-				}
+				await upsertCartItem(ctx.auth, {
+					restaurantId: input.restaurantId,
+					sessionId: input.sessionId,
+					menuItemId: input.menuItemId,
+					quantity: input.quantity,
+					spice: input.spice,
+					salt: input.salt,
+					ice: input.ice,
+					addedByType: "staff",
+					addedByStaffId: staffId,
+				});
 			}),
 
 		setQuantity: authedProcedure

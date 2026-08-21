@@ -28,6 +28,14 @@ export type BillTotals = {
 
 const toPaisa = (rupees: number) => Math.round(rupees * 100);
 
+// Shared by every call site that displays a stored 0-1 rate as a percent
+// (restaurant service charge on Venue Settings, the Restaurants Directory,
+// the guest bill, and the staff Bills tab) — rounding to 2dp keeps float
+// round-trip noise (0.28 -> 14.000000000000002) out of the label.
+export function ratePercent(rate: number): number {
+	return Math.round(rate * 10000) / 100;
+}
+
 // Shared by every bill-math call site (staff list/detail/settle/PDF, guest
 // bill) that reads order_items: the portion of quantity still billable after
 // a Bills tab partial waive and/or partial cancel. 0 or negative means the

@@ -1,8 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import type { StaffRole } from "@/lib/auth";
-import { billableQuantity, computeBill } from "@/lib/bill-math";
+import { billableQuantity, computeBill, ratePercent } from "@/lib/bill-math";
 import { buildBillPdf } from "@/lib/bill-pdf";
 import type { Context } from "../trpc/context";
+import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
 import {
@@ -17,10 +18,6 @@ import {
 	waiveOrderItemInput,
 	waiveServiceChargeInput,
 } from "./bills.schema";
-
-function dbError(message: string, cause: unknown): TRPCError {
-	return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message, cause });
-}
 
 // Every Bills write (docs/product.md § RBAC) excludes Kitchen only.
 const BILLS_WRITE_ROLES: StaffRole[] = ["waiter", "manager", "owner"];
@@ -447,7 +444,7 @@ export const billsRouter = router({
 			billNumber: bill?.bill_number ?? null,
 			status,
 			serviceChargeWaived: waived,
-			serviceChargeRatePercent: Math.round(serviceChargeRate * 10000) / 100,
+			serviceChargeRatePercent: ratePercent(serviceChargeRate),
 			settledAt: bill?.settled_at ?? null,
 			hasItemsInProgress,
 			items: allItems.map((item) => ({

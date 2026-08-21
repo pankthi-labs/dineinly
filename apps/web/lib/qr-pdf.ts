@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import QRCode from "qrcode";
+import { pdfSafe } from "@/lib/bill-pdf";
 import { guestTableUrl } from "@/lib/qr-url";
 
 // Shared page-builder for both downloadQrPdf (one table) and
@@ -37,8 +38,9 @@ export async function buildTableQrPdf(
 		});
 
 		const labelSize = 20;
-		const labelWidth = font.widthOfTextAtSize(table.label, labelSize);
-		page.drawText(table.label, {
+		const label = pdfSafe(table.label);
+		const labelWidth = font.widthOfTextAtSize(label, labelSize);
+		page.drawText(label, {
 			x: (PAGE_WIDTH - labelWidth) / 2,
 			y: PAGE_HEIGHT / 2 - 40,
 			size: labelSize,

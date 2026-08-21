@@ -38,6 +38,56 @@ async function assertKnownLabels(
 	}
 }
 
+// Shared by createItem and updateItem: both need the same category
+// membership + label vocabulary checks before writing.
+async function validateMenuItemWrite(
+	auth: Context["auth"],
+	input: { restaurantId: string; categoryId: string; labels: string[] },
+): Promise<void> {
+	const { data: category, error: categoryError } = await auth
+		.from("menu_categories")
+		.select("id")
+		.eq("id", input.categoryId)
+		.eq("restaurant_id", input.restaurantId)
+		.maybeSingle();
+
+	if (categoryError) {
+		throw new TRPCError({
+			code: "INTERNAL_SERVER_ERROR",
+			message: "Unable to validate the menu category.",
+			cause: categoryError,
+		});
+	}
+	if (!category) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "Choose a category from this restaurant.",
+		});
+	}
+
+	await assertKnownLabels(auth, input.restaurantId, input.labels);
+}
+
+// Shared by createItem and updateItem: the column set both an insert and an
+// update write, mapped from the one input schema they both validate against.
+function menuItemColumns(input: z.infer<typeof menuItemInputSchema>) {
+	return {
+		category_id: input.categoryId,
+		name: input.name,
+		description: input.description,
+		price: input.price,
+		prep_time: input.prepTime,
+		serving_size: input.servingSize,
+		diet: input.diet,
+		availability: input.availability,
+		labels: [...new Set(input.labels)],
+		offers_spice: input.offersSpice,
+		offers_salt: input.offersSalt,
+		offers_ice: input.offersIce,
+		status: input.status,
+	};
+}
+
 const restaurantIdSchema = z.string().uuid();
 const menuCategoryInputSchema = z.object({
 	restaurantId: restaurantIdSchema,
@@ -275,47 +325,13 @@ export const menuRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
 
-			const { data: category, error: categoryError } = await ctx.auth
-				.from("menu_categories")
-				.select("id")
-				.eq("id", input.categoryId)
-				.eq("restaurant_id", input.restaurantId)
-				.maybeSingle();
-
-			if (categoryError) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Unable to validate the menu category.",
-					cause: categoryError,
-				});
-			}
-
-			if (!category) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "Choose a category from this restaurant.",
-				});
-			}
-
-			await assertKnownLabels(ctx.auth, input.restaurantId, input.labels);
+			await validateMenuItemWrite(ctx.auth, input);
 
 			const { data, error } = await ctx.auth
 				.from("menu_items")
 				.insert({
 					restaurant_id: input.restaurantId,
-					category_id: input.categoryId,
-					name: input.name,
-					description: input.description,
-					price: input.price,
-					prep_time: input.prepTime,
-					serving_size: input.servingSize,
-					diet: input.diet,
-					availability: input.availability,
-					labels: [...new Set(input.labels)],
-					offers_spice: input.offersSpice,
-					offers_salt: input.offersSalt,
-					offers_ice: input.offersIce,
-					status: input.status,
+					...menuItemColumns(input),
 				})
 				.select("id")
 				.single();
@@ -335,46 +351,12 @@ export const menuRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
 
-			const { data: category, error: categoryError } = await ctx.auth
-				.from("menu_categories")
-				.select("id")
-				.eq("id", input.categoryId)
-				.eq("restaurant_id", input.restaurantId)
-				.maybeSingle();
-
-			if (categoryError) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Unable to validate the menu category.",
-					cause: categoryError,
-				});
-			}
-
-			if (!category) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "Choose a category from this restaurant.",
-				});
-			}
-
-			await assertKnownLabels(ctx.auth, input.restaurantId, input.labels);
+			await validateMenuItemWrite(ctx.auth, input);
 
 			const { data, error } = await ctx.auth
 				.from("menu_items")
 				.update({
-					category_id: input.categoryId,
-					name: input.name,
-					description: input.description,
-					price: input.price,
-					prep_time: input.prepTime,
-					serving_size: input.servingSize,
-					diet: input.diet,
-					availability: input.availability,
-					labels: [...new Set(input.labels)],
-					offers_spice: input.offersSpice,
-					offers_salt: input.offersSalt,
-					offers_ice: input.offersIce,
-					status: input.status,
+					...menuItemColumns(input),
 					updated_at: new Date().toISOString(),
 				})
 				.eq("id", input.itemId)

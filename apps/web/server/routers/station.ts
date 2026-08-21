@@ -5,6 +5,7 @@ import {
 	STATION_EMAIL_SUFFIX,
 } from "@/lib/station-session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { dbError } from "../trpc/errors";
 import { authedProcedure, publicProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
 import {
@@ -13,10 +14,6 @@ import {
 	redeemPairingCodeInput,
 	revokeDeviceInput,
 } from "./station.schema";
-
-function dbError(message: string, cause: unknown): TRPCError {
-	return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message, cause });
-}
 
 // Synthetic identity per restaurant per station type (docs/architecture.md
 // § Station Account Provisioning) — unroutable, exists only to satisfy

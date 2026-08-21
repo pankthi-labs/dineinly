@@ -13,13 +13,13 @@ const STATUS_LABEL: Record<BillListItem["status"], string> = {
 	settled: "Settled",
 };
 
-// Open: nothing pending yet, neutral. Requested: pending staff action —
-// Soft Amber, the same "in progress" role §06 assigns it (step
-// indicators/progress). Settled: Rose Copper, §06's "settlement
-// confirmation checkmarks / completed-step indicators" role exactly.
+// Open: nothing pending yet, neutral. Requested: awaiting staff settlement —
+// the warning state token, the same in-flight/needs-attention role it carries
+// on the kitchen queue and on an expired staff invite. Settled: Rose Copper,
+// §06's "settlement confirmation / completed-step indicator" role exactly.
 const STATUS_COLOR: Record<BillListItem["status"], string> = {
 	open: "text-secondary",
-	requested: "text-accent-support",
+	requested: "text-warning",
 	settled: "text-accent-secondary",
 };
 

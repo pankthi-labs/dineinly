@@ -169,7 +169,7 @@ export default function FloorPage() {
 					<button
 						type="button"
 						onClick={handleSwitchUser}
-						className="text-accent text-sm hover:opacity-80"
+						className="font-medium text-accent text-sm hover:opacity-80"
 					>
 						Switch User
 					</button>
@@ -332,7 +332,7 @@ function MergeDialog({
 						type="button"
 						onClick={onCancel}
 						disabled={isPending}
-						className="rounded-sm px-4 py-2 text-secondary text-sm hover:text-primary disabled:cursor-not-allowed"
+						className="rounded-sm px-4 py-2 font-medium text-secondary text-sm hover:text-primary disabled:cursor-not-allowed"
 					>
 						Cancel
 					</button>
