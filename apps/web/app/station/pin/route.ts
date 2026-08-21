@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
 	mintStationSessionToken,
+	STATION_EMAIL_SUFFIX,
 	STATION_SESSION_COOKIE,
 	STATION_SESSION_TTL_SECONDS,
 } from "@/lib/station-session";
@@ -20,6 +21,26 @@ export async function POST(request: Request) {
 	}
 
 	const supabase = await createClient();
+
+	// Only a paired station device may resolve a PIN. Without this, any
+	// signed-in staff member could brute-force a colleague's 4-digit PIN
+	// remotely — the "no lockout" tradeoff this endpoint accepts only holds
+	// while the physical tablet is the only way to reach it. The failure is
+	// indistinguishable from a wrong PIN, same anti-enumeration posture as
+	// resolve_staff_signin.
+	const {
+		data: { user },
+	} = await supabase.auth.getUser();
+	const { data: callerStaff } = await supabase
+		.from("staff")
+		.select("email")
+		.eq("user_id", user?.id ?? "")
+		.eq("status", "active")
+		.maybeSingle();
+	if (!callerStaff?.email.endsWith(STATION_EMAIL_SUFFIX)) {
+		return NextResponse.json({ error: "PIN not recognized." }, { status: 401 });
+	}
+
 	const { data, error } = await supabase.rpc("resolve_staff_by_pin", {
 		p_restaurant_id: body.data.restaurantId,
 		p_pin: body.data.pin,

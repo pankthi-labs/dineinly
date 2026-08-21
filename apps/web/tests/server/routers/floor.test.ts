@@ -7,7 +7,7 @@ type StaffQueryResult = {
 	error: unknown;
 };
 type RpcResult = {
-	data: Array<{ id: string; name: string }> | null;
+	data: unknown;
 	error: unknown;
 };
 
@@ -15,6 +15,7 @@ function makeCtx(
 	staffResults: StaffQueryResult[],
 	stationSession: Context["stationSession"] = null,
 	rpcResults: RpcResult[] = [],
+	stationDeviceId: string | null = null,
 ): Context {
 	let fromCall = 0;
 	let rpcCall = 0;
@@ -42,7 +43,7 @@ function makeCtx(
 	return {
 		auth,
 		stationSession,
-		stationDeviceId: null,
+		stationDeviceId,
 	} as unknown as Context;
 }
 
@@ -104,6 +105,29 @@ describe("requireOwnStaffId", () => {
 		);
 		await expect(requireOwnStaffId(ctx, "rest-1")).rejects.toThrow(
 			"Enter your PIN to continue.",
+		);
+	});
+
+	it("rejects a revoked device even with a valid PIN session", async () => {
+		const ctx = makeCtx(
+			[
+				{
+					data: {
+						id: "station-1",
+						email: "waiter-rest-1@stations.dineinly.internal",
+					},
+					error: null,
+				},
+			],
+			{ staffId: "waiter-2", restaurantId: "rest-1" },
+			[
+				{ data: [{ id: "waiter-2", name: "Waiter Two" }], error: null },
+				{ data: true, error: null },
+			],
+			"device-1",
+		);
+		await expect(requireOwnStaffId(ctx, "rest-1")).rejects.toThrow(
+			"This device was removed. Pair it again.",
 		);
 	});
 

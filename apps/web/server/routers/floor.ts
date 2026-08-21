@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import type { Context } from "../trpc/context";
 import { authedProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
@@ -15,8 +16,6 @@ function dbError(message: string, cause: unknown): TRPCError {
 }
 
 const FLOOR_ROLES = ["waiter", "manager", "owner"] as const;
-
-const STATION_EMAIL_SUFFIX = "@stations.dineinly.internal";
 
 // Order on behalf of guest (docs/product.md § RBAC "Add to Cart"/"Submit
 // Order": Waiter/Manager/Owner). The cart itself is the same shared,
@@ -88,6 +87,26 @@ export async function requireOwnStaffId(
 			code: "PRECONDITION_FAILED",
 			message: "Enter your PIN to continue.",
 		});
+	}
+
+	// Revocation is a server-side boundary, not just the Floor page's
+	// redirect: a revoked tablet must stop mutating even if it never
+	// re-renders. The device id comes from a signed cookie (lib/station-
+	// session.ts), so a device can't rename itself out of a revocation.
+	if (ctx.stationDeviceId) {
+		const { data: revoked, error: revokedError } = await ctx.auth.rpc(
+			"is_station_device_revoked",
+			{ p_device_id: ctx.stationDeviceId },
+		);
+		if (revokedError) {
+			throw dbError("Unable to verify this device.", revokedError);
+		}
+		if (revoked) {
+			throw new TRPCError({
+				code: "PRECONDITION_FAILED",
+				message: "This device was removed. Pair it again.",
+			});
+		}
 	}
 
 	return actingStaff[0].id;

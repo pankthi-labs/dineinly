@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Field } from "@/components/form-sheet";
-import { STATION_DEVICE_ID_COOKIE } from "@/lib/station-session";
+import {
+	STATION_DEVICE_ID_COOKIE,
+	STATION_DEVICE_TOKEN_TTL_SECONDS,
+} from "@/lib/station-session";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
 import { pairingCodePattern } from "@/server/routers/station.schema";
@@ -25,13 +28,13 @@ export default function StationPairPage() {
 	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!pairingCodePattern.test(code)) {
-			setError("Enter the 6-digit code.");
+			setError("Enter the 8-digit code.");
 			return;
 		}
 		setError(null);
 
 		try {
-			const { tokenHash, restaurantId, deviceId } =
+			const { tokenHash, restaurantId, deviceToken } =
 				await redeemMutation.mutateAsync({ code });
 			const { error: verifyError } = await supabase.auth.verifyOtp({
 				token_hash: tokenHash,
@@ -41,10 +44,12 @@ export default function StationPairPage() {
 				setError("Couldn't finish pairing this device.");
 				return;
 			}
-			// One year, path=/ — outlives the Supabase session by design; if the
-			// station ever re-pairs, a fresh redemption overwrites this with the
-			// new device's id.
-			document.cookie = `${STATION_DEVICE_ID_COOKIE}=${deviceId}; path=/; max-age=${60 * 60 * 24 * 365}`;
+			// One year, path=/ — outlives the Supabase session by design; the
+			// value is a signed token (lib/station-session.ts), not a raw id, so
+			// requireOwnStaffId can verify it server-side before trusting it for
+			// revocation checks. If the station ever re-pairs, a fresh redemption
+			// overwrites this with the new device's signed token.
+			document.cookie = `${STATION_DEVICE_ID_COOKIE}=${deviceToken}; path=/; max-age=${STATION_DEVICE_TOKEN_TTL_SECONDS}`;
 			router.replace(`/restaurants/${restaurantId}/floor`);
 		} catch (mutationError) {
 			setError(
@@ -63,7 +68,7 @@ export default function StationPairPage() {
 				<div className="mb-6 text-center">
 					<h1 className="text-lg text-primary">Pair this device</h1>
 					<p className="mt-1 text-secondary text-sm">
-						Enter the 6-digit code shown on the Manager's screen.
+						Enter the 8-digit code shown on the Manager's screen.
 					</p>
 				</div>
 
@@ -72,8 +77,8 @@ export default function StationPairPage() {
 						<input
 							inputMode="numeric"
 							autoComplete="off"
-							maxLength={6}
-							placeholder="000000"
+							maxLength={8}
+							placeholder="00000000"
 							value={code}
 							disabled={redeemMutation.isPending}
 							onChange={(event) =>

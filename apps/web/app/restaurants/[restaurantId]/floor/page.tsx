@@ -94,6 +94,26 @@ export default function FloorPage() {
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
+			{/* A failed status check can't be treated as "not a station" — the
+			PIN pad would stay hidden while every mutation kept rejecting, so the
+			page has to say so and offer a retry. */}
+			{statusQuery.isError ? (
+				<div className="fixed inset-0 z-(--z-overlay) flex items-center justify-center bg-glass p-4">
+					<div className="w-full max-w-xs rounded-xl border border-divider bg-surface-elevated p-8 text-center">
+						<p role="alert" className="text-error text-sm">
+							Couldn't check this device's status.
+						</p>
+						<button
+							type="button"
+							onClick={() => statusQuery.refetch()}
+							className="mt-4 text-accent text-caps hover:opacity-80"
+						>
+							Retry
+						</button>
+					</div>
+				</div>
+			) : null}
+
 			{statusQuery.data?.isStation &&
 			!statusQuery.data.deviceRevoked &&
 			!statusQuery.data.actingStaffName ? (

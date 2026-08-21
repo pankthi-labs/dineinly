@@ -65,6 +65,8 @@ declare
 	v_is_admin boolean := public.is_dineinly_admin();
 	v_caller_role public.staff_role := public.staff_role_for_restaurant(p_restaurant_id);
 	v_caller_staff_id uuid;
+	v_random_bytes bytea;
+	v_random_int bigint;
 	v_code text;
 	v_expires_at timestamptz := now() + interval '10 minutes';
 begin
@@ -80,7 +82,18 @@ begin
 		raise exception 'Only an active Owner or Manager may pair a station device';
 	end if;
 
-	v_code := lpad(floor(random() * 1000000)::text, 6, '0');
+	-- 8 digits from a CSPRNG, not random(): the code is live for 10 minutes
+	-- against an unauthenticated redeem endpoint, and the redeem match is not
+	-- restaurant-scoped, so the keyspace has to be wide enough that neither
+	-- brute force nor a collision with another restaurant's live code is
+	-- reachable inside that window.
+	v_random_bytes := extensions.gen_random_bytes(4);
+	v_random_int :=
+		get_byte(v_random_bytes, 0)::bigint * 16777216 +
+		get_byte(v_random_bytes, 1)::bigint * 65536 +
+		get_byte(v_random_bytes, 2)::bigint * 256 +
+		get_byte(v_random_bytes, 3)::bigint;
+	v_code := lpad((v_random_int % 100000000)::text, 8, '0');
 
 	insert into public.station_pairing_codes (
 		restaurant_id, station_type, code_hash, expires_at, created_by_staff_id

@@ -3,7 +3,7 @@ import { PIN_PATTERN } from "./staff.schema";
 
 const restaurantIdSchema = z.string().uuid();
 
-export const pairingCodePattern = /^\d{6}$/;
+export const pairingCodePattern = /^\d{8}$/;
 
 export const stationTypeSchema = z.enum(["waiter"]);
 
@@ -13,7 +13,7 @@ export const generatePairingCodeInput = z.object({
 });
 
 export const redeemPairingCodeInput = z.object({
-	code: z.string().trim().regex(pairingCodePattern, "Code must be 6 digits"),
+	code: z.string().trim().regex(pairingCodePattern, "Code must be 8 digits"),
 });
 
 // Shared with the PIN pad component so both validate identically off one

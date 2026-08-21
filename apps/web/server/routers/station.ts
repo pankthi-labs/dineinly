@@ -1,5 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import {
+	mintStationDeviceToken,
+	STATION_EMAIL_SUFFIX,
+} from "@/lib/station-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authedProcedure, publicProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
@@ -18,7 +22,7 @@ function dbError(message: string, cause: unknown): TRPCError {
 // § Station Account Provisioning) — unroutable, exists only to satisfy
 // Supabase Auth's unique-email requirement. Nothing is ever sent to it.
 function stationEmail(restaurantId: string, stationType: "waiter"): string {
-	return `${stationType}-${restaurantId}@stations.dineinly.internal`;
+	return `${stationType}-${restaurantId}${STATION_EMAIL_SUFFIX}`;
 }
 
 export const stationRouter = router({
@@ -69,7 +73,7 @@ export const stationRouter = router({
 			const { data: existingStaff, error: existingStaffError } =
 				await adminClient
 					.from("staff")
-					.select("user_id")
+					.select("id, user_id, status")
 					.eq("restaurant_id", restaurantId)
 					.eq("email", email)
 					.maybeSingle();
@@ -80,6 +84,20 @@ export const stationRouter = router({
 				);
 			}
 			let userId = existingStaff?.user_id;
+
+			if (existingStaff?.user_id && existingStaff.status !== "active") {
+				// Pairing revives the station's own row rather than provisioning a
+				// second one: the synthetic email's auth identity outlives a
+				// removal, so a fresh createUser would collide on it and leave the
+				// restaurant unable to pair at all.
+				const { error: reviveError } = await adminClient
+					.from("staff")
+					.update({ status: "active" })
+					.eq("id", existingStaff.id);
+				if (reviveError) {
+					throw dbError("Unable to provision the station device.", reviveError);
+				}
+			}
 
 			if (!userId) {
 				const { data: created, error: createError } =
@@ -122,11 +140,20 @@ export const stationRouter = router({
 				throw dbError("Unable to pair this device.", deviceError);
 			}
 
+			// Signed here, not on the device: the device stores this token as its
+			// identity cookie, and requireOwnStaffId only trusts a device id it
+			// can verify came from a real redemption.
+			const deviceToken = await mintStationDeviceToken({
+				deviceId: device.id,
+				restaurantId,
+			});
+
 			return {
 				email,
 				tokenHash: link.properties.hashed_token,
 				restaurantId,
 				deviceId: device.id,
+				deviceToken,
 			};
 		}),
 
@@ -173,13 +200,16 @@ export const stationRouter = router({
 				data: { user },
 			} = await ctx.auth.auth.getUser();
 
-			const { data: staffRow } = await ctx.auth
+			const { data: staffRow, error: staffRowError } = await ctx.auth
 				.from("staff")
 				.select("email")
 				.eq("user_id", user?.id ?? "")
 				.eq("status", "active")
-				.like("email", "%@stations.dineinly.internal")
+				.like("email", `%${STATION_EMAIL_SUFFIX}`)
 				.maybeSingle();
+			if (staffRowError) {
+				throw dbError("Unable to check this device's status.", staffRowError);
+			}
 
 			const isStation = staffRow != null;
 			if (!isStation) {
@@ -188,20 +218,29 @@ export const stationRouter = router({
 
 			let deviceRevoked = false;
 			if (ctx.stationDeviceId) {
-				const { data: revoked } = await ctx.auth.rpc(
+				const { data: revoked, error: revokedError } = await ctx.auth.rpc(
 					"is_station_device_revoked",
 					{ p_device_id: ctx.stationDeviceId },
 				);
+				if (revokedError) {
+					throw dbError("Unable to check this device's status.", revokedError);
+				}
 				deviceRevoked = revoked ?? false;
 			}
 			if (deviceRevoked || !ctx.stationSession) {
 				return { isStation, actingStaffName: null, deviceRevoked };
 			}
 
-			const { data: named } = await ctx.auth.rpc("resolve_active_floor_staff", {
-				p_restaurant_id: ctx.stationSession.restaurantId,
-				p_staff_id: ctx.stationSession.staffId,
-			});
+			const { data: named, error: namedError } = await ctx.auth.rpc(
+				"resolve_active_floor_staff",
+				{
+					p_restaurant_id: ctx.stationSession.restaurantId,
+					p_staff_id: ctx.stationSession.staffId,
+				},
+			);
+			if (namedError) {
+				throw dbError("Unable to check this device's status.", namedError);
+			}
 
 			return {
 				isStation,
