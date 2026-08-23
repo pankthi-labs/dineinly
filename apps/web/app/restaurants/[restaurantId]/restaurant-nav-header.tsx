@@ -8,6 +8,7 @@ import {
 	useCanAccessSettings,
 	useCanManageStaff,
 	useIsAdmin,
+	useIsMenuOnly,
 } from "./viewer-context";
 
 const NAV_ITEMS = [
@@ -52,15 +53,19 @@ export function RestaurantNavHeader({
 	const canManageMenuAndTables = canManageStaff;
 	const canAccessBills = useCanAccessBills();
 	const canAccessSettings = useCanAccessSettings();
+	const isMenuOnly = useIsMenuOnly();
 	const gatedItems: Partial<Record<NavItem, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
-		"Table Matrix": canManageMenuAndTables,
+		// Dineinly Menu is view-only (docs/product.md § Dineinly Experiences)
+		// — no tables, kitchen, floor, or bills, for any role.
+		Kitchen: !isMenuOnly,
+		"Table Matrix": canManageMenuAndTables && !isMenuOnly,
 		// Floor (Order on behalf of guest, Merge Tables — docs/product.md §
 		// RBAC) is Waiter/Manager/Owner, same reach as Bills.
-		Floor: canAccessBills,
+		Floor: canAccessBills && !isMenuOnly,
 		"Staff Roster": canManageStaff,
 		"Venue Settings": canAccessSettings,
-		Bills: canAccessBills,
+		Bills: canAccessBills && !isMenuOnly,
 	};
 	const visibleItems = NAV_ITEMS.filter(
 		(item) => !(item in gatedItems) || gatedItems[item],

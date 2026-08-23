@@ -18,6 +18,7 @@ import {
 	useCanAccessBills,
 	useCanManageStaff,
 	useIsAdmin,
+	useIsMenuOnly,
 } from "./viewer-context";
 
 const CARD_TITLES = [
@@ -97,11 +98,15 @@ export function RestaurantHome({
 	const canManageStaff = useCanManageStaff();
 	const canManageMenuAndTables = canManageStaff;
 	const canAccessBills = useCanAccessBills();
+	const isMenuOnly = useIsMenuOnly();
 	const cardAccess: Partial<Record<CardTitle, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
-		"Table Matrix": canManageMenuAndTables,
+		// Dineinly Menu is view-only (docs/product.md § Dineinly Experiences)
+		// — no tables, kitchen, or bills, for any role.
+		Kitchen: !isMenuOnly,
+		"Table Matrix": canManageMenuAndTables && !isMenuOnly,
 		"Staff Roster": canManageStaff,
-		Bills: canAccessBills,
+		Bills: canAccessBills && !isMenuOnly,
 	};
 	const visibleCards = navCards.filter(
 		(card) => !(card.title in cardAccess) || cardAccess[card.title],

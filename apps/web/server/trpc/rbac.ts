@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { isDineinlyAdmin, type StaffRole } from "@/lib/auth";
 import type { Context } from "./context";
+import { dbError } from "./errors";
 
 // Feature-level RBAC for tRPC mutations. requireRestaurantAccess (lib/auth.ts)
 // / authedProcedure only prove the caller is active staff at this restaurant
@@ -36,4 +37,39 @@ export async function requireStaffRole(
 			message: "You don't have permission to do this.",
 		});
 	}
+}
+
+// Dineinly Menu (docs/product.md § Dineinly Experiences) is view-only — no
+// kitchen, floor, or bills for that package, not merely a permission
+// question the caller's role could pass.
+export async function assertFullServiceExperience(
+	ctx: Context,
+	restaurantId: string,
+): Promise<void> {
+	const { data, error } = await ctx.auth
+		.from("restaurants")
+		.select("experience")
+		.eq("id", restaurantId)
+		.maybeSingle();
+
+	if (error) {
+		throw dbError("Unable to verify this restaurant's package.", error);
+	}
+	if (data?.experience === "menu") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "This feature isn't available on the Dineinly Menu package.",
+		});
+	}
+}
+
+export async function requireFullServiceRole(
+	ctx: Context,
+	restaurantId: string,
+	allowedRoles: StaffRole[],
+): Promise<void> {
+	await Promise.all([
+		requireStaffRole(ctx, restaurantId, allowedRoles),
+		assertFullServiceExperience(ctx, restaurantId),
+	]);
 }
