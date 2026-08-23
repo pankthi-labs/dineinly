@@ -625,6 +625,8 @@ begin
 
 	if p_experience = 'menu' then
 		perform public.ensure_menu_qr_table(v_restaurant_id);
+	elsif p_experience = 'counter' then
+		perform public.ensure_counter_qr_token(v_restaurant_id);
 	end if;
 
 	return query select v_restaurant_id, v_staff_id;
@@ -704,6 +706,67 @@ $$;
 revoke execute on function public.ensure_menu_qr_table(uuid) from public;
 grant execute on function public.ensure_menu_qr_table(uuid) to authenticated;
 
+-- Shared by admin_create_restaurant and both update RPCs below, called only
+-- when p_experience = 'counter'. Idempotent, same reasoning as
+-- ensure_menu_qr_table: a restaurant that already has a token (its own, or
+-- from a prior stint on Counter) keeps it — switching Counter -> another
+-- experience -> Counter again reuses the same QR instead of alternating
+-- tokens (any printed/laminated counter QR keeps working).
+create or replace function public.ensure_counter_qr_token(p_restaurant_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+	update public.restaurants
+	set counter_qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id and counter_qr_token is null;
+end;
+$$;
+
+revoke execute on function public.ensure_counter_qr_token(uuid) from public;
+grant execute on function public.ensure_counter_qr_token(uuid) to authenticated;
+
+-- Counter QR "Regenerate" (Task 6's counterQr.regenerate). SECURITY DEFINER
+-- for the same reason as owner_update_restaurant just above it: restaurants
+-- only has a write policy for Dineinly Admin (admin_all_restaurants) — a
+-- plain Owner has row-level SELECT only (staff_select_own_restaurant), so an
+-- invoker-mode UPDATE would silently affect 0 rows for that caller. The
+-- explicit role check below is what makes bypassing RLS here safe, same
+-- pattern as every staff-roster write RPC.
+create or replace function public.regenerate_counter_qr_token(p_restaurant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_token text;
+begin
+	if not (
+		public.is_dineinly_admin()
+		or public.staff_role_for_restaurant(p_restaurant_id) = 'owner'
+	) then
+		raise exception 'Only the restaurant owner may regenerate this QR code';
+	end if;
+
+	update public.restaurants
+	set counter_qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id
+	returning counter_qr_token into v_token;
+
+	if v_token is null then
+		raise exception 'Restaurant not found';
+	end if;
+
+	return v_token;
+end;
+$$;
+
+revoke execute on function public.regenerate_counter_qr_token(uuid) from public;
+grant execute on function public.regenerate_counter_qr_token(uuid) to authenticated;
+
 -- admin_update_restaurant: updates the restaurant and its owner-contact row
 -- in one transaction. Once the primary owner has signed in, their
 -- name/email/mobile are immutable through this function — reassigning who
@@ -771,6 +834,8 @@ begin
 
 	if p_experience = 'menu' then
 		perform public.ensure_menu_qr_table(p_id);
+	elsif p_experience = 'counter' then
+		perform public.ensure_counter_qr_token(p_id);
 	end if;
 
 	return p_id;
@@ -836,6 +901,8 @@ begin
 
 	if p_experience = 'menu' then
 		perform public.ensure_menu_qr_table(p_id);
+	elsif p_experience = 'counter' then
+		perform public.ensure_counter_qr_token(p_id);
 	end if;
 
 	return p_id;

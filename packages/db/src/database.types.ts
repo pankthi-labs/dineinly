@@ -507,6 +507,7 @@ export type Database = {
 				Row: {
 					address: string;
 					city: string;
+					counter_qr_token: string | null;
 					created_at: string;
 					experience: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number: string;
@@ -521,6 +522,7 @@ export type Database = {
 				Insert: {
 					address: string;
 					city: string;
+					counter_qr_token?: string | null;
 					created_at?: string;
 					experience?: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number: string;
@@ -535,6 +537,7 @@ export type Database = {
 				Update: {
 					address?: string;
 					city?: string;
+					counter_qr_token?: string | null;
 					created_at?: string;
 					experience?: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number?: string;
@@ -798,6 +801,10 @@ export type Database = {
 			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
+			ensure_counter_qr_token: {
+				Args: { p_restaurant_id: string };
+				Returns: undefined;
+			};
 			ensure_menu_qr_table: {
 				Args: { p_restaurant_id: string };
 				Returns: undefined;
@@ -917,6 +924,10 @@ export type Database = {
 					restaurant_id: string;
 					station_type: Database["public"]["Enums"]["station_type"];
 				}[];
+			};
+			regenerate_counter_qr_token: {
+				Args: { p_restaurant_id: string };
+				Returns: string;
 			};
 			remove_staff: {
 				Args: { p_staff_id: string };
