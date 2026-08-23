@@ -1056,27 +1056,46 @@ begin
 		and rt.status = 'active'
 	for update;
 
-	if v_table_id is null then
+	if v_table_id is not null then
+		if v_session_id is not null then
+			select ts.status into v_session_status
+			from public.table_sessions ts
+			where ts.id = v_session_id;
+		end if;
+
+		if v_session_id is null or v_session_status <> 'active' then
+			insert into public.table_sessions (restaurant_id)
+			values (v_restaurant_id)
+			returning id into v_session_id;
+
+			update public.restaurant_tables
+			set session_id = v_session_id
+			where id = v_table_id;
+		end if;
+
+		return query select v_restaurant_id, v_session_id, v_label;
+		return;
+	end if;
+
+	-- No table QR matched — try the counter-experience universal QR
+	-- (docs/core-data-model.md § Experience Gating). Unlike the table branch
+	-- above, this never joins an existing session: one counter QR serves
+	-- many concurrent guests, so every scan starts its own fresh, tableless
+	-- session. table_sessions already has no table_id column, so no schema
+	-- change is needed for this second entry path.
+	select r.id into v_restaurant_id
+	from public.restaurants r
+	where r.counter_qr_token = p_qr_token;
+
+	if v_restaurant_id is null then
 		raise exception 'Invalid QR code';
 	end if;
 
-	if v_session_id is not null then
-		select ts.status into v_session_status
-		from public.table_sessions ts
-		where ts.id = v_session_id;
-	end if;
+	insert into public.table_sessions (restaurant_id)
+	values (v_restaurant_id)
+	returning id into v_session_id;
 
-	if v_session_id is null or v_session_status <> 'active' then
-		insert into public.table_sessions (restaurant_id)
-		values (v_restaurant_id)
-		returning id into v_session_id;
-
-		update public.restaurant_tables
-		set session_id = v_session_id
-		where id = v_table_id;
-	end if;
-
-	return query select v_restaurant_id, v_session_id, v_label;
+	return query select v_restaurant_id, v_session_id, null::text;
 end;
 $$;
 
