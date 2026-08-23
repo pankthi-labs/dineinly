@@ -18,7 +18,7 @@ type GuestOrder = {
 	id: string;
 	number: number;
 	status: "preparing" | "partially served" | "served";
-	items: { name: string; quantity: number; served: boolean }[];
+	items: { name: string; quantity: number; served: boolean; ready: boolean }[];
 };
 
 // A "partially served" order renders as two group rows sharing the order
@@ -29,13 +29,16 @@ type GuestOrder = {
 type OrderGroup = {
 	key: string;
 	number: number;
-	status: "preparing" | "served";
+	status: "preparing" | "done";
 	items: { name: string; quantity: number }[];
 };
 
-const GROUP_LABEL: Record<OrderGroup["status"], string> = {
-	preparing: "Preparing",
-	served: "Served",
+const GROUP_LABEL: Record<
+	"one" | "counter",
+	Record<OrderGroup["status"], string>
+> = {
+	one: { preparing: "Preparing", done: "Served" },
+	counter: { preparing: "Preparing", done: "Ready for Pickup" },
 };
 
 // Same semantic pairing as the staff Kitchen Display (preparing = Amber,
@@ -43,17 +46,19 @@ const GROUP_LABEL: Record<OrderGroup["status"], string> = {
 // of the pass (docs/design-system.md §06).
 const GROUP_DOT_CLASS: Record<OrderGroup["status"], string> = {
 	preparing: "bg-warning",
-	served: "bg-success",
+	done: "bg-success",
 };
 
 const GROUP_TEXT_CLASS: Record<OrderGroup["status"], string> = {
 	preparing: "text-warning",
-	served: "text-success",
+	done: "text-success",
 };
 
-function orderGroups(order: GuestOrder): OrderGroup[] {
-	const preparing = order.items.filter((item) => !item.served);
-	const served = order.items.filter((item) => item.served);
+function orderGroups(order: GuestOrder, isCounter: boolean): OrderGroup[] {
+	const isDone = (item: GuestOrder["items"][number]) =>
+		isCounter ? item.served || item.ready : item.served;
+	const preparing = order.items.filter((item) => !isDone(item));
+	const done = order.items.filter((item) => isDone(item));
 	const groups: OrderGroup[] = [];
 	if (preparing.length > 0) {
 		groups.push({
@@ -63,12 +68,12 @@ function orderGroups(order: GuestOrder): OrderGroup[] {
 			items: preparing,
 		});
 	}
-	if (served.length > 0) {
+	if (done.length > 0) {
 		groups.push({
-			key: `${order.id}-served`,
+			key: `${order.id}-done`,
 			number: order.number,
-			status: "served",
-			items: served,
+			status: "done",
+			items: done,
 		});
 	}
 	return groups;
@@ -86,7 +91,9 @@ export default function GuestOrdersPage() {
 	// history — only One's is live-status-tracked and has a bill attached
 	// (see the ordersEnabled/billEnabled split below and in guest.ts).
 	const ordersEnabled = menu.data?.restaurant.experience !== "menu";
-	const billEnabled = menu.data?.restaurant.experience === "one";
+	const billEnabled =
+		menu.data?.restaurant.experience === "one" ||
+		menu.data?.restaurant.experience === "counter";
 	const orders = trpc.guest.orders.list.useQuery(undefined, {
 		enabled: menu.isSuccess && ordersEnabled,
 	});
@@ -146,6 +153,7 @@ export default function GuestOrdersPage() {
 	}
 
 	const items = [...(orders.data ?? [])].reverse();
+	const isCounter = menu.data.restaurant.experience === "counter";
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
@@ -171,9 +179,15 @@ export default function GuestOrdersPage() {
 					</p>
 				) : billEnabled ? (
 					<div className="mt-6 flex flex-col gap-6">
-						{items.flatMap(orderGroups).map((group) => (
-							<OrderGroupCard key={group.key} group={group} />
-						))}
+						{items
+							.flatMap((order) => orderGroups(order, isCounter))
+							.map((group) => (
+								<OrderGroupCard
+									key={group.key}
+									group={group}
+									experience={isCounter ? "counter" : "one"}
+								/>
+							))}
 					</div>
 				) : (
 					<div className="mt-6 flex flex-col gap-6">
@@ -262,7 +276,13 @@ function GuestOrderCard({ order }: { order: GuestOrder }) {
 	);
 }
 
-function OrderGroupCard({ group }: { group: OrderGroup }) {
+function OrderGroupCard({
+	group,
+	experience,
+}: {
+	group: OrderGroup;
+	experience: "one" | "counter";
+}) {
 	const [expanded, setExpanded] = useState(false);
 	return (
 		<div className="border-divider border-b pb-6">
@@ -288,7 +308,7 @@ function OrderGroupCard({ group }: { group: OrderGroup }) {
 					className={`h-2 w-2 shrink-0 rounded-full ${GROUP_DOT_CLASS[group.status]}`}
 				/>
 				<span className={`text-caps ${GROUP_TEXT_CLASS[group.status]}`}>
-					{GROUP_LABEL[group.status]}
+					{GROUP_LABEL[experience][group.status]}
 				</span>
 			</p>
 

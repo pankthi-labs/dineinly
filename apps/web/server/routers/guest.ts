@@ -283,6 +283,11 @@ export const guestRouter = router({
 						name: item.item_name,
 						quantity: item.quantity - item.cancelled_quantity,
 						served: item.status === "served",
+						// Counter-only distinction (docs/core-data-model.md §
+						// Lifecycle invariants: "Counter shows its own mapping, e.g.
+						// Preparing -> Ready for Pickup") — Full-Service ignores this
+						// and keeps grouping purely on `served`.
+						ready: item.status === "ready",
 					})),
 				};
 			});
