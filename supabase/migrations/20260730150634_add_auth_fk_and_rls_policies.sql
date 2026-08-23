@@ -1140,6 +1140,7 @@ declare
 	v_restaurant_id uuid;
 	v_session_id uuid;
 	v_order_id uuid;
+	v_experience public.restaurant_experience;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
 	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
@@ -1228,6 +1229,29 @@ begin
 	join public.menu_categories mc
 		on mc.restaurant_id = mi.restaurant_id and mc.id = mi.category_id
 	where ci.restaurant_id = v_restaurant_id and ci.session_id = v_session_id;
+
+	-- Counter-experience addition (docs/core-data-model.md § Lifecycle
+	-- invariants): confirming the cart also draws the session's bill token
+	-- immediately, so the guest sees it without a separate Request Bill tap.
+	-- The settled-bill check earlier in this function already guarantees no
+	-- bill on this session is 'settled' yet, so a plain upsert to
+	-- 'requested' is safe with no settled-guard needed here (contrast
+	-- request_bill(), which re-runs on every poll and must not un-settle).
+	select experience into v_experience
+	from public.restaurants
+	where id = v_restaurant_id;
+
+	if v_experience = 'counter' then
+		insert into public.bills (restaurant_id, session_id, status, service_charge_rate)
+		values (
+			v_restaurant_id,
+			v_session_id,
+			'requested',
+			(select service_charge_rate from public.restaurants where id = v_restaurant_id)
+		)
+		on conflict (session_id) do update
+		set status = 'requested';
+	end if;
 
 	delete from public.cart_items
 	where restaurant_id = v_restaurant_id and session_id = v_session_id;
