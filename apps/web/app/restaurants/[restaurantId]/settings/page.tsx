@@ -7,7 +7,8 @@ import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { trpc } from "@/lib/trpc-client";
 import { RestaurantNavHeader } from "../restaurant-nav-header";
-import { useIsMenuOnly } from "../viewer-context";
+import { useIsCounter, useIsMenuOnly } from "../viewer-context";
+import { CounterQrSection } from "./counter-qr-section";
 import { QrCodeSection } from "./qr-code-section";
 import { VenueSettingsForm } from "./venue-settings-form";
 
@@ -15,6 +16,7 @@ export default function VenueSettingsPage() {
 	const { restaurantId } = useParams<{ restaurantId: string }>();
 	const [toast, setToast] = useState<ToastState | null>(null);
 	const isMenuOnly = useIsMenuOnly();
+	const isCounter = useIsCounter();
 
 	const utils = trpc.useUtils();
 	const restaurantQuery = trpc.restaurants.getById.useQuery({
@@ -85,6 +87,9 @@ export default function VenueSettingsPage() {
 
 				{isMenuOnly ? (
 					<QrCodeSection restaurantId={restaurantId} onToast={setToast} />
+				) : null}
+				{isCounter ? (
+					<CounterQrSection restaurantId={restaurantId} onToast={setToast} />
 				) : null}
 			</main>
 
