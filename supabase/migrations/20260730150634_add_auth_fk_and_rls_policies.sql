@@ -1233,10 +1233,12 @@ begin
 	-- Counter-experience addition (docs/core-data-model.md § Lifecycle
 	-- invariants): confirming the cart also draws the session's bill token
 	-- immediately, so the guest sees it without a separate Request Bill tap.
-	-- The settled-bill check earlier in this function already guarantees no
-	-- bill on this session is 'settled' yet, so a plain upsert to
-	-- 'requested' is safe with no settled-guard needed here (contrast
-	-- request_bill(), which re-runs on every poll and must not un-settle).
+	-- Staff's Mark Bill Settled mutation runs in its own transaction, so a
+	-- settle can commit between the settled-bill check earlier in this
+	-- function and this upsert. The on-conflict branch below must not
+	-- unconditionally reset status/service_charge_rate, or it collides with
+	-- bills_settled_check on an already-settled row (same race request_bill()
+	-- guards against on every poll).
 	select experience into v_experience
 	from public.restaurants
 	where id = v_restaurant_id;
@@ -1250,7 +1252,15 @@ begin
 			(select service_charge_rate from public.restaurants where id = v_restaurant_id)
 		)
 		on conflict (session_id) do update
-		set status = 'requested';
+		set
+			status = case
+				when public.bills.status = 'settled' then public.bills.status
+				else 'requested'
+			end,
+			service_charge_rate = case
+				when public.bills.status = 'settled' then public.bills.service_charge_rate
+				else excluded.service_charge_rate
+			end;
 	end if;
 
 	delete from public.cart_items
