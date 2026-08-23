@@ -22,10 +22,11 @@ type GuestOrder = {
 };
 
 // A "partially served" order renders as two group rows sharing the order
-// number — one still Preparing, one already Served — merging back into a
-// single row once every item is served (docs/product.md: guest sees the
-// derived order status, never per-item granularity, so status lives on the
-// group, not the line).
+// number — one still Preparing, one already done (Served for Full-Service,
+// Ready for Pickup for Counter) — merging back into a single row once every
+// item reaches that state (docs/product.md: guest sees the derived order
+// status, never per-item granularity, so status lives on the group, not the
+// line).
 type OrderGroup = {
 	key: string;
 	number: number;

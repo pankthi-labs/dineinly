@@ -278,7 +278,9 @@ export default function BillDetailPage() {
 				    tab). */}
 				<div className="mt-6 flex items-baseline justify-between print:hidden">
 					<div>
-						<h1 className="text-3xl">Table {data.tableLabel || "—"}</h1>
+						<h1 className="text-3xl">
+							{data.tableLabel ? `Table ${data.tableLabel}` : "Counter"}
+						</h1>
 						<p className="text-secondary text-sm">
 							{data.billNumber
 								? `Bill #${data.billNumber}`
@@ -593,7 +595,7 @@ export default function BillDetailPage() {
 							{data.billNumber
 								? `Bill #${data.billNumber}`
 								: "Not yet requested"}{" "}
-							· Table {data.tableLabel || "—"}
+							· {data.tableLabel ? `Table ${data.tableLabel}` : "Counter"}
 						</p>
 					</header>
 

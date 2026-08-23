@@ -1085,7 +1085,7 @@ begin
 	-- change is needed for this second entry path.
 	select r.id into v_restaurant_id
 	from public.restaurants r
-	where r.counter_qr_token = p_qr_token;
+	where r.counter_qr_token = p_qr_token and r.experience = 'counter';
 
 	if v_restaurant_id is null then
 		raise exception 'Invalid QR code';
@@ -1158,6 +1158,16 @@ begin
 	-- Close Session (which requires a settled bill and nothing in progress)
 	-- before the table's next QR scan opens a fresh session for more orders
 	-- — this session never reopens for ordering once its bill is settled.
+	--
+	-- Locks the bill row (if one exists yet) before checking its status, so
+	-- a concurrent Mark Bill Settled can't commit between this check and the
+	-- bill upsert below: without the lock, this SELECT could read
+	-- 'requested', the settle could commit, and the upsert further down
+	-- would then see the now-settled row and silently keep it settled --
+	-- attaching this order's items to a bill whose total was frozen before
+	-- they existed, instead of raising here.
+	perform 1 from public.bills where session_id = v_session_id for update;
+
 	if exists (
 		select 1 from public.bills
 		where session_id = v_session_id and status = 'settled'
@@ -1259,6 +1269,7 @@ begin
 			end,
 			service_charge_rate = case
 				when public.bills.status = 'settled' then public.bills.service_charge_rate
+				when public.bills.service_charge_waived then 0
 				else excluded.service_charge_rate
 			end;
 	end if;

@@ -118,7 +118,7 @@ export async function buildBillPdf(input: {
 	drawCentered(`GSTIN: ${input.restaurant.gst_number}`, 8);
 	y -= LINE_HEIGHT / 2;
 	drawCentered(
-		`Bill #${input.billNumber ?? "-"} - Table ${input.tableLabel}`,
+		`Bill #${input.billNumber ?? "-"} - ${input.tableLabel ? `Table ${input.tableLabel}` : "Counter"}`,
 		9,
 	);
 	y -= LINE_HEIGHT / 2;

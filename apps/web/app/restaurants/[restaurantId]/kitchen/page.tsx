@@ -60,7 +60,9 @@ export default function KitchenDisplayPage() {
 	// Waiter (self-service pickup, docs/product.md § Dineinly Experiences).
 	// UX only — serveBatch enforces the real, server-side version.
 	const isCounter = useIsCounter();
-	const canServe = isAdmin || restaurantRole !== "kitchen" || isCounter;
+	const canServe =
+		isAdmin ||
+		(isCounter ? restaurantRole !== "waiter" : restaurantRole !== "kitchen");
 	const [availabilityMode, setAvailabilityMode] = useState<
 		"unavailable" | "available" | null
 	>(null);
