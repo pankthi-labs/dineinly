@@ -224,7 +224,7 @@ export default function GuestMenuPage() {
 							</div>
 							{/* Dineinly Menu's QR is universal, not per-table (docs/product.md
 							§ Dineinly Experiences) — nothing to label here. */}
-							{orderingEnabled ? (
+							{orderingEnabled && menu.data.tableLabel ? (
 								<p className="shrink-0 rounded-pill border border-divider px-3 py-1 text-caps text-secondary">
 									Table {menu.data.tableLabel}
 								</p>

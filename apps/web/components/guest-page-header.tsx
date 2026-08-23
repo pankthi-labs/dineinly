@@ -9,7 +9,7 @@ export function GuestPageHeader({
 	tableLabel,
 }: {
 	restaurantName: string;
-	tableLabel: string;
+	tableLabel: string | null;
 }) {
 	return (
 		<header className="flex items-center gap-4 px-5 pt-6 pb-4">
@@ -17,9 +17,11 @@ export function GuestPageHeader({
 				<h1 className="text-2xl">{restaurantName}</h1>
 				<PoweredByDineinly className="mt-1" />
 			</div>
-			<p className="shrink-0 rounded-pill border border-divider px-3 py-1 text-caps text-secondary">
-				Table {tableLabel}
-			</p>
+			{tableLabel ? (
+				<p className="shrink-0 rounded-pill border border-divider px-3 py-1 text-caps text-secondary">
+					Table {tableLabel}
+				</p>
+			) : null}
 		</header>
 	);
 }

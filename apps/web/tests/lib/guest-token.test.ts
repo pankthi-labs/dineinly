@@ -43,4 +43,15 @@ describe("guest-token", () => {
 	it("rejects garbage input", async () => {
 		expect(await verifyGuestToken("not.a.jwt")).toBeNull();
 	});
+
+	it("round-trips a null table_label (counter-experience session)", async () => {
+		const token = await mintGuestToken({
+			restaurant_id: crypto.randomUUID(),
+			table_session_id: crypto.randomUUID(),
+			table_label: null,
+			app_role: "guest",
+		});
+		const claims = await verifyGuestToken(token);
+		expect(claims?.table_label).toBeNull();
+	});
 });
