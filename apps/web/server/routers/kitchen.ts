@@ -261,11 +261,12 @@ export const kitchenRouter = router({
 		}),
 
 	// Serve Order (docs/product.md § RBAC "Serve Order (set Served)") is
-	// Waiter/Manager/Owner — the inverse split of advanceBatch above, which
-	// excludes Waiter. Ready is the only status this ever moves from: Served
-	// is terminal (order-item.ts / core-data-model.md lifecycle), and
-	// Kitchen never touches this transition at all, not even to view it as
-	// an option — the Ready column offers no advance action for Kitchen.
+	// Waiter/Manager/Owner for Full-Service — the inverse split of
+	// advanceBatch above, which excludes Waiter. Ready is the only status
+	// this ever moves from: Served is terminal (order-item.ts /
+	// core-data-model.md lifecycle). Counter-experience restaurants swap
+	// Waiter for Kitchen here (docs/product.md § Dineinly Experiences —
+	// Counter is self-service, no waiter marks the pickup).
 	serveBatch: authedProcedure
 		.input(
 			z.object({
@@ -274,11 +275,24 @@ export const kitchenRouter = router({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			await requireFullServiceRole(ctx, input.restaurantId, [
-				"waiter",
-				"manager",
-				"owner",
-			]);
+			const restaurantResult = await ctx.auth
+				.from("restaurants")
+				.select("experience")
+				.eq("id", input.restaurantId)
+				.maybeSingle();
+			if (restaurantResult.error) {
+				throw dbError("Unable to update the order.", restaurantResult.error);
+			}
+
+			// Counter is self-service — Kitchen marks the pickup complete
+			// (docs/product.md § Dineinly Experiences), unlike Full-Service where
+			// only Waiter/Manager/Owner may (Kitchen never touches Serve there).
+			const allowedRoles: Parameters<typeof requireFullServiceRole>[2] =
+				restaurantResult.data?.experience === "counter"
+					? ["kitchen", "manager", "owner"]
+					: ["waiter", "manager", "owner"];
+
+			await requireFullServiceRole(ctx, input.restaurantId, allowedRoles);
 
 			return updateOrderItemsStatus(
 				ctx,

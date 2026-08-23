@@ -65,6 +65,14 @@ export function useIsMenuOnly(): boolean {
 	return useRestaurantViewer().experience === "menu";
 }
 
+// Dineinly Counter (docs/product.md § Dineinly Experiences) is
+// self-service, quick-turnaround — no Waiter marks the pickup complete,
+// Kitchen does (see kitchen/page.tsx's canServe). Client-side UX only —
+// see kitchen.ts's serveBatch for the real, server-enforced gate.
+export function useIsCounter(): boolean {
+	return useRestaurantViewer().experience === "counter";
+}
+
 // Owner reassignment (Tbd.md "Owner reassignment"): only the current
 // primary owner or Dineinly Admin — stricter than useCanManageStaff, which
 // any Owner-role or Manager row passes. Client-side UX only — see

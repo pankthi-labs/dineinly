@@ -14,7 +14,7 @@ import {
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
-import { useIsAdmin, useRestaurantRole } from "../viewer-context";
+import { useIsAdmin, useIsCounter, useRestaurantRole } from "../viewer-context";
 import { AvailabilityPanel } from "./availability-panel";
 
 const CLOCK_TICK_MS = 30_000;
@@ -55,10 +55,12 @@ export default function KitchenDisplayPage() {
 	// ✅) but can't advance a batch. UX only — advanceBatch enforces the
 	// real, server-side version of this same check.
 	const canAdvance = isAdmin || restaurantRole !== "waiter";
-	// "Serve Order (set Served)" is the inverse split — Waiter/Manager/Owner,
-	// never Kitchen. UX only — serveBatch enforces the real, server-side
-	// version of this same check.
-	const canServe = isAdmin || restaurantRole !== "kitchen";
+	// "Serve Order (set Served)" is the inverse split — Waiter/Manager/Owner
+	// for Full-Service, never Kitchen there. Counter swaps Kitchen in for
+	// Waiter (self-service pickup, docs/product.md § Dineinly Experiences).
+	// UX only — serveBatch enforces the real, server-side version.
+	const isCounter = useIsCounter();
+	const canServe = isAdmin || restaurantRole !== "kitchen" || isCounter;
 	const [availabilityMode, setAvailabilityMode] = useState<
 		"unavailable" | "available" | null
 	>(null);
@@ -272,7 +274,7 @@ export default function KitchenDisplayPage() {
 										disabled={serveBatch.isPending}
 										className={ADVANCE_BUTTON_CLASS}
 									>
-										Mark Served
+										{isCounter ? "Picked Up" : "Mark Served"}
 										<Check
 											className="icon-sm"
 											strokeWidth={1.5}
