@@ -31,7 +31,7 @@ Non-negotiable regardless of which doc you're reading:
 - **Order mutations must be idempotent** — no duplicate orders from retries or repeated taps.
 - **Migrations: Drizzle authors, Supabase CLI applies.** `drizzle-kit generate` writes to `supabase/migrations/`; `supabase db reset` / `db push` apply. Never run `drizzle-kit migrate`, `drizzle-kit push`, or `supabase db diff`, and never edit tables in Studio — each starts a second, divergent migration history. See `docs/architecture.md`.
 - **Never model external Supabase schemas as Drizzle tables** (`auth`, `storage`, `realtime`, etc.) — Supabase owns their migrations. A typed `.references()` stub makes `drizzle-kit generate` treat that table as ours to manage and try to create or drop it. FKs into these schemas are a plain column plus a hand-written `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`, in a custom migration (`drizzle-kit generate --custom`), never folded into a Drizzle-generated one. See `docs/architecture.md`.
-- **Never start the dev server, take screenshots, or run Playwright/browser automation to test a change.** The user tests every UI change manually. Verify with typecheck/lint/unit tests/build only, then report the change as done and let the user check it in the browser themselves. Do not add new Playwright specs unless explicitly asked.
+- **Never start the dev server, take screenshots, or run Playwright/browser automation to verify a code change you made.** The user tests every UI change manually. Verify with typecheck/lint/unit tests/build only, then report the change as done and let the user check it in the browser themselves. This is separate from the real E2E suite at `e2e/` (`e2e/README.md`) — that suite exists, is sanctioned, and covers every major flow across every role, but running it (`pnpm test:e2e*`) or adding to it is a human/CI-invoked action, same as starting the dev server is — do either only when explicitly asked, never to self-verify an unrelated change.
 
 ## Code Comments
 
@@ -49,4 +49,8 @@ If a doc introduces another `TBD`, do not invent entities, schema, or relationsh
 
 ## Testing UI Changes
 
-Never start the dev server, take screenshots, or run Playwright/browser automation to verify a UI change works. The user tests every change manually in their own browser. Verify with typecheck/lint/unit tests/build only, then report the change as done. Do not add new Playwright specs unless explicitly asked.
+Never start the dev server, take screenshots, or run Playwright/browser automation to verify a UI change you made works. The user tests every change manually in their own browser. Verify with typecheck/lint/unit tests/build only, then report the change as done.
+
+## E2E Suite (`e2e/`)
+
+A real Playwright suite exists at `e2e/` covering every major flow across every role (Admin, Owner/Manager, Kitchen/Waiter — both individual and shared-station-PIN, Guest) — see `e2e/README.md` for the full list, prerequisites, and how to run one flow in isolation. It is human/CI-invoked only: never run `pnpm test:e2e*` or add a new spec to self-verify a change, only when explicitly asked to. It requires the dev server and Supabase stack already running — never start either to run it.
