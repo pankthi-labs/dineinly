@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
-import { requireStaffRole } from "../trpc/rbac";
+import { requireFullServiceRole } from "../trpc/rbac";
 
 const restaurantIdSchema = z.string().uuid();
 
@@ -231,7 +231,7 @@ export const kitchenRouter = router({
 			// "Update Order Status (Preparing/Ready)" (docs/product.md § RBAC)
 			// is Kitchen/Manager/Owner — Waiter can view the queue but not
 			// advance it.
-			await requireStaffRole(ctx, input.restaurantId, [
+			await requireFullServiceRole(ctx, input.restaurantId, [
 				"kitchen",
 				"manager",
 				"owner",
@@ -274,7 +274,7 @@ export const kitchenRouter = router({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			await requireStaffRole(ctx, input.restaurantId, [
+			await requireFullServiceRole(ctx, input.restaurantId, [
 				"waiter",
 				"manager",
 				"owner",

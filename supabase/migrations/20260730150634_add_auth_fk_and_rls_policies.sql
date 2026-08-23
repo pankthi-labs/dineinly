@@ -623,6 +623,10 @@ begin
 	values (v_restaurant_id, p_owner_email, p_owner_name, p_owner_mobile, 'owner', 'invited', now(), true)
 	returning id into v_staff_id;
 
+	if p_experience = 'menu' then
+		perform public.ensure_menu_qr_table(v_restaurant_id);
+	end if;
+
 	return query select v_restaurant_id, v_staff_id;
 end;
 $$;
@@ -671,6 +675,34 @@ revoke execute on function public.assert_restaurant_track_unchanged(
 grant execute on function public.assert_restaurant_track_unchanged(
 	uuid, public.restaurant_experience
 ) to authenticated;
+
+-- Shared by admin_create_restaurant and both update RPCs below, called only
+-- when p_experience = 'menu'. Dineinly Menu exposes no Table Matrix (it's
+-- view-only, no per-table anything) — the Owner never creates a table
+-- themselves, but the one QR shown on Venue Settings still hangs off a
+-- restaurant_tables row under the hood, reusing the same qr_token/
+-- resolve_qr_token machinery every other experience uses. Idempotent: a
+-- restaurant that already has a table (its own, or from a prior stint on
+-- Menu) keeps it — switching Menu -> another experience -> Menu again
+-- reuses the same QR instead of alternating tokens.
+create or replace function public.ensure_menu_qr_table(p_restaurant_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+	if not exists (
+		select 1 from public.restaurant_tables where restaurant_id = p_restaurant_id
+	) then
+		insert into public.restaurant_tables (restaurant_id, label, qr_token)
+		values (p_restaurant_id, 'Menu', gen_random_uuid()::text);
+	end if;
+end;
+$$;
+
+revoke execute on function public.ensure_menu_qr_table(uuid) from public;
+grant execute on function public.ensure_menu_qr_table(uuid) to authenticated;
 
 -- admin_update_restaurant: updates the restaurant and its owner-contact row
 -- in one transaction. Once the primary owner has signed in, their
@@ -737,6 +769,10 @@ begin
 		where id = v_primary_owner_id;
 	end if;
 
+	if p_experience = 'menu' then
+		perform public.ensure_menu_qr_table(p_id);
+	end if;
+
 	return p_id;
 end;
 $$;
@@ -797,6 +833,10 @@ begin
 		service_charge_rate = p_service_charge_rate,
 		experience = p_experience
 	where id = p_id;
+
+	if p_experience = 'menu' then
+		perform public.ensure_menu_qr_table(p_id);
+	end if;
 
 	return p_id;
 end;
@@ -1134,6 +1174,7 @@ as $$
 declare
 	v_staff_id uuid;
 	v_order_id uuid;
+	v_experience public.restaurant_experience;
 begin
 	select id into v_staff_id
 	from public.staff
@@ -1144,6 +1185,16 @@ begin
 
 	if v_staff_id is null then
 		raise exception 'Only an active Waiter, Manager, or Owner may place an order';
+	end if;
+
+	-- Dineinly Menu is view-only, no floor ordering (docs/product.md §
+	-- Dineinly Experiences) — the tRPC layer already blocks floor.cart.addItem
+	-- for it, so a Menu restaurant's cart can never hold items in practice,
+	-- but this SECURITY DEFINER function checks directly rather than relying
+	-- on that alone.
+	select experience into v_experience from public.restaurants where id = p_restaurant_id;
+	if v_experience = 'menu' then
+		raise exception 'This feature isn''t available on the Dineinly Menu package';
 	end if;
 
 	if not exists (

@@ -4,7 +4,10 @@ import { listCartItems, upsertCartItem } from "../cart";
 import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
-import { requireStaffRole } from "../trpc/rbac";
+import {
+	assertFullServiceExperience,
+	requireFullServiceRole,
+} from "../trpc/rbac";
 import {
 	addCartItemInput,
 	listCartInput,
@@ -113,7 +116,7 @@ export async function requireOwnStaffId(
 export const floorRouter = router({
 	cart: router({
 		list: authedProcedure.input(listCartInput).query(async ({ ctx, input }) => {
-			await requireStaffRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
+			await requireFullServiceRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
 
 			return listCartItems(ctx.auth, input.restaurantId, input.sessionId);
 		}),
@@ -123,6 +126,7 @@ export const floorRouter = router({
 		addItem: authedProcedure
 			.input(addCartItemInput)
 			.mutation(async ({ ctx, input }) => {
+				await assertFullServiceExperience(ctx, input.restaurantId);
 				const staffId = await requireOwnStaffId(ctx, input.restaurantId);
 
 				const sessionResult = await ctx.auth
@@ -158,7 +162,7 @@ export const floorRouter = router({
 		setQuantity: authedProcedure
 			.input(setCartItemQuantityInput)
 			.mutation(async ({ ctx, input }) => {
-				await requireStaffRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
+				await requireFullServiceRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
 
 				const { error } =
 					input.quantity === 0
@@ -182,7 +186,7 @@ export const floorRouter = router({
 		removeItem: authedProcedure
 			.input(removeCartItemInput)
 			.mutation(async ({ ctx, input }) => {
-				await requireStaffRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
+				await requireFullServiceRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
 
 				const { error } = await ctx.auth
 					.from("cart_items")

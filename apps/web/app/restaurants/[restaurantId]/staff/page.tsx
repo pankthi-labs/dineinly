@@ -16,6 +16,7 @@ import { RestaurantNavHeader } from "../restaurant-nav-header";
 import {
 	useCanReassignOwner,
 	useIsAdmin,
+	useIsMenuOnly,
 	useRestaurantRole,
 } from "../viewer-context";
 import type { ReassignTarget } from "./reassign-owner-dialog";
@@ -52,14 +53,20 @@ function isOwnerLevel(
 
 // Server-enforced too (invite_staff/update_staff, supabase/migrations/
 // 20260816164344_add_staff_roster_rpcs.sql); this only keeps the form from
-// offering a choice the server would reject.
+// offering a choice the server would reject. Dineinly Menu has no Waiter or
+// Kitchen roles at all — no PIN stations, no floor/kitchen flows to staff
+// (docs/product.md § Dineinly Experiences).
 function availableRolesFor(
 	viewerIsAdmin: boolean,
 	viewerRole: StaffRole | null,
+	isMenuOnly: boolean,
 ): StaffRole[] {
-	return isOwnerLevel(viewerIsAdmin, viewerRole)
+	const roles = isOwnerLevel(viewerIsAdmin, viewerRole)
 		? ALL_ROLES
 		: ALL_ROLES.filter((role) => role !== "owner");
+	return isMenuOnly
+		? roles.filter((role) => role !== "waiter" && role !== "kitchen")
+		: roles;
 }
 
 // The primary owner row is locked for edit/remove — reassign_primary_owner
@@ -92,6 +99,7 @@ export default function StaffRosterPage() {
 	const viewerIsAdmin = useIsAdmin();
 	const viewerRole = useRestaurantRole();
 	const canReassignOwner = useCanReassignOwner();
+	const isMenuOnly = useIsMenuOnly();
 
 	const [sheetMode, setSheetMode] = useState<"closed" | "create" | "edit">(
 		"closed",
@@ -198,7 +206,11 @@ export default function StaffRosterPage() {
 	}
 
 	const isSubmitting = inviteMutation.isPending || updateMutation.isPending;
-	const availableRoles = availableRolesFor(viewerIsAdmin, viewerRole);
+	const availableRoles = availableRolesFor(
+		viewerIsAdmin,
+		viewerRole,
+		isMenuOnly,
+	);
 
 	const staffList = listQuery.data ?? [];
 	const currentOwner = staffList.find((staff) => staff.is_primary_owner);

@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
-import { requireRestaurantRole } from "@/lib/auth";
+import {
+	requireFullServiceExperience,
+	requireRestaurantRole,
+} from "@/lib/auth";
 
 // Every Bills action (Request/Settle/Close/Force-Terminate/correct —
 // docs/product.md § RBAC) is Waiter/Manager/Owner/Dineinly Admin — Kitchen
-// has no reach here at all.
+// has no reach here at all. Dineinly Menu has no Bills — it's view-only.
 export default async function BillsLayout({
 	children,
 	params,
@@ -13,5 +16,6 @@ export default async function BillsLayout({
 }) {
 	const { restaurantId } = await params;
 	await requireRestaurantRole(restaurantId, ["waiter", "manager", "owner"]);
+	await requireFullServiceExperience(restaurantId);
 	return children;
 }

@@ -798,6 +798,10 @@ export type Database = {
 			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
+			ensure_menu_qr_table: {
+				Args: { p_restaurant_id: string };
+				Returns: undefined;
+			};
 			finish_station_provisioning: {
 				Args: {
 					p_restaurant_id: string;

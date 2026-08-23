@@ -222,9 +222,13 @@ export default function GuestMenuPage() {
 								<h1 className="text-2xl">{menu.data.restaurant.name}</h1>
 								<PoweredByDineinly className="mt-1" />
 							</div>
-							<p className="shrink-0 rounded-pill border border-divider px-3 py-1 text-caps text-secondary">
-								Table {menu.data.tableLabel}
-							</p>
+							{/* Dineinly Menu's QR is universal, not per-table (docs/product.md
+							§ Dineinly Experiences) — nothing to label here. */}
+							{orderingEnabled ? (
+								<p className="shrink-0 rounded-pill border border-divider px-3 py-1 text-caps text-secondary">
+									Table {menu.data.tableLabel}
+								</p>
+							) : null}
 						</>
 					)}
 					<CollapsibleSearch

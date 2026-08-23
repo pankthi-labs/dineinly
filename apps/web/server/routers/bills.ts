@@ -5,7 +5,7 @@ import { buildBillPdf } from "@/lib/bill-pdf";
 import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
-import { requireStaffRole } from "../trpc/rbac";
+import { requireFullServiceRole } from "../trpc/rbac";
 import {
 	cancelOrderItemInput,
 	closeSessionInput,
@@ -120,9 +120,10 @@ async function assertBillNotSettled(
 // (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 5)
 // scope every query below to the caller's own restaurant. Every write is
 // Waiter/Manager/Owner only (Request/Settle/Close/Force-Terminate/correct —
-// docs/product.md § RBAC all exclude Kitchen), enforced via requireStaffRole
-// below; closeSession's is inside close_session() itself (§ 14 of that
-// migration) since it's a SECURITY INVOKER RPC, not a plain ctx.auth write.
+// docs/product.md § RBAC all exclude Kitchen), enforced via
+// requireFullServiceRole below; closeSession's is inside close_session()
+// itself (§ 14 of that migration) since it's a SECURITY INVOKER RPC, not a
+// plain ctx.auth write.
 export const billsRouter = router({
 	// Bills tab list (docs/product.md § Billing & Settlement): one row per
 	// table session, not per bill row — a session that's never had "Request
@@ -501,7 +502,7 @@ export const billsRouter = router({
 				});
 			}
 			const restaurantId = sessionResult.data.restaurant_id;
-			await requireStaffRole(ctx, restaurantId, BILLS_WRITE_ROLES);
+			await requireFullServiceRole(ctx, restaurantId, BILLS_WRITE_ROLES);
 
 			const existing = await ctx.auth
 				.from("bills")
@@ -585,7 +586,7 @@ export const billsRouter = router({
 					message: "Table session not found.",
 				});
 			}
-			await requireStaffRole(
+			await requireFullServiceRole(
 				ctx,
 				sessionResult.data.restaurant_id,
 				BILLS_WRITE_ROLES,
@@ -673,7 +674,7 @@ export const billsRouter = router({
 					message: "Order item not found.",
 				});
 			}
-			await requireStaffRole(
+			await requireFullServiceRole(
 				ctx,
 				itemResult.data.restaurant_id,
 				BILLS_WRITE_ROLES,
@@ -739,7 +740,7 @@ export const billsRouter = router({
 					message: "Order item not found.",
 				});
 			}
-			await requireStaffRole(
+			await requireFullServiceRole(
 				ctx,
 				itemResult.data.restaurant_id,
 				BILLS_WRITE_ROLES,
@@ -806,7 +807,7 @@ export const billsRouter = router({
 				});
 			}
 			const restaurantId = sessionResult.data.restaurant_id;
-			await requireStaffRole(ctx, restaurantId, BILLS_WRITE_ROLES);
+			await requireFullServiceRole(ctx, restaurantId, BILLS_WRITE_ROLES);
 
 			const [billResult, ordersResult, userResult] = await Promise.all([
 				ctx.auth

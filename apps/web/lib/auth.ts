@@ -143,3 +143,42 @@ export async function requireRestaurantRole(
 
 	return viewer;
 }
+
+/**
+ * The restaurant's Dineinly package. Deduped per request via cache() — both
+ * requireFullServiceExperience below and restaurants/[restaurantId]/layout.tsx
+ * (RestaurantViewerProvider's `experience` prop) need it, and a request can
+ * hit both.
+ */
+export const getRestaurantExperience = cache(
+	async (
+		restaurantId: string,
+	): Promise<Database["public"]["Enums"]["restaurant_experience"] | null> => {
+		const supabase = await createClient();
+		const { data } = await supabase
+			.from("restaurants")
+			.select("experience")
+			.eq("id", restaurantId)
+			.maybeSingle();
+
+		return data?.experience ?? null;
+	},
+);
+
+/**
+ * Redirects to the restaurant home page unless the restaurant's package
+ * (`restaurant.experience`) includes this feature. Dineinly Menu is
+ * view-only (docs/product.md § Dineinly Experiences) — no tables, kitchen,
+ * floor, or bills — so this isn't a permission question a role could pass,
+ * unlike requireRestaurantRole above. Call after requireRestaurantAccess /
+ * requireRestaurantRole in every subtree those features gate.
+ */
+export async function requireFullServiceExperience(
+	restaurantId: string,
+): Promise<void> {
+	const experience = await getRestaurantExperience(restaurantId);
+
+	if (experience === "menu") {
+		redirect(`/restaurants/${restaurantId}`);
+	}
+}

@@ -1,7 +1,11 @@
 "use client";
 
+import type { Database } from "@workspace/db";
 import { createContext, type ReactNode, useContext } from "react";
 import type { StaffRole } from "@/lib/auth";
+
+type RestaurantExperience =
+	Database["public"]["Enums"]["restaurant_experience"];
 
 type RestaurantViewer = {
 	isAdmin: boolean;
@@ -11,6 +15,9 @@ type RestaurantViewer = {
 	/** True only when the caller's own row is the restaurant's primary
 	 * owner (see lib/auth.ts RestaurantAccess). */
 	isPrimaryOwner: boolean;
+	/** The restaurant's Dineinly package (docs/product.md § Dineinly
+	 * Experiences). Drives useIsMenuOnly below. */
+	experience: RestaurantExperience;
 };
 
 const RestaurantViewerContext = createContext<RestaurantViewer | null>(null);
@@ -19,11 +26,12 @@ export function RestaurantViewerProvider({
 	isAdmin,
 	restaurantRole,
 	isPrimaryOwner,
+	experience,
 	children,
 }: RestaurantViewer & { children: ReactNode }) {
 	return (
 		<RestaurantViewerContext.Provider
-			value={{ isAdmin, restaurantRole, isPrimaryOwner }}
+			value={{ isAdmin, restaurantRole, isPrimaryOwner, experience }}
 		>
 			{children}
 		</RestaurantViewerContext.Provider>
@@ -46,6 +54,15 @@ export function useIsAdmin(): boolean {
 
 export function useRestaurantRole(): StaffRole | null {
 	return useRestaurantViewer().restaurantRole;
+}
+
+// Dineinly Menu (docs/product.md § Dineinly Experiences) is view-only — no
+// tables, kitchen, floor, or bills. Client-side UX only (hides the nav/cards
+// for the feature) — see requireFullServiceExperience (lib/auth.ts) and
+// requireFullServiceRole (server/trpc/rbac.ts) for the real, server-enforced
+// gate.
+export function useIsMenuOnly(): boolean {
+	return useRestaurantViewer().experience === "menu";
 }
 
 // Owner reassignment (Tbd.md "Owner reassignment"): only the current

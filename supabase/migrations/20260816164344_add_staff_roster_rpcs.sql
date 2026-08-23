@@ -62,6 +62,7 @@ as $$
 declare
 	v_is_admin boolean := public.is_dineinly_admin();
 	v_caller_role public.staff_role := public.staff_role_for_restaurant(p_restaurant_id);
+	v_experience public.restaurant_experience;
 begin
 	if not v_is_admin and (v_caller_role is null or v_caller_role not in ('owner', 'manager')) then
 		raise exception 'Only an active Owner or Manager may invite staff';
@@ -69,6 +70,14 @@ begin
 
 	if not v_is_admin and v_caller_role = 'manager' and p_role = 'owner' then
 		raise exception 'Managers may not invite Owners';
+	end if;
+
+	-- Dineinly Menu has no Waiter or Kitchen roles at all — no PIN stations,
+	-- no floor/kitchen flows to staff (docs/product.md § Dineinly
+	-- Experiences).
+	select experience into v_experience from public.restaurants where id = p_restaurant_id;
+	if v_experience = 'menu' and p_role in ('waiter', 'kitchen') then
+		raise exception 'Dineinly Menu has no Waiter or Kitchen roles';
 	end if;
 
 	return query
@@ -165,6 +174,7 @@ declare
 	v_is_admin boolean := public.is_dineinly_admin();
 	v_target public.staff;
 	v_caller_role public.staff_role;
+	v_experience public.restaurant_experience;
 begin
 	select * into v_target from public.staff where staff.id = p_staff_id;
 	if v_target is null then
@@ -186,6 +196,12 @@ begin
 
 	if not v_is_admin and v_caller_role = 'manager' and (v_target.role = 'owner' or p_role = 'owner') then
 		raise exception 'Managers may not manage Owners';
+	end if;
+
+	-- Same Dineinly Menu restriction as invite_staff above.
+	select experience into v_experience from public.restaurants where id = v_target.restaurant_id;
+	if v_experience = 'menu' and p_role in ('waiter', 'kitchen') then
+		raise exception 'Dineinly Menu has no Waiter or Kitchen roles';
 	end if;
 
 	return query
