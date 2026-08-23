@@ -197,7 +197,12 @@ export const stationRouter = router({
 
 			const isStation = staffRow != null;
 			if (!isStation) {
-				return { isStation, actingStaffName: null, deviceRevoked: false };
+				return {
+					isStation,
+					actingStaffName: null,
+					actingStaffRole: null,
+					deviceRevoked: false,
+				};
 			}
 
 			let deviceRevoked = false;
@@ -212,7 +217,12 @@ export const stationRouter = router({
 				deviceRevoked = revoked ?? false;
 			}
 			if (deviceRevoked || !ctx.stationSession) {
-				return { isStation, actingStaffName: null, deviceRevoked };
+				return {
+					isStation,
+					actingStaffName: null,
+					actingStaffRole: null,
+					deviceRevoked,
+				};
 			}
 
 			const { data: named, error: namedError } = await ctx.auth.rpc(
@@ -229,6 +239,7 @@ export const stationRouter = router({
 			return {
 				isStation,
 				actingStaffName: named?.[0]?.name ?? null,
+				actingStaffRole: named?.[0]?.role ?? null,
 				deviceRevoked,
 			};
 		}),

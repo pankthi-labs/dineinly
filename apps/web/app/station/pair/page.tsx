@@ -44,6 +44,17 @@ export default function StationPairPage() {
 				setError("Couldn't finish pairing this device.");
 				return;
 			}
+			// A (re)pairing must not inherit whoever was last acting on this
+			// device — dineinly_station_session outlives a single shift (12h
+			// TTL) and isn't touched by redeeming a new pairing code, so without
+			// this the PIN prompt on /floor gets skipped in favor of the
+			// previous person's still-valid session. Best-effort: the pairing
+			// code is already burned by this point, so a network blip here
+			// shouldn't fail the whole flow — worst case a stale session
+			// outlives it until Switch User or its own TTL clears it.
+			try {
+				await fetch("/station/pin", { method: "DELETE" });
+			} catch {}
 			// One year, path=/ — outlives the Supabase session by design; the
 			// value is a signed token (lib/station-session.ts), not a raw id, so
 			// requireOwnStaffId can verify it server-side before trusting it for
