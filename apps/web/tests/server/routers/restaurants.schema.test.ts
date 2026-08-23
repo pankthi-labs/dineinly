@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	createRestaurantInput,
+	getCounterQrInput,
 	restaurantFieldsSchema,
 	updateOwnRestaurantInput,
 } from "@/server/routers/restaurants.schema";
@@ -107,6 +108,21 @@ describe("updateOwnRestaurantInput", () => {
 
 	it("rejects a missing id", () => {
 		expect(updateOwnRestaurantInput.safeParse(validRestaurant).success).toBe(
+			false,
+		);
+	});
+});
+
+describe("getCounterQrInput", () => {
+	it("accepts a valid restaurant id", () => {
+		expect(
+			getCounterQrInput.safeParse({ restaurantId: crypto.randomUUID() })
+				.success,
+		).toBe(true);
+	});
+
+	it("rejects a non-uuid restaurant id", () => {
+		expect(getCounterQrInput.safeParse({ restaurantId: "nope" }).success).toBe(
 			false,
 		);
 	});
