@@ -150,5 +150,14 @@ export const downloadCounterQrPdfInput = z.object({
 	origin: z.string().url(),
 });
 
+export const getMenuQrInput = z.object({
+	restaurantId: z.string().uuid(),
+});
+
+export const downloadMenuQrPdfInput = z.object({
+	restaurantId: z.string().uuid(),
+	origin: z.string().url(),
+});
+
 export type RestaurantFields = z.infer<typeof restaurantFieldsSchema>;
 export type OwnerContact = z.infer<typeof ownerContactSchema>;

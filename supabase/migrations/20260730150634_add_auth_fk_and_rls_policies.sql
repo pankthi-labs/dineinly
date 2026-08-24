@@ -624,7 +624,7 @@ begin
 	returning id into v_staff_id;
 
 	if p_experience = 'menu' then
-		perform public.ensure_menu_qr_table(v_restaurant_id);
+		perform public.ensure_menu_qr_token(v_restaurant_id);
 	elsif p_experience = 'counter' then
 		perform public.ensure_counter_qr_token(v_restaurant_id);
 	end if;
@@ -685,35 +685,34 @@ grant execute on function public.assert_restaurant_track_unchanged(
 
 -- Shared by admin_create_restaurant and both update RPCs below, called only
 -- when p_experience = 'menu'. Dineinly Menu exposes no Table Matrix (it's
--- view-only, no per-table anything) — the Owner never creates a table
--- themselves, but the one QR shown on its dedicated QR Menu page still
--- hangs off a restaurant_tables row under the hood, reusing the same qr_token/
--- resolve_qr_token machinery every other experience uses. Idempotent: a
--- restaurant that already has a table (its own, or from a prior stint on
--- Menu) keeps it — switching Menu -> another experience -> Menu again
--- reuses the same QR instead of alternating tokens.
-create or replace function public.ensure_menu_qr_table(p_restaurant_id uuid)
+-- view-only, no per-table anything, no session a staff member ever closes)
+-- — a restaurant-level token, same shape as ensure_counter_qr_token, not a
+-- restaurant_tables row: that earlier design reused the table/session
+-- machinery and left the QR permanently stuck "occupied" once a single
+-- guest scanned it, since Menu has no Close Session flow to free it again.
+-- Idempotent, same reasoning as ensure_counter_qr_token: a restaurant that
+-- already has a token (its own, or from a prior stint on Menu) keeps it —
+-- switching Menu -> another experience -> Menu again reuses the same QR
+-- instead of alternating tokens.
+create or replace function public.ensure_menu_qr_token(p_restaurant_id uuid)
 returns void
 language plpgsql
 security invoker
 set search_path = ''
 as $$
 begin
-	if not exists (
-		select 1 from public.restaurant_tables where restaurant_id = p_restaurant_id
-	) then
-		insert into public.restaurant_tables (restaurant_id, label, qr_token)
-		values (p_restaurant_id, 'Menu', gen_random_uuid()::text);
-	end if;
+	update public.restaurants
+	set menu_qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id and menu_qr_token is null;
 end;
 $$;
 
-revoke execute on function public.ensure_menu_qr_table(uuid) from public;
-grant execute on function public.ensure_menu_qr_table(uuid) to authenticated;
+revoke execute on function public.ensure_menu_qr_token(uuid) from public;
+grant execute on function public.ensure_menu_qr_token(uuid) to authenticated;
 
 -- Shared by admin_create_restaurant and both update RPCs below, called only
 -- when p_experience = 'counter'. Idempotent, same reasoning as
--- ensure_menu_qr_table: a restaurant that already has a token (its own, or
+-- ensure_menu_qr_token: a restaurant that already has a token (its own, or
 -- from a prior stint on Counter) keeps it — switching Counter -> another
 -- experience -> Counter again reuses the same QR instead of alternating
 -- tokens (any printed/laminated counter QR keeps working).
@@ -771,6 +770,46 @@ $$;
 
 revoke execute on function public.regenerate_counter_qr_token(uuid) from public;
 grant execute on function public.regenerate_counter_qr_token(uuid) to authenticated;
+
+-- Menu QR "Regenerate" (QrCodeSection's regenerate) — same SECURITY DEFINER
+-- reasoning and Owner/Admin-only gate as regenerate_counter_qr_token above.
+-- Unlike a Table Matrix table's regenerateQr (tables.ts), there is no
+-- occupied-row guard: Menu has no table and no session to protect, so a new
+-- token is always minted on request. Any guest still on the old QR keeps
+-- their already-issued session until it expires — Menu's guest token TTL is
+-- intentionally short (resolve_qr_token's menu branch below), so a rescan
+-- against the new token is how they pick back up.
+create or replace function public.regenerate_menu_qr_token(p_restaurant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_token text;
+begin
+	if not (
+		public.is_dineinly_admin()
+		or public.staff_role_for_restaurant(p_restaurant_id) = 'owner'
+	) then
+		raise exception 'Only the restaurant owner may regenerate this QR code';
+	end if;
+
+	update public.restaurants
+	set menu_qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id and experience = 'menu'
+	returning menu_qr_token into v_token;
+
+	if v_token is null then
+		raise exception 'Restaurant not found';
+	end if;
+
+	return v_token;
+end;
+$$;
+
+revoke execute on function public.regenerate_menu_qr_token(uuid) from public;
+grant execute on function public.regenerate_menu_qr_token(uuid) to authenticated;
 
 -- admin_update_restaurant: updates the restaurant and its owner-contact row
 -- in one transaction. Once the primary owner has signed in, their
@@ -838,7 +877,7 @@ begin
 	end if;
 
 	if p_experience = 'menu' then
-		perform public.ensure_menu_qr_table(p_id);
+		perform public.ensure_menu_qr_token(p_id);
 	elsif p_experience = 'counter' then
 		perform public.ensure_counter_qr_token(p_id);
 	end if;
@@ -1102,6 +1141,22 @@ begin
 	from public.restaurants r
 	where r.counter_qr_token = p_qr_token and r.experience = 'counter';
 
+	if v_restaurant_id is not null then
+		insert into public.table_sessions (restaurant_id)
+		values (v_restaurant_id)
+		returning id into v_session_id;
+
+		return query select v_restaurant_id, v_session_id, null::text, 'counter'::public.restaurant_experience;
+		return;
+	end if;
+
+	-- Try the menu-experience universal QR — same tableless-session shape as
+	-- counter above, for the same reason: Menu has no table to seat and no
+	-- staff Close Session flow, so nothing here is ever "occupied".
+	select r.id into v_restaurant_id
+	from public.restaurants r
+	where r.menu_qr_token = p_qr_token and r.experience = 'menu';
+
 	if v_restaurant_id is null then
 		raise exception 'Invalid QR code';
 	end if;
@@ -1110,7 +1165,7 @@ begin
 	values (v_restaurant_id)
 	returning id into v_session_id;
 
-	return query select v_restaurant_id, v_session_id, null::text, 'counter'::public.restaurant_experience;
+	return query select v_restaurant_id, v_session_id, null::text, 'menu'::public.restaurant_experience;
 end;
 $$;
 

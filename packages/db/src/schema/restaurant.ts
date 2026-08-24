@@ -33,6 +33,13 @@ export const restaurants = pgTable(
 		// Restaurant Table.qr_token, resolving this token never looks up an
 		// existing session — it always creates one (see resolve_qr_token()).
 		counterQrToken: text("counter_qr_token").unique(),
+		// Menu's universal QR (docs/core-data-model.md § Experience Gating).
+		// Null for every other experience — set only by ensure_menu_qr_token()
+		// the moment a restaurant becomes menu-experience. Menu has no table to
+		// seat and no session a staff member ever closes, so like counterQrToken
+		// this always mints a fresh session on scan rather than joining a
+		// Restaurant Table's existing one (see resolve_qr_token()).
+		menuQrToken: text("menu_qr_token").unique(),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},

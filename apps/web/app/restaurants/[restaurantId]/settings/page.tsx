@@ -43,7 +43,7 @@ export default function VenueSettingsPage() {
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
 					title="Venue Settings"
-					description="Update your restaurant's details and service charge."
+					description="Update your restaurant's details."
 				/>
 
 				<div className="mt-8 max-w-2xl">

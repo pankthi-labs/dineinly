@@ -180,10 +180,12 @@ CREATE TABLE "restaurants" (
 	"status" "restaurant_status" DEFAULT 'active' NOT NULL,
 	"experience" "restaurant_experience" DEFAULT 'one' NOT NULL,
 	"counter_qr_token" text,
+	"menu_qr_token" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "restaurants_service_charge_rate_check" CHECK ("restaurants"."service_charge_rate" between 0 and 1),
-	CONSTRAINT "restaurants_counter_qr_token_unique" UNIQUE("counter_qr_token")
+	CONSTRAINT "restaurants_counter_qr_token_unique" UNIQUE("counter_qr_token"),
+	CONSTRAINT "restaurants_menu_qr_token_unique" UNIQUE("menu_qr_token")
 );
 --> statement-breakpoint
 CREATE TABLE "restaurant_tables" (

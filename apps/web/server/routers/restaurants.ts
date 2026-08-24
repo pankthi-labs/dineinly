@@ -7,7 +7,9 @@ import { adminProcedure, authedProcedure, router } from "../trpc/init";
 import {
 	createRestaurantInput,
 	downloadCounterQrPdfInput,
+	downloadMenuQrPdfInput,
 	getCounterQrInput,
+	getMenuQrInput,
 	getRestaurantInput,
 	listRestaurantsInput,
 	setRestaurantStatusInput,
@@ -417,6 +419,90 @@ export const restaurantsRouter = router({
 
 				return {
 					fileName: `${data.name.replace(/[^a-zA-Z0-9-]+/g, "-")}-counter-qr.pdf`,
+					base64: Buffer.from(pdf).toString("base64"),
+				};
+			}),
+	}),
+
+	// Menu's single universal QR (docs/product.md § Dineinly Experiences —
+	// no Table Matrix, no per-table anything) — mirrors counterQr above
+	// exactly, a restaurant-level token with no table/session occupied-check
+	// to get stuck on, rather than tables.ts's per-table regenerateQr.
+	menuQr: router({
+		get: authedProcedure.input(getMenuQrInput).query(async ({ ctx, input }) => {
+			const {
+				data: { user },
+			} = await ctx.auth.auth.getUser();
+
+			if (!isDineinlyAdmin(user)) {
+				const { data: role } = await ctx.auth.rpc("staff_role_for_restaurant", {
+					p_restaurant_id: input.restaurantId,
+				});
+				if (role !== "owner") {
+					throw new TRPCError({
+						code: "FORBIDDEN",
+						message: "Only the restaurant owner may view this QR code.",
+					});
+				}
+			}
+
+			const { data, error } = await ctx.auth
+				.from("restaurants")
+				.select("menu_qr_token")
+				.eq("id", input.restaurantId)
+				.maybeSingle();
+
+			if (error) {
+				throw toTRPCError(error, "Unable to load the menu QR code.");
+			}
+
+			return { qrToken: data?.menu_qr_token ?? null };
+		}),
+
+		regenerate: authedProcedure
+			.input(getMenuQrInput)
+			.mutation(async ({ ctx, input }) => {
+				const { data, error } = await ctx.auth.rpc("regenerate_menu_qr_token", {
+					p_restaurant_id: input.restaurantId,
+				});
+
+				if (error) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: error.message,
+						cause: error,
+					});
+				}
+
+				return { qrToken: data };
+			}),
+
+		downloadPdf: authedProcedure
+			.input(downloadMenuQrPdfInput)
+			.query(async ({ ctx, input }) => {
+				const { data, error } = await ctx.auth
+					.from("restaurants")
+					.select("name, menu_qr_token")
+					.eq("id", input.restaurantId)
+					.maybeSingle();
+
+				if (error) {
+					throw toTRPCError(error, "Unable to load the restaurant.");
+				}
+				if (!data?.menu_qr_token) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "No menu QR code for this restaurant.",
+					});
+				}
+
+				const pdf = await buildTableQrPdf(
+					[{ label: "Menu", qrToken: data.menu_qr_token }],
+					input.origin,
+				);
+
+				return {
+					fileName: `${data.name.replace(/[^a-zA-Z0-9-]+/g, "-")}-menu-qr.pdf`,
 					base64: Buffer.from(pdf).toString("base64"),
 				};
 			}),

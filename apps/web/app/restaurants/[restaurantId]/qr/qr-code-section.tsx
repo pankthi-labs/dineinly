@@ -5,15 +5,15 @@ import type { ToastState } from "@/components/toast";
 import { downloadPdf } from "@/lib/download-pdf";
 import { trpc } from "@/lib/trpc-client";
 import { QrModal } from "../tables/qr-modal";
-import type { RegenerateTarget } from "../tables/regenerate-confirm-dialog";
 import { RegenerateConfirmDialog } from "../tables/regenerate-confirm-dialog";
 
 // Dineinly Menu has no Table Matrix (its package is view-only, no per-table
 // anything — docs/product.md § Dineinly Experiences) — this is the Owner's
-// only QR, provisioned automatically (ensure_menu_qr_table,
+// only QR, provisioned automatically (ensure_menu_qr_token,
 // supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql) the
-// moment the restaurant becomes Menu, and reused across the tables.* API
-// every other experience's Table Matrix already exercises.
+// moment the restaurant becomes Menu. A restaurant-level token, same shape
+// as Counter's — not a table, so regenerating it never hits an
+// "occupied" check: there's no session here a staff member ever closes.
 export function QrCodeSection({
 	restaurantId,
 	onToast,
@@ -22,32 +22,29 @@ export function QrCodeSection({
 	onToast: (toast: ToastState) => void;
 }) {
 	const [showQr, setShowQr] = useState(false);
-	const [regenerateTarget, setRegenerateTarget] =
-		useState<RegenerateTarget | null>(null);
+	const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 	const [isDownloading, setIsDownloading] = useState(false);
 
 	const utils = trpc.useUtils();
-	const listQuery = trpc.tables.list.useQuery({ restaurantId });
-	const table = listQuery.data?.[0] ?? null;
+	const qrQuery = trpc.restaurants.menuQr.get.useQuery({ restaurantId });
 
-	const regenerateMutation = trpc.tables.regenerateQr.useMutation({
+	const regenerateMutation = trpc.restaurants.menuQr.regenerate.useMutation({
 		onSuccess: () => {
-			setRegenerateTarget(null);
-			utils.tables.list.invalidate({ restaurantId });
+			setShowRegenerateConfirm(false);
+			utils.restaurants.menuQr.get.invalidate({ restaurantId });
 			onToast({ message: "QR code regenerated.", tone: "success" });
 		},
 		onError: (error) => {
-			setRegenerateTarget(null);
+			setShowRegenerateConfirm(false);
 			onToast({ message: error.message, tone: "error" });
 		},
 	});
 
 	async function handleDownloadPdf() {
-		if (!table) return;
 		setIsDownloading(true);
 		try {
-			const result = await utils.tables.downloadQrPdf.fetch({
-				id: table.id,
+			const result = await utils.restaurants.menuQr.downloadPdf.fetch({
+				restaurantId,
 				origin: window.location.origin,
 			});
 			downloadPdf(result.fileName, result.base64);
@@ -64,11 +61,11 @@ export function QrCodeSection({
 		}
 	}
 
-	if (listQuery.isPending) {
+	if (qrQuery.isPending) {
 		return <div className="skeleton h-12 w-64 rounded-md" />;
 	}
 
-	if (!table) return null;
+	if (!qrQuery.data?.qrToken) return null;
 
 	return (
 		<>
@@ -82,9 +79,7 @@ export function QrCodeSection({
 				</button>
 				<button
 					type="button"
-					onClick={() =>
-						setRegenerateTarget({ id: table.id, label: table.label })
-					}
+					onClick={() => setShowRegenerateConfirm(true)}
 					className="rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface hover:text-primary"
 				>
 					Regenerate QR
@@ -94,20 +89,18 @@ export function QrCodeSection({
 			{showQr ? (
 				<QrModal
 					label="Menu QR Code"
-					qrToken={table.qr_token}
+					qrToken={qrQuery.data.qrToken}
 					onClose={() => setShowQr(false)}
 					onDownloadPdf={handleDownloadPdf}
 					isDownloading={isDownloading}
 				/>
 			) : null}
 
-			{regenerateTarget ? (
+			{showRegenerateConfirm ? (
 				<RegenerateConfirmDialog
-					target={regenerateTarget}
-					onCancel={() => setRegenerateTarget(null)}
-					onConfirm={() =>
-						regenerateMutation.mutate({ id: regenerateTarget.id })
-					}
+					target={{ id: restaurantId, label: "Menu" }}
+					onCancel={() => setShowRegenerateConfirm(false)}
+					onConfirm={() => regenerateMutation.mutate({ restaurantId })}
 					isPending={regenerateMutation.isPending}
 					body="The old printed QR code stops working immediately — anywhere it's posted will need the new one."
 				/>

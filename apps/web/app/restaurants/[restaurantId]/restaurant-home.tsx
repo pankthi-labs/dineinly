@@ -74,7 +74,7 @@ const navCards: Array<{
 	},
 	{
 		title: "Venue Settings",
-		description: "Service charge & profile",
+		description: "Restaurant details",
 		icon: Store,
 	},
 	{
