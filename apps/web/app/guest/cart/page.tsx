@@ -102,7 +102,7 @@ function GuestCartContent({
 	onRemove,
 }: {
 	restaurantName: string;
-	tableLabel: string;
+	tableLabel: string | null;
 	items: CartLine[];
 	idempotencyKey: string;
 	submitError: string | null;

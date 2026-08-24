@@ -43,7 +43,7 @@ export function BillRow({
 					{bill.billNumber ? `Bill #${bill.billNumber}` : "Not yet requested"}
 				</h3>
 				<p className="text-secondary text-sm">
-					Table {bill.tableLabel || "—"} ·{" "}
+					{bill.tableLabel ? `Table ${bill.tableLabel}` : "Counter"} ·{" "}
 					{new Date(bill.date).toLocaleString("en-IN", {
 						day: "numeric",
 						month: "short",

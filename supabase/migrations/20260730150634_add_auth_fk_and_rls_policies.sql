@@ -625,6 +625,8 @@ begin
 
 	if p_experience = 'menu' then
 		perform public.ensure_menu_qr_table(v_restaurant_id);
+	elsif p_experience = 'counter' then
+		perform public.ensure_counter_qr_token(v_restaurant_id);
 	end if;
 
 	return query select v_restaurant_id, v_staff_id;
@@ -704,6 +706,67 @@ $$;
 revoke execute on function public.ensure_menu_qr_table(uuid) from public;
 grant execute on function public.ensure_menu_qr_table(uuid) to authenticated;
 
+-- Shared by admin_create_restaurant and both update RPCs below, called only
+-- when p_experience = 'counter'. Idempotent, same reasoning as
+-- ensure_menu_qr_table: a restaurant that already has a token (its own, or
+-- from a prior stint on Counter) keeps it — switching Counter -> another
+-- experience -> Counter again reuses the same QR instead of alternating
+-- tokens (any printed/laminated counter QR keeps working).
+create or replace function public.ensure_counter_qr_token(p_restaurant_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+	update public.restaurants
+	set counter_qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id and counter_qr_token is null;
+end;
+$$;
+
+revoke execute on function public.ensure_counter_qr_token(uuid) from public;
+grant execute on function public.ensure_counter_qr_token(uuid) to authenticated;
+
+-- Counter QR "Regenerate" (Task 6's counterQr.regenerate). SECURITY DEFINER
+-- for the same reason as owner_update_restaurant just above it: restaurants
+-- only has a write policy for Dineinly Admin (admin_all_restaurants) — a
+-- plain Owner has row-level SELECT only (staff_select_own_restaurant), so an
+-- invoker-mode UPDATE would silently affect 0 rows for that caller. The
+-- explicit role check below is what makes bypassing RLS here safe, same
+-- pattern as every staff-roster write RPC.
+create or replace function public.regenerate_counter_qr_token(p_restaurant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_token text;
+begin
+	if not (
+		public.is_dineinly_admin()
+		or public.staff_role_for_restaurant(p_restaurant_id) = 'owner'
+	) then
+		raise exception 'Only the restaurant owner may regenerate this QR code';
+	end if;
+
+	update public.restaurants
+	set counter_qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id
+	returning counter_qr_token into v_token;
+
+	if v_token is null then
+		raise exception 'Restaurant not found';
+	end if;
+
+	return v_token;
+end;
+$$;
+
+revoke execute on function public.regenerate_counter_qr_token(uuid) from public;
+grant execute on function public.regenerate_counter_qr_token(uuid) to authenticated;
+
 -- admin_update_restaurant: updates the restaurant and its owner-contact row
 -- in one transaction. Once the primary owner has signed in, their
 -- name/email/mobile are immutable through this function — reassigning who
@@ -771,6 +834,8 @@ begin
 
 	if p_experience = 'menu' then
 		perform public.ensure_menu_qr_table(p_id);
+	elsif p_experience = 'counter' then
+		perform public.ensure_counter_qr_token(p_id);
 	end if;
 
 	return p_id;
@@ -836,6 +901,8 @@ begin
 
 	if p_experience = 'menu' then
 		perform public.ensure_menu_qr_table(p_id);
+	elsif p_experience = 'counter' then
+		perform public.ensure_counter_qr_token(p_id);
 	end if;
 
 	return p_id;
@@ -998,31 +1065,50 @@ begin
 		and rt.status = 'active'
 	for update;
 
-	if v_table_id is null then
+	if v_table_id is not null then
+		if v_session_id is not null then
+			select ts.status into v_session_status
+			from public.table_sessions ts
+			where ts.id = v_session_id;
+		end if;
+
+		if v_session_id is null or v_session_status <> 'active' then
+			insert into public.table_sessions (restaurant_id)
+			values (v_restaurant_id)
+			returning id into v_session_id;
+
+			update public.restaurant_tables
+			set session_id = v_session_id
+			where id = v_table_id;
+		end if;
+
+		select r.experience into v_experience
+		from public.restaurants r
+		where r.id = v_restaurant_id;
+
+		return query select v_restaurant_id, v_session_id, v_label, v_experience;
+		return;
+	end if;
+
+	-- No table QR matched — try the counter-experience universal QR
+	-- (docs/core-data-model.md § Experience Gating). Unlike the table branch
+	-- above, this never joins an existing session: one counter QR serves
+	-- many concurrent guests, so every scan starts its own fresh, tableless
+	-- session. table_sessions already has no table_id column, so no schema
+	-- change is needed for this second entry path.
+	select r.id into v_restaurant_id
+	from public.restaurants r
+	where r.counter_qr_token = p_qr_token and r.experience = 'counter';
+
+	if v_restaurant_id is null then
 		raise exception 'Invalid QR code';
 	end if;
 
-	if v_session_id is not null then
-		select ts.status into v_session_status
-		from public.table_sessions ts
-		where ts.id = v_session_id;
-	end if;
+	insert into public.table_sessions (restaurant_id)
+	values (v_restaurant_id)
+	returning id into v_session_id;
 
-	if v_session_id is null or v_session_status <> 'active' then
-		insert into public.table_sessions (restaurant_id)
-		values (v_restaurant_id)
-		returning id into v_session_id;
-
-		update public.restaurant_tables
-		set session_id = v_session_id
-		where id = v_table_id;
-	end if;
-
-	select r.experience into v_experience
-	from public.restaurants r
-	where r.id = v_restaurant_id;
-
-	return query select v_restaurant_id, v_session_id, v_label, v_experience;
+	return query select v_restaurant_id, v_session_id, null::text, 'counter'::public.restaurant_experience;
 end;
 $$;
 
@@ -1067,6 +1153,7 @@ declare
 	v_restaurant_id uuid;
 	v_session_id uuid;
 	v_order_id uuid;
+	v_experience public.restaurant_experience;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
 	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
@@ -1084,6 +1171,16 @@ begin
 	-- Close Session (which requires a settled bill and nothing in progress)
 	-- before the table's next QR scan opens a fresh session for more orders
 	-- — this session never reopens for ordering once its bill is settled.
+	--
+	-- Locks the bill row (if one exists yet) before checking its status, so
+	-- a concurrent Mark Bill Settled can't commit between this check and the
+	-- bill upsert below: without the lock, this SELECT could read
+	-- 'requested', the settle could commit, and the upsert further down
+	-- would then see the now-settled row and silently keep it settled --
+	-- attaching this order's items to a bill whose total was frozen before
+	-- they existed, instead of raising here.
+	perform 1 from public.bills where session_id = v_session_id for update;
+
 	if exists (
 		select 1 from public.bills
 		where session_id = v_session_id and status = 'settled'
@@ -1155,6 +1252,40 @@ begin
 	join public.menu_categories mc
 		on mc.restaurant_id = mi.restaurant_id and mc.id = mi.category_id
 	where ci.restaurant_id = v_restaurant_id and ci.session_id = v_session_id;
+
+	-- Counter-experience addition (docs/core-data-model.md § Lifecycle
+	-- invariants): confirming the cart also draws the session's bill token
+	-- immediately, so the guest sees it without a separate Request Bill tap.
+	-- Staff's Mark Bill Settled mutation runs in its own transaction, so a
+	-- settle can commit between the settled-bill check earlier in this
+	-- function and this upsert. The on-conflict branch below must not
+	-- unconditionally reset status/service_charge_rate, or it collides with
+	-- bills_settled_check on an already-settled row (same race request_bill()
+	-- guards against on every poll).
+	select experience into v_experience
+	from public.restaurants
+	where id = v_restaurant_id;
+
+	if v_experience = 'counter' then
+		insert into public.bills (restaurant_id, session_id, status, service_charge_rate)
+		values (
+			v_restaurant_id,
+			v_session_id,
+			'requested',
+			(select service_charge_rate from public.restaurants where id = v_restaurant_id)
+		)
+		on conflict (session_id) do update
+		set
+			status = case
+				when public.bills.status = 'settled' then public.bills.status
+				else 'requested'
+			end,
+			service_charge_rate = case
+				when public.bills.status = 'settled' then public.bills.service_charge_rate
+				when public.bills.service_charge_waived then 0
+				else excluded.service_charge_rate
+			end;
+	end if;
 
 	delete from public.cart_items
 	where restaurant_id = v_restaurant_id and session_id = v_session_id;

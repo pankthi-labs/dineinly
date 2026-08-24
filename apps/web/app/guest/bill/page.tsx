@@ -83,7 +83,8 @@ export default function GuestBillPage() {
 							GSTIN: {data.restaurant.gstNumber}
 						</p>
 						<p className="mt-1 text-caps text-muted">
-							Bill #{data.billNumber} · Table {data.tableLabel}
+							Bill #{data.billNumber}
+							{data.tableLabel ? ` · Table ${data.tableLabel}` : ""}
 							{data.status === "settled" ? " · Settled" : ""}
 						</p>
 					</header>

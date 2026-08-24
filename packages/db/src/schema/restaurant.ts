@@ -25,6 +25,12 @@ export const restaurants = pgTable(
 		// Which Dineinly package this restaurant runs — set at creation, changed
 		// via the same admin edit flow. See restaurantExperience in enums.ts.
 		experience: restaurantExperience("experience").notNull().default("one"),
+		// Counter's universal QR (docs/core-data-model.md § Experience Gating).
+		// Null for every other experience — set only by ensure_counter_qr_token()
+		// the moment a restaurant becomes counter-experience. Unlike
+		// Restaurant Table.qr_token, resolving this token never looks up an
+		// existing session — it always creates one (see resolve_qr_token()).
+		counterQrToken: text("counter_qr_token").unique(),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},

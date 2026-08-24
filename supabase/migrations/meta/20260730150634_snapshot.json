@@ -1226,6 +1226,12 @@
           "notNull": true,
           "default": "'one'"
         },
+        "counter_qr_token": {
+          "name": "counter_qr_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1244,7 +1250,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "restaurants_counter_qr_token_unique": {
+          "name": "restaurants_counter_qr_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "counter_qr_token"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "restaurants_service_charge_rate_check": {

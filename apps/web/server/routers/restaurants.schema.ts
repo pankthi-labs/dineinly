@@ -64,5 +64,14 @@ export const listRestaurantsInput = z.object({
 	search: z.string().trim().max(120).optional(),
 });
 
+export const getCounterQrInput = z.object({
+	restaurantId: z.string().uuid(),
+});
+
+export const downloadCounterQrPdfInput = z.object({
+	restaurantId: z.string().uuid(),
+	origin: z.string().url(),
+});
+
 export type RestaurantFields = z.infer<typeof restaurantFieldsSchema>;
 export type OwnerContact = z.infer<typeof ownerContactSchema>;

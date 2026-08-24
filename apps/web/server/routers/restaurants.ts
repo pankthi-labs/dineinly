@@ -2,9 +2,12 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
 import { isDineinlyAdmin } from "@/lib/auth";
 import { ratePercent } from "@/lib/bill-math";
+import { buildTableQrPdf } from "@/lib/qr-pdf";
 import { adminProcedure, authedProcedure, router } from "../trpc/init";
 import {
 	createRestaurantInput,
+	downloadCounterQrPdfInput,
+	getCounterQrInput,
 	getRestaurantInput,
 	listRestaurantsInput,
 	setRestaurantStatusInput,
@@ -299,4 +302,102 @@ export const restaurantsRouter = router({
 
 			return { id: input.id, status: input.status };
 		}),
+
+	counterQr: router({
+		// Read + regenerate/download reuse the Owner+Admin gate every other
+		// Venue Settings write uses (RLS: staff_select_own_restaurant lets any
+		// staff read; the role check below narrows to Owner, matching
+		// getSettings above) — this is Venue Settings surface, not the
+		// broader authedProcedure reach tables.ts uses.
+		get: authedProcedure
+			.input(getCounterQrInput)
+			.query(async ({ ctx, input }) => {
+				const {
+					data: { user },
+				} = await ctx.auth.auth.getUser();
+
+				if (!isDineinlyAdmin(user)) {
+					const { data: role } = await ctx.auth.rpc(
+						"staff_role_for_restaurant",
+						{
+							p_restaurant_id: input.restaurantId,
+						},
+					);
+					if (role !== "owner") {
+						throw new TRPCError({
+							code: "FORBIDDEN",
+							message: "Only the restaurant owner may view this QR code.",
+						});
+					}
+				}
+
+				const { data, error } = await ctx.auth
+					.from("restaurants")
+					.select("counter_qr_token")
+					.eq("id", input.restaurantId)
+					.maybeSingle();
+
+				if (error) {
+					throw toTRPCError(error, "Unable to load the counter QR code.");
+				}
+
+				return { qrToken: data?.counter_qr_token ?? null };
+			}),
+
+		// Rotates the token in place — same "old printed QR stops working
+		// immediately" behavior as tables.regenerateQr (docs/product.md §
+		// Onboarding & Setup). Delegates to regenerate_counter_qr_token()
+		// (SECURITY DEFINER) rather than a direct table update: restaurants
+		// only grants Owners row-level SELECT via RLS (staff_select_own_
+		// restaurant), not UPDATE — same reasoning as owner_update_restaurant,
+		// see that RPC's comment in the migration.
+		regenerate: authedProcedure
+			.input(getCounterQrInput)
+			.mutation(async ({ ctx, input }) => {
+				const { data, error } = await ctx.auth.rpc(
+					"regenerate_counter_qr_token",
+					{ p_restaurant_id: input.restaurantId },
+				);
+
+				if (error) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: error.message,
+						cause: error,
+					});
+				}
+
+				return { qrToken: data };
+			}),
+
+		downloadPdf: authedProcedure
+			.input(downloadCounterQrPdfInput)
+			.query(async ({ ctx, input }) => {
+				const { data, error } = await ctx.auth
+					.from("restaurants")
+					.select("name, counter_qr_token")
+					.eq("id", input.restaurantId)
+					.maybeSingle();
+
+				if (error) {
+					throw toTRPCError(error, "Unable to load the restaurant.");
+				}
+				if (!data?.counter_qr_token) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "No counter QR code for this restaurant.",
+					});
+				}
+
+				const pdf = await buildTableQrPdf(
+					[{ label: "Counter", qrToken: data.counter_qr_token }],
+					input.origin,
+				);
+
+				return {
+					fileName: `${data.name.replace(/[^a-zA-Z0-9-]+/g, "-")}-counter-qr.pdf`,
+					base64: Buffer.from(pdf).toString("base64"),
+				};
+			}),
+	}),
 });

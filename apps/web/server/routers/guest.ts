@@ -17,9 +17,10 @@ const preferencesInput = z.object({
 // status (nobody in Dineinly ever advances an item's status for Guest, so a
 // status ladder would just hang on "Preparing" forever) and no bill (staff
 // runs billing outside Dineinly). One is the full dine-in experience —
-// ordering, live status, and bill. Counter never reaches this router — it
-// has no Restaurant Table rows, so it can't resolve through the table-QR
-// guest session this router serves.
+// ordering, live status, and bill. Counter also reaches this router (its
+// tableless sessions resolve through the same guest JWT/session shape —
+// see resolve_qr_token()) and gets bill access too, since the bill_number
+// doubles as the guest's counter token (docs/core-data-model.md).
 function requireOrderingEnabled(experience: string): void {
 	if (experience === "menu") {
 		throw new TRPCError({
@@ -30,7 +31,7 @@ function requireOrderingEnabled(experience: string): void {
 }
 
 function requireBillEnabled(experience: string): void {
-	if (experience !== "one") {
+	if (experience !== "one" && experience !== "counter") {
 		throw new TRPCError({
 			code: "FORBIDDEN",
 			message: "Billing isn't available here.",
@@ -282,6 +283,11 @@ export const guestRouter = router({
 						name: item.item_name,
 						quantity: item.quantity - item.cancelled_quantity,
 						served: item.status === "served",
+						// Counter-only distinction (docs/core-data-model.md §
+						// Lifecycle invariants: "Counter shows its own mapping, e.g.
+						// Preparing -> Ready for Pickup") — Full-Service ignores this
+						// and keeps grouping purely on `served`.
+						ready: item.status === "ready",
 					})),
 				};
 			});
