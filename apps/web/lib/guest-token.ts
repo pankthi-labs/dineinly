@@ -32,6 +32,11 @@ const GUEST_TOKEN_ALG = "RS256";
 /** architecture.md: "≥12h, longer for events". Also the max-age of the
  *  cookie the token is set in, so the two expire together. */
 export const GUEST_TOKEN_MIN_TTL_SECONDS = 12 * 60 * 60;
+/** Dineinly Menu (docs/product.md § Dineinly Experiences) has no table to
+ *  seat and no session a staff member ever closes, so its guest token is
+ *  capped well short of full-service's — a guest who's been sitting on a
+ *  stale tab re-scans instead of browsing an unbounded session. */
+export const GUEST_TOKEN_MENU_TTL_SECONDS = 4 * 60 * 60;
 
 export const guestClaimsSchema = z.object({
 	restaurant_id: z.uuid(),
@@ -105,13 +110,18 @@ function publicKey(): Promise<jose.CryptoKey> {
 	return cachedPublicKey;
 }
 
-/** Mints a scoped, signed guest JWT. Caller sets it as an httpOnly cookie. */
-export async function mintGuestToken(claims: GuestClaims): Promise<string> {
+/** Mints a scoped, signed guest JWT. Caller sets it as an httpOnly cookie
+ *  with a matching max-age — `ttlSeconds` defaults to the full-service
+ *  window; pass GUEST_TOKEN_MENU_TTL_SECONDS for a Dineinly Menu scan. */
+export async function mintGuestToken(
+	claims: GuestClaims,
+	ttlSeconds: number = GUEST_TOKEN_MIN_TTL_SECONDS,
+): Promise<string> {
 	const key = await privateKey();
 	return new jose.SignJWT({ ...claims, role: "authenticated" })
 		.setProtectedHeader({ alg: GUEST_TOKEN_ALG, kid: signingJwk.kid })
 		.setIssuedAt()
-		.setExpirationTime(`${GUEST_TOKEN_MIN_TTL_SECONDS}s`)
+		.setExpirationTime(`${ttlSeconds}s`)
 		.sign(key);
 }
 

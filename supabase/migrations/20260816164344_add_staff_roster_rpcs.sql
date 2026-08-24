@@ -75,7 +75,7 @@ begin
 	-- Dineinly Menu has no Waiter or Kitchen roles at all — no PIN stations,
 	-- no floor/kitchen flows to staff (docs/product.md § Dineinly
 	-- Experiences).
-	select experience into v_experience from public.restaurants where id = p_restaurant_id;
+	select experience into v_experience from public.restaurants where restaurants.id = p_restaurant_id;
 	if v_experience = 'menu' and p_role in ('waiter', 'kitchen') then
 		raise exception 'Dineinly Menu has no Waiter or Kitchen roles';
 	end if;
@@ -118,9 +118,9 @@ declare
 	v_target_role public.staff_role;
 	v_caller_role public.staff_role;
 begin
-	select restaurant_id, role into v_restaurant_id, v_target_role
+	select restaurant_id, staff.role into v_restaurant_id, v_target_role
 	from public.staff
-	where id = p_staff_id and status = 'invited';
+	where staff.id = p_staff_id and staff.status = 'invited';
 
 	if v_restaurant_id is null then
 		raise exception 'No pending invite found for that staff member';
@@ -199,7 +199,7 @@ begin
 	end if;
 
 	-- Same Dineinly Menu restriction as invite_staff above.
-	select experience into v_experience from public.restaurants where id = v_target.restaurant_id;
+	select experience into v_experience from public.restaurants where restaurants.id = v_target.restaurant_id;
 	if v_experience = 'menu' and p_role in ('waiter', 'kitchen') then
 		raise exception 'Dineinly Menu has no Waiter or Kitchen roles';
 	end if;
@@ -440,7 +440,7 @@ declare
 begin
 	select * into v_current_owner
 	from public.staff
-	where restaurant_id = p_restaurant_id and is_primary_owner;
+	where restaurant_id = p_restaurant_id and staff.is_primary_owner;
 	if v_current_owner is null then
 		raise exception 'This restaurant has no primary owner to reassign';
 	end if;
@@ -455,7 +455,7 @@ begin
 
 	select * into v_target
 	from public.staff
-	where id = p_new_owner_staff_id and restaurant_id = p_restaurant_id;
+	where staff.id = p_new_owner_staff_id and restaurant_id = p_restaurant_id;
 	if v_target is null then
 		raise exception 'Staff member not found';
 	end if;

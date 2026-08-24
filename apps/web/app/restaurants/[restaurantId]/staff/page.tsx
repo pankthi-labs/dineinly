@@ -364,7 +364,10 @@ export default function StaffRosterPage() {
 					)}
 				</div>
 
-				{viewerIsAdmin || viewerRole === "owner" || viewerRole === "manager" ? (
+				{!isMenuOnly &&
+				(viewerIsAdmin ||
+					viewerRole === "owner" ||
+					viewerRole === "manager") ? (
 					<StationPanel restaurantId={restaurantId} />
 				) : null}
 			</main>

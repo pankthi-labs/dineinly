@@ -100,7 +100,8 @@ export default function GuestMenuPage() {
 		{ "cart_item.change": () => utils.guest.cart.list.invalidate() },
 	);
 	useBroadcastChannel(client, restaurantId ? `menu:${restaurantId}` : null, {
-		"menu_item.availability": () => utils.guest.menu.invalidate(),
+		"menu_item.change": () => utils.guest.menu.invalidate(),
+		"menu_category.change": () => utils.guest.menu.invalidate(),
 	});
 
 	// Card quick-add/stepper writes/edits the *last* cart line for a menu
@@ -171,6 +172,23 @@ export default function GuestMenuPage() {
 			.filter((category) => category.items.length > 0);
 	}, [menu.data, search, activeDiets, expressOnly, sharingOnly]);
 
+	// Each pill's own presence, independent of which filters are currently
+	// active — a filter only earns a pill if it splits the menu; one that's
+	// true (or false) for every item can't distinguish anything.
+	const allItems = useMemo(
+		() => menu.data?.categories.flatMap((category) => category.items) ?? [],
+		[menu.data],
+	);
+	const dietIsMixed =
+		allItems.some((item) => item.diet === "veg") &&
+		allItems.some((item) => item.diet === "non_veg");
+	const hasExpress =
+		allItems.some((item) => item.prep_time === FASTEST_PREP_TIME) &&
+		allItems.some((item) => item.prep_time !== FASTEST_PREP_TIME);
+	const hasSharing =
+		allItems.some((item) => item.serving_size !== "serves 1") &&
+		allItems.some((item) => item.serving_size === "serves 1");
+
 	function toggleDiet(diet: "veg" | "non_veg") {
 		setActiveDiets((current) =>
 			current.includes(diet)
@@ -186,11 +204,17 @@ export default function GuestMenuPage() {
 		setSharingOnly(false);
 	}
 
+	// scrollIntoView's own scroll-margin-top handling is unreliable under a
+	// sticky header on mobile Safari — it can land short of or past the
+	// heading. Computing the target offset directly and scrolling to it is
+	// deterministic across browsers.
 	function jumpToCategory(categoryId: string) {
 		setActiveCategoryId(categoryId);
-		document
-			.getElementById(`category-${categoryId}`)
-			?.scrollIntoView({ behavior: "smooth", block: "start" });
+		const node = document.getElementById(`category-${categoryId}`);
+		if (!node) return;
+		const top =
+			node.getBoundingClientRect().top + window.scrollY - stickyHeight;
+		window.scrollTo({ top, behavior: "smooth" });
 	}
 
 	if (menu.isLoading) return <GuestLoading message="Loading menu…" />;
@@ -261,32 +285,42 @@ export default function GuestMenuPage() {
 					</nav>
 				) : null}
 
-				<div className="no-scrollbar flex flex-nowrap gap-3 overflow-x-auto px-5 pb-4">
-					<FilterPill
-						active={activeDiets.includes("veg")}
-						onClick={() => toggleDiet("veg")}
-					>
-						Veg
-					</FilterPill>
-					<FilterPill
-						active={activeDiets.includes("non_veg")}
-						onClick={() => toggleDiet("non_veg")}
-					>
-						Non-Veg
-					</FilterPill>
-					<FilterPill
-						active={expressOnly}
-						onClick={() => setExpressOnly((value) => !value)}
-					>
-						Quick Serve
-					</FilterPill>
-					<FilterPill
-						active={sharingOnly}
-						onClick={() => setSharingOnly((value) => !value)}
-					>
-						Made to Share
-					</FilterPill>
-				</div>
+				{dietIsMixed || hasExpress || hasSharing ? (
+					<div className="no-scrollbar flex flex-nowrap gap-3 overflow-x-auto px-5 pb-4">
+						{dietIsMixed ? (
+							<FilterPill
+								active={activeDiets.includes("veg")}
+								onClick={() => toggleDiet("veg")}
+							>
+								Veg
+							</FilterPill>
+						) : null}
+						{dietIsMixed ? (
+							<FilterPill
+								active={activeDiets.includes("non_veg")}
+								onClick={() => toggleDiet("non_veg")}
+							>
+								Non-Veg
+							</FilterPill>
+						) : null}
+						{hasExpress ? (
+							<FilterPill
+								active={expressOnly}
+								onClick={() => setExpressOnly((value) => !value)}
+							>
+								Quick Serve
+							</FilterPill>
+						) : null}
+						{hasSharing ? (
+							<FilterPill
+								active={sharingOnly}
+								onClick={() => setSharingOnly((value) => !value)}
+							>
+								Made to Share
+							</FilterPill>
+						) : null}
+					</div>
+				) : null}
 			</div>
 
 			<main
@@ -443,7 +477,12 @@ function MenuItemCard({
 					</h3>
 					<p className="prose text-secondary text-sm">{item.description}</p>
 				</button>
-				<span className="self-start justify-self-end whitespace-nowrap text-lg text-primary">
+				{/* No add control on a view-only menu (Dineinly Menu package) — the
+				price is the row's one point of emphasis, so it takes the gold
+				accent instead of sitting flat like every other price row. */}
+				<span
+					className={`self-start justify-self-end whitespace-nowrap text-lg ${orderingEnabled ? "text-primary" : "text-accent"}`}
+				>
 					{formatPrice(item.price)}
 				</span>
 				{soldOut ? (
@@ -556,9 +595,7 @@ function MenuItemDrawer({
 					<p className="text-center text-caps text-muted">
 						Currently unavailable
 					</p>
-				) : !orderingEnabled ? (
-					<p className="text-center text-caps text-muted">View only</p>
-				) : (
+				) : !orderingEnabled ? undefined : (
 					<div className="flex flex-col gap-3">
 						{error ? (
 							<p className="text-center text-error text-sm">{error}</p>

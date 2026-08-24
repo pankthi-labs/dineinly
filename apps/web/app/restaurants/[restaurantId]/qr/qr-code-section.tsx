@@ -65,25 +65,18 @@ export function QrCodeSection({
 	}
 
 	if (listQuery.isPending) {
-		return (
-			<div className="skeleton mt-8 h-32 max-w-2xl rounded-xl border border-divider" />
-		);
+		return <div className="skeleton h-12 w-64 rounded-md" />;
 	}
 
 	if (!table) return null;
 
 	return (
-		<div className="mt-8 max-w-2xl rounded-xl border border-divider bg-surface p-6">
-			<h2 className="text-lg text-primary">QR Code</h2>
-			<p className="mt-2 text-secondary text-sm">
-				One QR for the whole menu — guests scan it to browse, no table to set
-				up.
-			</p>
-			<div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-caps">
+		<>
+			<div className="flex flex-wrap gap-4">
 				<button
 					type="button"
 					onClick={() => setShowQr(true)}
-					className="text-accent hover:opacity-80"
+					className="rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover"
 				>
 					Show QR
 				</button>
@@ -92,9 +85,9 @@ export function QrCodeSection({
 					onClick={() =>
 						setRegenerateTarget({ id: table.id, label: table.label })
 					}
-					className="text-secondary hover:text-primary"
+					className="rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface hover:text-primary"
 				>
-					Regenerate
+					Regenerate QR
 				</button>
 			</div>
 
@@ -116,8 +109,9 @@ export function QrCodeSection({
 						regenerateMutation.mutate({ id: regenerateTarget.id })
 					}
 					isPending={regenerateMutation.isPending}
+					body="The old printed QR code stops working immediately — anywhere it's posted will need the new one."
 				/>
 			) : null}
-		</div>
+		</>
 	);
 }

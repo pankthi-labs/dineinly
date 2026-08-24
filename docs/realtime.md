@@ -16,7 +16,7 @@ Rejected: **Postgres Changes** (simplest, but the RLS-per-row cost and raw-colum
 |---|---|---|---|
 | `session:{id}` | Guests + staff on that session | Cart items, order-item status, bill status | JWT `table_session_id` matches topic id AND session `status = active` AND tenant match |
 | `restaurant:{id}` | Staff only | Kitchen queue (new orders), floor / table-session state | Staff JWT with matching `restaurant_id`; guest JWTs lack the staff claim and cannot join |
-| `menu:{restaurant_id}` | Guests + staff | Availability (86'd) changes only | Any valid token scoped to that `restaurant_id` — menu is already public to guests, nothing sensitive |
+| `menu:{restaurant_id}` | Guests + staff | Item availability (86'd)/hide changes, category reorder/hide changes | Any valid token scoped to that `restaurant_id` — menu is already public to guests, nothing sensitive |
 
 Guest-facing order status (`Preparing` → `Partially Served` → `Served`, per `core-data-model.md`) is **derived client-side** from Order Item status — not broadcast separately.
 
@@ -33,7 +33,8 @@ Revocation is live-state, not expiry-based, consistent with Guest Sessions: clos
 | Order Item | UPDATE of `status` | `session:{session_id}` + `restaurant:{restaurant_id}` | Guest topic: item name/status only. Staff topic: full row |
 | Bill | INSERT / UPDATE of `status` | `session:{session_id}` + `restaurant:{restaurant_id}` | Both topics fire on insert and on a status-changing update (the update trigger's `WHEN old.status IS DISTINCT FROM new.status` guards only against no-op re-fires, not against insert). Guest/session topic: `requested` / `settled`. Staff topic: full row — the Bills tab watches every session in the restaurant at once, not just one, so it subscribes here rather than to a `session:{id}` per visible row |
 | Table Session | INSERT / UPDATE of `status` | `restaurant:{restaurant_id}` | Floor view: session open/close, table free/busy |
-| Menu Item | UPDATE of `availability` | `menu:{restaurant_id}` | Item id + new availability only |
+| Menu Item | UPDATE of `availability`, `status` | `menu:{restaurant_id}` | Item id + new availability + new status |
+| Menu Category | UPDATE of `sort`, `status` | `menu:{restaurant_id}` | Category id only — client invalidates and refetches |
 
 Guest-facing topics (`session:{id}`, `menu:{restaurant_id}`) use explicit `realtime.broadcast()` with a hand-picked column set — never the raw row. Staff-only topic (`restaurant:{id}`) may use `realtime.broadcast_changes()` with the default record payload since no guest ever sees it.
 

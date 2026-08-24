@@ -961,6 +961,13 @@ grant execute on function public.set_menu_item_availability(uuid, uuid, public.a
 -- over from a closed session is treated the same as no session at all and
 -- is replaced here, on next scan, rather than being cleared eagerly at close.
 --
+-- `experience` rides along so the route can pick the guest JWT's TTL
+-- (lib/guest-token.ts) — Dineinly Menu has no table to seat and no session a
+-- staff member ever closes, so its guest token is capped shorter than
+-- full-service's, and re-scanning is how a guest picks back up. `anon` has
+-- no select grant on restaurants (§ 2), so this is the only way the
+-- pre-token route can read it.
+--
 -- Same hardening as every other function in this file: `set search_path =
 -- ''` with fully schema-qualified references, `execute` revoked from
 -- `public`.
@@ -969,7 +976,8 @@ create or replace function public.resolve_qr_token(p_qr_token text)
 returns table (
 	restaurant_id uuid,
 	table_session_id uuid,
-	table_label text
+	table_label text,
+	experience public.restaurant_experience
 )
 language plpgsql
 security definer
@@ -981,6 +989,7 @@ declare
 	v_label text;
 	v_session_id uuid;
 	v_session_status public.session_status;
+	v_experience public.restaurant_experience;
 begin
 	select rt.id, rt.restaurant_id, rt.label, rt.session_id
 	into v_table_id, v_restaurant_id, v_label, v_session_id
@@ -1009,7 +1018,11 @@ begin
 		where id = v_table_id;
 	end if;
 
-	return query select v_restaurant_id, v_session_id, v_label;
+	select r.experience into v_experience
+	from public.restaurants r
+	where r.id = v_restaurant_id;
+
+	return query select v_restaurant_id, v_session_id, v_label, v_experience;
 end;
 $$;
 
@@ -1687,9 +1700,11 @@ create trigger broadcast_table_session_change
 after insert or update of status on public.table_sessions
 for each row execute function public.broadcast_table_session_change();
 
--- menu_items: availability (86'd) change -> menu:{restaurant_id} (guests +
--- staff both read this topic).
-create or replace function public.broadcast_menu_item_availability()
+-- menu_items: availability (86'd) or status (hide/show) change ->
+-- menu:{restaurant_id} (guests + staff both read this topic). Both columns
+-- share one trigger/event since either one changes what a guest sees on the
+-- menu, and the client side just invalidates and refetches either way.
+create or replace function public.broadcast_menu_item_change()
 returns trigger
 language plpgsql
 security definer
@@ -1698,16 +1713,43 @@ as $$
 begin
 	perform public.broadcast_event(
 		'menu:' || new.restaurant_id,
-		'menu_item.availability',
-		jsonb_build_object('itemId', new.id, 'availability', new.availability)
+		'menu_item.change',
+		jsonb_build_object(
+			'itemId', new.id,
+			'availability', new.availability,
+			'status', new.status
+		)
 	);
 	return new;
 end;
 $$;
 
-create trigger broadcast_menu_item_availability
-after update of availability on public.menu_items
-for each row execute function public.broadcast_menu_item_availability();
+create trigger broadcast_menu_item_change
+after update of availability, status on public.menu_items
+for each row execute function public.broadcast_menu_item_change();
+
+-- menu_categories: sort (Menu Desk reorder) or status change ->
+-- menu:{restaurant_id}, same topic and reasoning as menu_items above — a
+-- guest's category order/visibility is live too, not just item state.
+create or replace function public.broadcast_menu_category_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	perform public.broadcast_event(
+		'menu:' || new.restaurant_id,
+		'menu_category.change',
+		jsonb_build_object('categoryId', new.id)
+	);
+	return new;
+end;
+$$;
+
+create trigger broadcast_menu_category_change
+after update of sort, status on public.menu_categories
+for each row execute function public.broadcast_menu_category_change();
 
 -- ============================================================================
 -- 13. Realtime broadcast: subscribe side — realtime.messages RLS

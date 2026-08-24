@@ -182,3 +182,19 @@ export async function requireFullServiceExperience(
 		redirect(`/restaurants/${restaurantId}`);
 	}
 }
+
+/**
+ * Redirects to the restaurant home page unless the restaurant's package is
+ * Dineinly Menu — the inverse of requireFullServiceExperience above, for the
+ * one route (`qr/layout.tsx`) that's Menu-only rather than Menu-excluded:
+ * full-service restaurants already have per-table QR via Table Matrix.
+ */
+export async function requireMenuExperience(
+	restaurantId: string,
+): Promise<void> {
+	const experience = await getRestaurantExperience(restaurantId);
+
+	if (experience !== "menu") {
+		redirect(`/restaurants/${restaurantId}`);
+	}
+}

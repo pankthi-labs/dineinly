@@ -24,17 +24,30 @@ function listError(error: PostgrestError): TRPCError {
 
 // invite_staff/update_staff/remove_staff raise their own clean, user-facing
 // text for every business-rule rejection (e.g. "Managers may not invite
-// Owners") — same pattern as bills.ts's close_session — so error.message is
-// passed straight through as BAD_REQUEST rather than collapsed to a generic
-// fallback. The one exception is a duplicate-email unique violation (23505),
-// which surfaces the underlying index name if shown raw.
+// Owners") via plpgsql `raise exception`, which always carries SQLSTATE
+// P0001 — same pattern as bills.ts's close_session — so that message is
+// passed straight through as BAD_REQUEST. Any other code is a raw Postgres
+// error (constraint violation, ambiguous reference, etc.), never meant for
+// a user to read, and collapses to a generic fallback — 23505 gets its own
+// specific text since duplicate email is the one raw case worth naming.
 function rpcError(error: PostgrestError): TRPCError {
+	if (error.code === "23505") {
+		return new TRPCError({
+			code: "BAD_REQUEST",
+			message: "That email is already on the roster.",
+			cause: error,
+		});
+	}
+	if (error.code === "P0001") {
+		return new TRPCError({
+			code: "BAD_REQUEST",
+			message: error.message,
+			cause: error,
+		});
+	}
 	return new TRPCError({
-		code: "BAD_REQUEST",
-		message:
-			error.code === "23505"
-				? "That email is already on the roster."
-				: error.message,
+		code: "INTERNAL_SERVER_ERROR",
+		message: "Something went wrong. Please try again.",
 		cause: error,
 	});
 }

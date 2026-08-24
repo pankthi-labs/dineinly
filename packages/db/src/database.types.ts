@@ -951,6 +951,7 @@ export type Database = {
 			resolve_qr_token: {
 				Args: { p_qr_token: string };
 				Returns: {
+					experience: Database["public"]["Enums"]["restaurant_experience"];
 					restaurant_id: string;
 					table_label: string;
 					table_session_id: string;

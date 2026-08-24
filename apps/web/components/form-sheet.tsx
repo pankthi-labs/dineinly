@@ -38,7 +38,9 @@ export function FormSheet({
 	title: string;
 	onClose: () => void;
 	children: ReactNode;
-	footer: ReactNode;
+	/** Omit for content with nothing actionable to submit — the footer bar
+	 * (and its top border) is skipped entirely rather than shown empty. */
+	footer?: ReactNode;
 	/** Blocks Escape/backdrop/× dismissal while a mutation is in flight, so a
 	 * stray tap can't unmount the panel mid-submit and swallow the result. */
 	isSubmitting?: boolean;
@@ -114,7 +116,9 @@ export function FormSheet({
 
 				<div className="flex-1 overflow-y-auto px-6 py-8">{children}</div>
 
-				<div className="border-divider border-t px-6 py-5">{footer}</div>
+				{footer ? (
+					<div className="border-divider border-t px-6 py-5">{footer}</div>
+				) : null}
 			</div>
 		</div>
 	);

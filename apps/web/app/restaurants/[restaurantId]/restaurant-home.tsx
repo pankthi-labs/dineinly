@@ -5,6 +5,7 @@ import {
 	BookOpen,
 	ChefHat,
 	LayoutGrid,
+	QrCode,
 	Receipt,
 	Store,
 	Users,
@@ -16,6 +17,7 @@ import { getGreeting } from "@/lib/greeting";
 import { trpc } from "@/lib/trpc-client";
 import {
 	useCanAccessBills,
+	useCanAccessSettings,
 	useCanManageStaff,
 	useIsAdmin,
 	useIsMenuOnly,
@@ -25,6 +27,7 @@ const CARD_TITLES = [
 	"Menu Desk",
 	"Kitchen",
 	"Table Matrix",
+	"QR Menu",
 	"Staff Roster",
 	"Venue Settings",
 	"Bills",
@@ -37,10 +40,10 @@ const navCards: Array<{
 	icon: LucideIcon;
 	// Cards without an href aren't built yet — rendered inert rather than
 	// linking nowhere (no permission question, the page doesn't exist for
-	// anyone). Staff Roster, Menu Desk, Table Matrix, and Bills are role-
-	// gated instead (docs/product.md § RBAC) — visibleCards below drops the
-	// card entirely for a viewer without reach, same pattern as
-	// restaurant-nav-header.tsx.
+	// anyone). Staff Roster, Menu Desk, Table Matrix, Venue Settings, and
+	// Bills are role-gated instead (docs/product.md § RBAC) — visibleCards
+	// below drops the card entirely for a viewer without reach, same pattern
+	// as restaurant-nav-header.tsx.
 	href?: string;
 }> = [
 	{
@@ -58,6 +61,11 @@ const navCards: Array<{
 		title: "Table Matrix",
 		description: "Live seating status",
 		icon: LayoutGrid,
+	},
+	{
+		title: "QR Menu",
+		description: "Your guest-facing QR",
+		icon: QrCode,
 	},
 	{
 		title: "Staff Roster",
@@ -82,7 +90,9 @@ const navCards: Array<{
 const GATED_CARD_ROUTES: Partial<Record<CardTitle, string>> = {
 	"Menu Desk": "menu",
 	"Table Matrix": "tables",
+	"QR Menu": "qr",
 	"Staff Roster": "staff",
+	"Venue Settings": "settings",
 	Bills: "bills",
 };
 
@@ -98,6 +108,7 @@ export function RestaurantHome({
 	const canManageStaff = useCanManageStaff();
 	const canManageMenuAndTables = canManageStaff;
 	const canAccessBills = useCanAccessBills();
+	const canAccessSettings = useCanAccessSettings();
 	const isMenuOnly = useIsMenuOnly();
 	const cardAccess: Partial<Record<CardTitle, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
@@ -105,7 +116,11 @@ export function RestaurantHome({
 		// — no tables, kitchen, or bills, for any role.
 		Kitchen: !isMenuOnly,
 		"Table Matrix": canManageMenuAndTables && !isMenuOnly,
+		// The Menu package's one universal QR (docs/product.md § Dineinly
+		// Experiences) — Table Matrix's full-service counterpart.
+		"QR Menu": canManageMenuAndTables && isMenuOnly,
 		"Staff Roster": canManageStaff,
+		"Venue Settings": canAccessSettings,
 		Bills: canAccessBills && !isMenuOnly,
 	};
 	const visibleCards = navCards.filter(

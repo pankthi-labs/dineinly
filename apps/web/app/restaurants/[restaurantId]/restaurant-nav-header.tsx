@@ -16,6 +16,7 @@ const NAV_ITEMS = [
 	"Menu Desk",
 	"Kitchen",
 	"Table Matrix",
+	"QR Menu",
 	"Floor",
 	"Staff Roster",
 	"Venue Settings",
@@ -23,16 +24,17 @@ const NAV_ITEMS = [
 ] as const;
 type NavItem = (typeof NAV_ITEMS)[number];
 
-// Staff Roster, Menu Desk, Table Matrix, Bills, and Venue Settings are all
-// role-gated (docs/product.md § RBAC) — a viewer without reach doesn't get a
-// route their own page layout would just redirect away from, so
-// RestaurantNavHeader below omits the item from the nav entirely rather than
-// rendering it disabled.
+// Staff Roster, Menu Desk, Table Matrix, QR Menu, Bills, and Venue Settings
+// are all role-gated (docs/product.md § RBAC) — a viewer without reach
+// doesn't get a route their own page layout would just redirect away from,
+// so RestaurantNavHeader below omits the item from the nav entirely rather
+// than rendering it disabled.
 const NAV_ROUTES: Partial<Record<NavItem, (restaurantId: string) => string>> = {
 	Home: (restaurantId) => `/restaurants/${restaurantId}`,
 	Kitchen: (restaurantId) => `/restaurants/${restaurantId}/kitchen`,
 	"Menu Desk": (restaurantId) => `/restaurants/${restaurantId}/menu`,
 	"Table Matrix": (restaurantId) => `/restaurants/${restaurantId}/tables`,
+	"QR Menu": (restaurantId) => `/restaurants/${restaurantId}/qr`,
 	Floor: (restaurantId) => `/restaurants/${restaurantId}/floor`,
 	"Staff Roster": (restaurantId) => `/restaurants/${restaurantId}/staff`,
 	"Venue Settings": (restaurantId) => `/restaurants/${restaurantId}/settings`,
@@ -60,6 +62,9 @@ export function RestaurantNavHeader({
 		// — no tables, kitchen, floor, or bills, for any role.
 		Kitchen: !isMenuOnly,
 		"Table Matrix": canManageMenuAndTables && !isMenuOnly,
+		// The Menu package's one universal QR (docs/product.md § Dineinly
+		// Experiences) — Table Matrix's full-service counterpart.
+		"QR Menu": canManageMenuAndTables && isMenuOnly,
 		// Floor (Order on behalf of guest, Merge Tables — docs/product.md §
 		// RBAC) is Waiter/Manager/Owner, same reach as Bills.
 		Floor: canAccessBills && !isMenuOnly,

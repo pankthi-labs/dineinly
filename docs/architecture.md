@@ -68,7 +68,7 @@ Built for the `waiter` station type: pairing-code issuance/redemption, per-devic
 Rules:
 - Guests never get service-role credentials and never bypass RLS. Token scope is exactly one active table session.
 - Guest tokens are **server-minted asymmetric-signed JWTs** (Supabase-trusted signing key, RS256, `jose`) carrying only the session claims — no per-guest anonymous auth user is created. Supabase validates the signature; RLS + Realtime authorize from the claims. Never hand-roll or symmetric-sign tokens. See `apps/web/lib/guest-token.ts`.
-- Tokens are long-lived (≥12h, longer for events) so a meal never expires; silent refresh gated on the session being active.
+- Tokens are long-lived (≥12h, longer for events) so a meal never expires; silent refresh gated on the session being active. Exception: Dineinly Menu (`docs/product.md` § Dineinly Experiences) has no table to seat and no session staff ever closes, so its token is capped at 4h (`GUEST_TOKEN_MENU_TTL_SECONDS`, `apps/web/lib/guest-token.ts`) — a guest on a stale tab re-scans instead of browsing an unbounded session.
 - Revocation is not via expiry: RLS policies check live session state (`status = active`), so closing a session denies access immediately.
 - Abuse control: staff can see/remove participants; token issuance is rate-limited per QR.
 

@@ -7,7 +7,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, publicProcedure, router } from "../trpc/init";
-import { requireStaffRole } from "../trpc/rbac";
+import { requireFullServiceRole } from "../trpc/rbac";
 import {
 	generatePairingCodeInput,
 	listDevicesInput,
@@ -29,7 +29,10 @@ export const stationRouter = router({
 	generatePairingCode: authedProcedure
 		.input(generatePairingCodeInput)
 		.mutation(async ({ ctx, input }) => {
-			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+			await requireFullServiceRole(ctx, input.restaurantId, [
+				"owner",
+				"manager",
+			]);
 
 			const { data, error } = await ctx.auth.rpc("generate_pairing_code", {
 				p_restaurant_id: input.restaurantId,
@@ -156,7 +159,10 @@ export const stationRouter = router({
 	listDevices: authedProcedure
 		.input(listDevicesInput)
 		.query(async ({ ctx, input }) => {
-			await requireStaffRole(ctx, input.restaurantId, ["owner", "manager"]);
+			await requireFullServiceRole(ctx, input.restaurantId, [
+				"owner",
+				"manager",
+			]);
 
 			const { data, error } = await ctx.auth.rpc("list_station_devices", {
 				p_restaurant_id: input.restaurantId,

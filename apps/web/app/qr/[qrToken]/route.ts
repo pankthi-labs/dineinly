@@ -2,7 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@workspace/db";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { GUEST_TOKEN_MIN_TTL_SECONDS, mintGuestToken } from "@/lib/guest-token";
+import {
+	GUEST_TOKEN_MENU_TTL_SECONDS,
+	GUEST_TOKEN_MIN_TTL_SECONDS,
+	mintGuestToken,
+} from "@/lib/guest-token";
 
 // Resolve-only route (docs/architecture.md § Route Structure) — not a page
 // tree. Validates qr_token, mints the guest JWT, sets the cookie, redirects
@@ -43,19 +47,27 @@ export async function GET(
 		return NextResponse.redirect(new URL("/guest/menu", origin));
 	}
 
-	const token = await mintGuestToken({
-		restaurant_id: data.restaurant_id,
-		table_session_id: data.table_session_id,
-		table_label: data.table_label,
-		app_role: "guest",
-	});
+	const ttlSeconds =
+		data.experience === "menu"
+			? GUEST_TOKEN_MENU_TTL_SECONDS
+			: GUEST_TOKEN_MIN_TTL_SECONDS;
+
+	const token = await mintGuestToken(
+		{
+			restaurant_id: data.restaurant_id,
+			table_session_id: data.table_session_id,
+			table_label: data.table_label,
+			app_role: "guest",
+		},
+		ttlSeconds,
+	);
 
 	const response = NextResponse.redirect(new URL("/guest/menu", origin));
 	response.cookies.set(GUEST_TOKEN_COOKIE, token, {
 		httpOnly: true,
 		secure: origin.startsWith("https:"),
 		sameSite: "lax",
-		maxAge: GUEST_TOKEN_MIN_TTL_SECONDS,
+		maxAge: ttlSeconds,
 		path: "/",
 	});
 	return response;
