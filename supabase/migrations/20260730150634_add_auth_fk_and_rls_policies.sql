@@ -133,7 +133,12 @@ grant select on public.restaurants to authenticated;
 create policy "guest_select_own_restaurant" on public.restaurants
 	for select
 	to authenticated
-	using (public.jwt_is_guest_for_restaurant(id));
+	using (
+		public.jwt_is_guest_for_restaurant(id)
+		and public.is_active_guest_session(
+			(auth.jwt() ->> 'table_session_id')::uuid, id
+		)
+	);
 
 -- menu_categories / menu_items: View Menu. Filtered on `status = active`
 -- (soft-delete), never on `availability` — sold-out items must still show,
@@ -146,6 +151,9 @@ create policy "guest_select_active_menu_categories" on public.menu_categories
 	using (
 		public.jwt_is_guest_for_restaurant(restaurant_id)
 		and status = 'active'
+		and public.is_active_guest_session(
+			(auth.jwt() ->> 'table_session_id')::uuid, restaurant_id
+		)
 	);
 
 grant select on public.menu_items to authenticated;
@@ -156,6 +164,9 @@ create policy "guest_select_active_menu_items" on public.menu_items
 	using (
 		public.jwt_is_guest_for_restaurant(restaurant_id)
 		and status = 'active'
+		and public.is_active_guest_session(
+			(auth.jwt() ->> 'table_session_id')::uuid, restaurant_id
+		)
 	);
 
 -- table_sessions: the guest's own session only, while active.
@@ -775,10 +786,14 @@ grant execute on function public.regenerate_counter_qr_token(uuid) to authentica
 -- reasoning and Owner/Admin-only gate as regenerate_counter_qr_token above.
 -- Unlike a Table Matrix table's regenerateQr (tables.ts), there is no
 -- occupied-row guard: Menu has no table and no session to protect, so a new
--- token is always minted on request. Any guest still on the old QR keeps
--- their already-issued session until it expires — Menu's guest token TTL is
--- intentionally short (resolve_qr_token's menu branch below), so a rescan
--- against the new token is how they pick back up.
+-- token is always minted on request. Also closes every active table_session
+-- on this restaurant — every guest_select_own_restaurant/menu_categories/
+-- menu_items policy re-checks table_sessions.status = 'active' on each
+-- query (this file's § 2 "Revocation is live-state, not expiry"), so this is
+-- what makes a guest already on the old QR lose access immediately rather
+-- than riding out their token's TTL. Safe to close in bulk: Menu has no
+-- ordering (no cart/orders/bills), so every active session on a
+-- menu-experience restaurant is a QR-menu viewer, never mid-order.
 create or replace function public.regenerate_menu_qr_token(p_restaurant_id uuid)
 returns text
 language plpgsql
@@ -803,6 +818,10 @@ begin
 	if v_token is null then
 		raise exception 'Restaurant not found';
 	end if;
+
+	update public.table_sessions
+	set status = 'closed', closed_at = now()
+	where restaurant_id = p_restaurant_id and status = 'active';
 
 	return v_token;
 end;
@@ -1944,6 +1963,35 @@ $$;
 create trigger broadcast_menu_category_change
 after insert or update of sort, status on public.menu_categories
 for each row execute function public.broadcast_menu_category_change();
+
+-- restaurants.menu_qr_token: QR "Regenerate" -> menu:{id}. An already-open
+-- guest tab on the old QR is still subscribed to this topic even after
+-- regenerate_menu_qr_token closes its session — can_access_menu_topic below
+-- only checks restaurant_id, never session liveness — so this is what signs
+-- it off immediately (client invalidates guest.menu, which then reads null
+-- under the now-revoked session and shows "please rescan") instead of it
+-- sitting on a stale menu until the guest happens to reload.
+create or replace function public.broadcast_menu_qr_regenerated()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	perform public.broadcast_event(
+		'menu:' || new.id,
+		'qr.regenerated',
+		jsonb_build_object('restaurantId', new.id)
+	);
+	return new;
+end;
+$$;
+
+create trigger broadcast_menu_qr_regenerated
+after update of menu_qr_token on public.restaurants
+for each row
+when (old.menu_qr_token is distinct from new.menu_qr_token)
+execute function public.broadcast_menu_qr_regenerated();
 
 -- ============================================================================
 -- 13. Realtime broadcast: subscribe side — realtime.messages RLS

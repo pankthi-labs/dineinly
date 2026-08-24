@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useId } from "react";
 import { EXPERIENCE_LABELS } from "@/components/restaurant-fields-fieldset";
 import type { AppRouter } from "@/server/routers/_app";
+import { needsBillingDetails } from "@/server/routers/restaurants.schema";
 
 type RestaurantListItem =
 	inferRouterOutputs<AppRouter>["restaurants"]["list"]["items"][number];
@@ -80,14 +81,16 @@ export function RestaurantRow({
 						{restaurant.pincode ? (
 							<Detail label="Pincode" value={restaurant.pincode} />
 						) : null}
-						<Detail
-							label="Service Charge"
-							value={
-								restaurant.serviceChargePercent === null
-									? "None"
-									: `${restaurant.serviceChargePercent}%`
-							}
-						/>
+						{needsBillingDetails(restaurant.experience) ? (
+							<Detail
+								label="Service Charge"
+								value={
+									restaurant.serviceChargePercent === null
+										? "None"
+										: `${restaurant.serviceChargePercent}%`
+								}
+							/>
+						) : null}
 						<Detail
 							label="Owner Name"
 							value={restaurant.owner?.name ?? "Not assigned"}

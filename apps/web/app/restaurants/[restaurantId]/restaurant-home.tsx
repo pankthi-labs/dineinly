@@ -48,7 +48,7 @@ const navCards: Array<{
 }> = [
 	{
 		title: "Menu Desk",
-		description: "Updates & specials",
+		description: "Dishes, prices & availability",
 		icon: BookOpen,
 	},
 	{
@@ -64,12 +64,12 @@ const navCards: Array<{
 	},
 	{
 		title: "QR Menu",
-		description: "Your guest-facing QR",
+		description: "Your menu's QR code",
 		icon: QrCode,
 	},
 	{
 		title: "Staff Roster",
-		description: "Manage shifts & access",
+		description: "Invite staff & manage roles",
 		icon: Users,
 	},
 	{

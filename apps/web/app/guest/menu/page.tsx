@@ -102,6 +102,14 @@ export default function GuestMenuPage() {
 	useBroadcastChannel(client, restaurantId ? `menu:${restaurantId}` : null, {
 		"menu_item.change": () => utils.guest.menu.invalidate(),
 		"menu_category.change": () => utils.guest.menu.invalidate(),
+		// Owner regenerated the QR (supabase/migrations/..._policies.sql's
+		// regenerate_menu_qr_token already closed this tab's session) — still
+		// subscribed to this topic since can_access_menu_topic only checks
+		// restaurant_id, not session liveness, so this fires even on an
+		// already-revoked session. Re-fetching now reads null under RLS and
+		// falls into RestaurantUnavailable below, instead of sitting on a
+		// stale menu until the guest happens to reload.
+		"qr.regenerated": () => utils.guest.menu.invalidate(),
 	});
 
 	// Card quick-add/stepper writes/edits the *last* cart line for a menu
@@ -777,10 +785,8 @@ function RestaurantUnavailable() {
 	return (
 		<main className="flex min-h-dvh items-center justify-center bg-background px-5 text-center text-primary">
 			<div>
-				<p className="text-caps text-muted">Menu unavailable</p>
-				<h1 className="mt-3 text-2xl">
-					This restaurant's menu isn't available right now.
-				</h1>
+				<p className="text-caps text-muted">Session ended</p>
+				<h1 className="mt-3 text-2xl">Scan the QR code again to continue.</h1>
 			</div>
 		</main>
 	);

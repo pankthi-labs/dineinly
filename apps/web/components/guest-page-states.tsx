@@ -8,14 +8,16 @@ export function GuestLoading({ message }: { message: string }) {
 	);
 }
 
+// Renders before any guest session exists — the restaurant's experience
+// (table-based, tableless, or Menu's view-only QR) isn't known yet, so this
+// copy stays experience-neutral. Never say "table": Dineinly Menu and
+// Dineinly Counter guests have none.
 export function NoGuestSession() {
 	return (
 		<main className="flex min-h-dvh items-center justify-center bg-background px-5 text-center text-primary">
 			<div>
-				<p className="text-caps text-muted">No table selected</p>
-				<h1 className="mt-3 text-2xl">
-					Scan your table's QR code to view the menu.
-				</h1>
+				<p className="text-caps text-muted">No session found</p>
+				<h1 className="mt-3 text-2xl">Scan the QR code to continue.</h1>
 			</div>
 		</main>
 	);
