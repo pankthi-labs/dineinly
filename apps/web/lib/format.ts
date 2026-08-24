@@ -1,7 +1,16 @@
+import type { StaffRole } from "@/lib/auth";
+
 /** Display-only normalization — storage keeps whatever the user typed. */
 export function titleCase(value: string): string {
 	return value.toLowerCase().replace(/(^|\s)\S/g, (char) => char.toUpperCase());
 }
+
+export const ROLE_LABEL: Record<StaffRole, string> = {
+	waiter: "Waiter",
+	kitchen: "Kitchen Staff",
+	manager: "Manager",
+	owner: "Owner",
+};
 
 export function formatPrice(price: number): string {
 	return new Intl.NumberFormat("en-IN", {

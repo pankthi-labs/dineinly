@@ -946,6 +946,7 @@ export type Database = {
 				Returns: {
 					id: string;
 					name: string;
+					role: Database["public"]["Enums"]["staff_role"];
 				}[];
 			};
 			resolve_qr_token: {

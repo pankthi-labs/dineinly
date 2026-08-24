@@ -1,7 +1,7 @@
 "use client";
 
 import type { inferRouterOutputs } from "@trpc/server";
-import type { StaffRole } from "@/lib/auth";
+import { ROLE_LABEL } from "@/lib/format";
 import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import type { AppRouter } from "@/server/routers/_app";
 
@@ -23,13 +23,6 @@ const STATUS_COLOR: Record<StaffListItem["status"], string> = {
 };
 
 const INVITE_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-export const ROLE_LABEL: Record<StaffRole, string> = {
-	waiter: "Waiter",
-	kitchen: "Kitchen Staff",
-	manager: "Manager",
-	owner: "Owner",
-};
 
 export function StaffRow({
 	staff,

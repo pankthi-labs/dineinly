@@ -4,8 +4,8 @@ import { type FormEvent, useState } from "react";
 import type { z } from "zod";
 import { Field, FieldGroup, FormSheet } from "@/components/form-sheet";
 import type { StaffRole } from "@/lib/auth";
+import { ROLE_LABEL } from "@/lib/format";
 import { staffFieldsSchema } from "@/server/routers/staff.schema";
-import { ROLE_LABEL } from "./staff-row";
 
 export type StaffFormValues = z.infer<typeof staffFieldsSchema>;
 

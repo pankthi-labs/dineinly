@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import type { StaffRole } from "@/lib/auth";
+import { ROLE_LABEL } from "@/lib/format";
 import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import { trpc } from "@/lib/trpc-client";
 import type { AppRouter } from "@/server/routers/_app";
@@ -26,7 +27,7 @@ import type { ResetPinTarget } from "./reset-pin-sheet";
 import { ResetPinSheet } from "./reset-pin-sheet";
 import type { EditTarget, StaffFormValues } from "./staff-form-sheet";
 import { StaffFormSheet } from "./staff-form-sheet";
-import { ROLE_LABEL, StaffRow } from "./staff-row";
+import { StaffRow } from "./staff-row";
 import { StationPanel } from "./station-panel";
 
 type StaffListItem = inferRouterOutputs<AppRouter>["staff"]["list"][number];
