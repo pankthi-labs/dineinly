@@ -444,7 +444,7 @@
           "name": "tax_rate",
           "type": "numeric(5, 4)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -1178,31 +1178,31 @@
           "name": "address",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "city": {
           "name": "city",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "gst_number": {
           "name": "gst_number",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "state": {
           "name": "state",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "pincode": {
           "name": "pincode",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "service_charge_rate": {
           "name": "service_charge_rate",

@@ -5,6 +5,7 @@ import { Receipt } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { visibleFilters } from "@/lib/filter-pills";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
@@ -60,6 +61,10 @@ export default function BillsPage() {
 		requested: bills.filter((b) => b.status === "requested").length,
 		settled: bills.filter((b) => b.status === "settled").length,
 	};
+	const statusesPresent = (
+		["open", "requested", "settled"] as StatusFilter[]
+	).filter((status) => filterCounts[status] > 0);
+	const visibleStatusFilters = visibleFilters(STATUS_FILTERS, statusesPresent);
 	const normalizedSearch = search.trim().toLowerCase();
 	const visibleBills = bills
 		.filter((b) => statusFilter === "all" || b.status === statusFilter)
@@ -109,23 +114,21 @@ export default function BillsPage() {
 						aria-label="Filter by exact date"
 						className="rounded-sm border border-divider bg-surface px-3 py-2 text-primary text-sm"
 					/>
-					{bills.length === 0
-						? null
-						: STATUS_FILTERS.map((filter) => (
-								<button
-									key={filter.value}
-									type="button"
-									onClick={() => setStatusFilter(filter.value)}
-									aria-pressed={statusFilter === filter.value}
-									className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
-										statusFilter === filter.value
-											? "border-accent text-primary"
-											: "border-divider text-secondary hover:text-primary"
-									}`}
-								>
-									{filter.label} ({filterCounts[filter.value]})
-								</button>
-							))}
+					{visibleStatusFilters.map((filter) => (
+						<button
+							key={filter.value}
+							type="button"
+							onClick={() => setStatusFilter(filter.value)}
+							aria-pressed={statusFilter === filter.value}
+							className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
+								statusFilter === filter.value
+									? "border-accent text-primary"
+									: "border-divider text-secondary hover:text-primary"
+							}`}
+						>
+							{filter.label} ({filterCounts[filter.value]})
+						</button>
+					))}
 				</div>
 
 				<div className="mt-8 flex flex-col gap-3">

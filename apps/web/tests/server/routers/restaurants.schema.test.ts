@@ -73,6 +73,37 @@ describe("restaurantFieldsSchema", () => {
 			}).success,
 		).toBe(false);
 	});
+
+	it("rejects a blank address/GST/pincode on a bill-generating experience", () => {
+		expect(
+			restaurantFieldsSchema.safeParse({
+				...validRestaurant,
+				experience: "counter",
+				address: "",
+				city: "",
+				gstNumber: "",
+				state: "",
+				pincode: "",
+			}).success,
+		).toBe(false);
+	});
+
+	it("accepts a blank address/GST/pincode on Menu and Guest, which never generate a bill", () => {
+		for (const experience of ["menu", "guest"]) {
+			expect(
+				restaurantFieldsSchema.safeParse({
+					...validRestaurant,
+					experience,
+					address: "",
+					city: "",
+					gstNumber: "",
+					state: "",
+					pincode: "",
+					serviceChargePercent: null,
+				}).success,
+			).toBe(true);
+		}
+	});
 });
 
 describe("createRestaurantInput", () => {

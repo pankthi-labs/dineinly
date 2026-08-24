@@ -74,10 +74,14 @@ begin
 
 	-- Dineinly Menu has no Waiter or Kitchen roles at all — no PIN stations,
 	-- no floor/kitchen flows to staff (docs/product.md § Dineinly
-	-- Experiences).
+	-- Experiences). Dineinly Counter has no Waiter station either — it's
+	-- self-service pickup, Kitchen sets Served there (docs/product.md § RBAC).
 	select experience into v_experience from public.restaurants where restaurants.id = p_restaurant_id;
 	if v_experience = 'menu' and p_role in ('waiter', 'kitchen') then
 		raise exception 'Dineinly Menu has no Waiter or Kitchen roles';
+	end if;
+	if v_experience = 'counter' and p_role = 'waiter' then
+		raise exception 'Dineinly Counter has no Waiter role';
 	end if;
 
 	return query
@@ -186,8 +190,12 @@ begin
 		raise exception 'Only an active Owner or Manager may edit staff';
 	end if;
 
-	if v_target.is_primary_owner then
-		raise exception 'The primary owner is only changed by reassigning ownership';
+	-- The primary owner's name is editable like anyone else's — only their
+	-- role/email are locked to reassign_primary_owner. Email is already
+	-- protected below (`case when status = 'active'`) once active, so only
+	-- role needs an explicit guard here.
+	if v_target.is_primary_owner and p_role <> v_target.role then
+		raise exception 'The primary owner''s role is only changed by reassigning ownership';
 	end if;
 
 	if v_target.status = 'removed' then
@@ -198,10 +206,13 @@ begin
 		raise exception 'Managers may not manage Owners';
 	end if;
 
-	-- Same Dineinly Menu restriction as invite_staff above.
+	-- Same Dineinly Menu/Counter restrictions as invite_staff above.
 	select experience into v_experience from public.restaurants where restaurants.id = v_target.restaurant_id;
 	if v_experience = 'menu' and p_role in ('waiter', 'kitchen') then
 		raise exception 'Dineinly Menu has no Waiter or Kitchen roles';
+	end if;
+	if v_experience = 'counter' and p_role = 'waiter' then
+		raise exception 'Dineinly Counter has no Waiter role';
 	end if;
 
 	return query

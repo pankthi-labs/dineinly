@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import type { Database } from "@workspace/db";
 import { isDineinlyAdmin, type StaffRole } from "@/lib/auth";
 import type { Context } from "./context";
 import { dbError } from "./errors";
@@ -45,7 +46,7 @@ export async function requireStaffRole(
 export async function assertFullServiceExperience(
 	ctx: Context,
 	restaurantId: string,
-): Promise<void> {
+): Promise<Database["public"]["Enums"]["restaurant_experience"] | null> {
 	const { data, error } = await ctx.auth
 		.from("restaurants")
 		.select("experience")
@@ -61,15 +62,19 @@ export async function assertFullServiceExperience(
 			message: "This feature isn't available on the Dineinly Menu package.",
 		});
 	}
+	return data?.experience ?? null;
 }
 
+// Returns the restaurant's experience so callers that also need it (e.g.
+// kitchen.ts's counter-bill gate) don't re-fetch it themselves.
 export async function requireFullServiceRole(
 	ctx: Context,
 	restaurantId: string,
 	allowedRoles: StaffRole[],
-): Promise<void> {
-	await Promise.all([
+): Promise<Database["public"]["Enums"]["restaurant_experience"] | null> {
+	const [, experience] = await Promise.all([
 		requireStaffRole(ctx, restaurantId, allowedRoles),
 		assertFullServiceExperience(ctx, restaurantId),
 	]);
+	return experience;
 }

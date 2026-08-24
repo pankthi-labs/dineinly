@@ -27,6 +27,7 @@ const INVITE_WINDOW_MS = 24 * 60 * 60 * 1000;
 export function StaffRow({
 	staff,
 	canManageThisRow,
+	canRemoveThisRow,
 	canReassignOwner,
 	canResetPin,
 	onEdit,
@@ -36,11 +37,16 @@ export function StaffRow({
 	onResendInvite,
 }: {
 	staff: StaffListItem;
-	/** False for the primary owner (locked — edit/remove both reject that
-	 * row server-side, reassignment is the only way to touch it) and, for a
-	 * Manager caller, any row whose role is Owner (docs/product.md § RBAC:
-	 * "Managers may not manage Owners"). */
+	/** False for a Manager caller viewing any row whose role is Owner
+	 * (docs/product.md § RBAC: "Managers may not manage Owners") — otherwise
+	 * true, including the primary owner (name-only edit; role/email stay
+	 * locked in the sheet itself). Gates Edit. */
 	canManageThisRow: boolean;
+	/** Narrower than canManageThisRow — false for the primary owner even
+	 * when canManageThisRow is true (remove_staff rejects that row
+	 * server-side; reassignment is the only way to remove them from the
+	 * role). Gates Remove. */
+	canRemoveThisRow: boolean;
 	/** Only the current primary owner or Dineinly Admin — a different,
 	 * stricter reach than canManageThisRow (a Manager never gets this). */
 	canReassignOwner: boolean;
@@ -75,7 +81,11 @@ export function StaffRow({
 	// enforces the actual Manager-can't-touch-Owner rule server-side.
 	const showResendInvite = isInvited && canManageThisRow;
 	const hasActions =
-		canManageThisRow || showReassign || showResetPin || showResendInvite;
+		canManageThisRow ||
+		canRemoveThisRow ||
+		showReassign ||
+		showResetPin ||
+		showResendInvite;
 
 	return (
 		<div
@@ -105,26 +115,26 @@ export function StaffRow({
 			reset) — a row this caller can't manage may still show reassign
 			and/or reset-PIN, since those are separate, sometimes wider reaches. */}
 			{!isRemoved && hasActions ? (
-				<div className="mt-1 flex flex-nowrap items-center gap-x-4 overflow-x-auto border-divider border-t pt-3 text-caps">
+				<div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 border-divider border-t pt-3 text-caps">
 					{canManageThisRow ? (
-						<>
-							<button
-								type="button"
-								onClick={onEdit}
-								aria-label={`Edit ${staff.name ?? staff.email}`}
-								className="shrink-0 text-secondary hover:text-primary"
-							>
-								Edit
-							</button>
-							<button
-								type="button"
-								onClick={onRemove}
-								aria-label={`Remove ${staff.name ?? staff.email}`}
-								className="shrink-0 text-accent-secondary hover:opacity-80"
-							>
-								Remove
-							</button>
-						</>
+						<button
+							type="button"
+							onClick={onEdit}
+							aria-label={`Edit ${staff.name ?? staff.email}`}
+							className="shrink-0 text-secondary hover:text-primary"
+						>
+							Edit
+						</button>
+					) : null}
+					{canRemoveThisRow ? (
+						<button
+							type="button"
+							onClick={onRemove}
+							aria-label={`Remove ${staff.name ?? staff.email}`}
+							className="shrink-0 text-accent-secondary hover:opacity-80"
+						>
+							Remove
+						</button>
 					) : null}
 					{showResendInvite ? (
 						<button

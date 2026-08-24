@@ -108,6 +108,7 @@ export function CounterQrSection({
 					onCancel={() => setShowRegenerateConfirm(false)}
 					onConfirm={() => regenerateMutation.mutate({ restaurantId })}
 					isPending={regenerateMutation.isPending}
+					body="The old printed QR code stops working immediately — anywhere it's posted will need the new one."
 				/>
 			) : null}
 		</div>

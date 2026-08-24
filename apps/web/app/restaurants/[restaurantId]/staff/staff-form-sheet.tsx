@@ -13,12 +13,10 @@ export type EditTarget = {
 	id: string;
 	values: StaffFormValues;
 	status: "invited" | "active" | "removed";
-};
-
-const EMPTY_VALUES: StaffFormValues = {
-	name: "",
-	email: "",
-	role: "waiter",
+	/** Locks role + (once active) email — the primary owner's role/email only
+	 * change via reassignment, but their name is editable like anyone
+	 * else's (see staff.ts's updateOwnProfile/update_staff). */
+	isPrimaryOwner: boolean;
 };
 
 type FieldErrors = Partial<Record<keyof StaffFormValues, string>>;
@@ -44,8 +42,17 @@ export function StaffFormSheet({
 	submitError: string | null;
 }) {
 	const isEdit = editTarget !== null;
+	// Invite mode's default role must actually be one of availableRoles — a
+	// hardcoded default (e.g. "waiter") that isn't offered on a Menu-only
+	// restaurant would render the first available option in the <select>
+	// while state silently stays on the excluded role, submitting the wrong
+	// value on first save.
 	const [values, setValues] = useState<StaffFormValues>(
-		editTarget?.values ?? EMPTY_VALUES,
+		editTarget?.values ?? {
+			name: "",
+			email: "",
+			role: availableRoles[0] ?? "manager",
+		},
 	);
 	const [errors, setErrors] = useState<FieldErrors>({});
 
@@ -53,8 +60,12 @@ export function StaffFormSheet({
 	// auth.uid(), not this field — update_staff (supabase/migrations/
 	// 20260816164344_add_staff_roster_rpcs.sql) silently ignores an email
 	// edit past that point, so the field is locked here to match rather than
-	// let staff type a change that quietly never saves.
-	const emailLocked = isEdit && editTarget.status === "active";
+	// let staff type a change that quietly never saves. The primary owner's
+	// email/role are locked unconditionally — those only change through
+	// reassignment or the Restaurants Directory, never here (only name is).
+	const emailLocked =
+		isEdit && (editTarget.status === "active" || editTarget.isPrimaryOwner);
+	const roleLocked = isEdit && editTarget.isPrimaryOwner;
 
 	function setField<K extends keyof StaffFormValues>(
 		key: K,
@@ -156,9 +167,18 @@ export function StaffFormSheet({
 							placeholder="name@restaurant.com"
 						/>
 					</Field>
-					<Field label="Role" error={errors.role}>
+					<Field
+						label="Role"
+						error={errors.role}
+						hint={
+							roleLocked
+								? "The primary owner's role only changes by reassigning ownership."
+								: undefined
+						}
+					>
 						<select
 							value={values.role}
+							disabled={roleLocked}
 							onChange={(e) => setField("role", e.target.value as StaffRole)}
 							onBlur={() => validateField("role")}
 						>

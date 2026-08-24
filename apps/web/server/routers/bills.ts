@@ -432,13 +432,16 @@ export const billsRouter = router({
 		return {
 			sessionId: session.id,
 			sessionStatus: session.status as "active" | "closed",
+			// A Bill only ever exists on One/Counter, which require these fields
+			// at creation (restaurantFieldsSchema's refineBillingDetails) — null
+			// only on Menu/Guest, which never reach this procedure.
 			restaurant: {
 				name: restaurantResult.data.name,
-				address: restaurantResult.data.address,
-				city: restaurantResult.data.city,
-				gstNumber: restaurantResult.data.gst_number,
-				state: restaurantResult.data.state,
-				pincode: restaurantResult.data.pincode,
+				address: restaurantResult.data.address as string,
+				city: restaurantResult.data.city as string,
+				gstNumber: restaurantResult.data.gst_number as string,
+				state: restaurantResult.data.state as string,
+				pincode: restaurantResult.data.pincode as string,
 			},
 			tableLabel: (tablesResult.data ?? []).map((t) => t.label).join(", "),
 			billId: bill?.id ?? null,
@@ -1081,7 +1084,15 @@ export const billsRouter = router({
 					: computed;
 
 			const pdf = await buildBillPdf({
-				restaurant: restaurantResult.data,
+				// Same "Bill only exists on One/Counter" invariant as bills.get above.
+				restaurant: {
+					name: restaurantResult.data.name,
+					address: restaurantResult.data.address as string,
+					city: restaurantResult.data.city as string,
+					gst_number: restaurantResult.data.gst_number as string,
+					state: restaurantResult.data.state as string,
+					pincode: restaurantResult.data.pincode as string,
+				},
 				billNumber: bill?.bill_number ?? null,
 				tableLabel: (tablesResult.data ?? []).map((t) => t.label).join(", "),
 				totals,

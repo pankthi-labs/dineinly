@@ -15,7 +15,8 @@ import { restaurants } from "./restaurant.js";
 // Menu grouping and display order. Own table for stable IDs and reordering.
 // Carries `taxRate` — food vs. drinks are taxed at different rates; this is
 // the natural per-category home for it (snapshotted onto order_item at order
-// time, see order-item.ts).
+// time, see order-item.ts). Null on Menu/Guest restaurants, which never
+// generate a Dineinly bill (docs/product.md § Dineinly Experiences).
 export const menuCategories = pgTable(
 	"menu_categories",
 	{
@@ -25,7 +26,7 @@ export const menuCategories = pgTable(
 			.references(() => restaurants.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		sort: integer("sort").notNull().default(0),
-		taxRate: numeric("tax_rate", { precision: 5, scale: 4 }).notNull(),
+		taxRate: numeric("tax_rate", { precision: 5, scale: 4 }),
 		status: menuCategoryStatus("status").notNull().default("active"),
 	},
 	(table) => [

@@ -7,9 +7,14 @@ import { trpc } from "@/lib/trpc-client";
 
 export function AddCategoryPanel({
 	restaurantId,
+	showTaxField,
 	onClose,
 }: {
 	restaurantId: string;
+	/** Only One and Counter have Dineinly compute a bill (docs/product.md §
+	 * Dineinly Experiences) — Menu and Guest never reach category tax, so
+	 * there's nothing to ask for. */
+	showTaxField: boolean;
 	onClose: () => void;
 }) {
 	const [name, setName] = useState("");
@@ -26,6 +31,12 @@ export function AddCategoryPanel({
 	function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setFormError(null);
+
+		if (!showTaxField) {
+			createCategory.mutate({ restaurantId, name, taxRate: null });
+			return;
+		}
+
 		const parsedTaxRate = Number(taxRate);
 		if (
 			!Number.isFinite(parsedTaxRate) ||
@@ -83,18 +94,20 @@ export function AddCategoryPanel({
 							onChange={(event) => setName(event.target.value)}
 						/>
 					</Field>
-					<Field label="Tax rate (%)" required hint="For example, 5 is 5%.">
-						<input
-							required
-							type="number"
-							min="0"
-							max="100"
-							step="0.1"
-							value={taxRate}
-							placeholder="e.g. 5"
-							onChange={(event) => setTaxRate(event.target.value)}
-						/>
-					</Field>
+					{showTaxField ? (
+						<Field label="Tax rate (%)" required hint="For example, 5 is 5%.">
+							<input
+								required
+								type="number"
+								min="0"
+								max="100"
+								step="0.1"
+								value={taxRate}
+								placeholder="e.g. 5"
+								onChange={(event) => setTaxRate(event.target.value)}
+							/>
+						</Field>
+					) : null}
 				</FieldGroup>
 				{formError ? (
 					<p role="alert" className="text-error text-sm">

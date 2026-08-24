@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import type { BillTotals } from "@/lib/bill-math";
-import { formatBillAmount } from "@/lib/format";
+import { formatBillAmount, formatBillLocation } from "@/lib/format";
 
 // Download Bill (docs/product.md § Bills tab). Server-side, same reasoning
 // as buildTableQrPdf (apps/web/lib/qr-pdf.ts): print output stays
@@ -118,7 +118,7 @@ export async function buildBillPdf(input: {
 	drawCentered(`GSTIN: ${input.restaurant.gst_number}`, 8);
 	y -= LINE_HEIGHT / 2;
 	drawCentered(
-		`Bill #${input.billNumber ?? "-"} - ${input.tableLabel ? `Table ${input.tableLabel}` : "Counter"}`,
+		`Bill #${input.billNumber ?? "-"} - ${formatBillLocation(input.tableLabel)}`,
 		9,
 	);
 	y -= LINE_HEIGHT / 2;

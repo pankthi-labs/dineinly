@@ -2,7 +2,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import Link from "next/link";
-import { formatBillAmount } from "@/lib/format";
+import { formatBillAmount, formatBillLocation } from "@/lib/format";
 import type { AppRouter } from "@/server/routers/_app";
 
 type BillListItem = inferRouterOutputs<AppRouter>["bills"]["list"][number];
@@ -43,7 +43,7 @@ export function BillRow({
 					{bill.billNumber ? `Bill #${bill.billNumber}` : "Not yet requested"}
 				</h3>
 				<p className="text-secondary text-sm">
-					{bill.tableLabel ? `Table ${bill.tableLabel}` : "Counter"} ·{" "}
+					{formatBillLocation(bill.tableLabel)} ·{" "}
 					{new Date(bill.date).toLocaleString("en-IN", {
 						day: "numeric",
 						month: "short",

@@ -26,6 +26,12 @@ export function RestaurantRow({
 	const regionId = useId();
 	const isLive = restaurant.status === "active";
 	const dimClass = isLive ? "" : "opacity-60";
+	// Null on Menu/Guest, which never ask for a bill address (docs/product.md
+	// § Dineinly Experiences).
+	const addressLine =
+		[restaurant.address, restaurant.city, restaurant.state]
+			.filter((part) => part !== null && part !== "")
+			.join(", ") || "—";
 
 	return (
 		<div className="rounded-xl border border-divider bg-surface transition-colors duration-(--duration-base) ease-out">
@@ -61,16 +67,13 @@ export function RestaurantRow({
 					<dl
 						className={`grid grid-cols-1 gap-6 border-divider border-b pb-6 sm:grid-cols-2 lg:grid-cols-3 ${dimClass}`}
 					>
-						<Detail
-							label="Address"
-							value={`${restaurant.address}, ${restaurant.city}, ${restaurant.state}`}
-						/>
+						<Detail label="Address" value={addressLine} />
 						<Detail
 							label="Dineinly Experience"
 							value={EXPERIENCE_LABELS[restaurant.experience]}
 						/>
-						<Detail label="GST Number" value={restaurant.gstNumber} />
-						<Detail label="Pincode" value={restaurant.pincode} />
+						<Detail label="GST Number" value={restaurant.gstNumber ?? "—"} />
+						<Detail label="Pincode" value={restaurant.pincode ?? "—"} />
 						<Detail
 							label="Service Charge"
 							value={

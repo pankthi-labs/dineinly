@@ -15,7 +15,7 @@ import { useState } from "react";
 import { Detail } from "@/components/detail";
 import { DietMark } from "@/components/diet-mark";
 import { PageHeader } from "@/components/page-header";
-import { formatPrice, titleCase } from "@/lib/format";
+import { capitalizeFirst, formatPrice, titleCase } from "@/lib/format";
 import {
 	type PREP_TIME_OPTIONS,
 	SERVING_SIZE_LABELS,
@@ -23,6 +23,10 @@ import {
 } from "@/lib/menu-options";
 import { moveId, moveIdTo } from "@/lib/reorder";
 import { trpc } from "@/lib/trpc-client";
+import {
+	isOrderingEnabled,
+	needsBillingDetails,
+} from "@/server/routers/restaurants.schema";
 import { RestaurantNavHeader } from "../restaurant-nav-header";
 import { AddCategoryPanel } from "./add-category-panel";
 import { AddDishPanel } from "./add-dish-panel";
@@ -354,6 +358,7 @@ export default function RestaurantMenuPage() {
 			{isAddingCategory ? (
 				<AddCategoryPanel
 					restaurantId={restaurantId}
+					showTaxField={needsBillingDetails(menu.data.restaurant.experience)}
 					onClose={() => setIsAddingCategory(false)}
 				/>
 			) : null}
@@ -369,6 +374,9 @@ export default function RestaurantMenuPage() {
 					item={editingItem}
 					categories={menu.data.categories}
 					labels={menu.data.labels}
+					showPreferenceFields={isOrderingEnabled(
+						menu.data.restaurant.experience,
+					)}
 					onClose={() => setEditingItem(null)}
 				/>
 			) : null}
@@ -377,6 +385,9 @@ export default function RestaurantMenuPage() {
 					restaurantId={restaurantId}
 					categories={menu.data.categories}
 					labels={menu.data.labels}
+					showPreferenceFields={isOrderingEnabled(
+						menu.data.restaurant.experience,
+					)}
 					onClose={() => setIsAddingDish(false)}
 				/>
 			) : null}
@@ -457,7 +468,10 @@ function MenuItemCard({
 			{isExpanded ? (
 				<div className="border-divider border-t bg-background">
 					<div className="p-5 lg:p-6">
-						<Detail label="Description" value={item.description} />
+						<Detail
+							label="Description"
+							value={capitalizeFirst(item.description)}
+						/>
 						<div className="mt-6 grid gap-6 lg:grid-cols-3">
 							<Detail
 								label="Preparation time"

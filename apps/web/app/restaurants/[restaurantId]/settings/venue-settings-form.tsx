@@ -2,12 +2,9 @@
 
 import { type FormEvent, useState } from "react";
 import {
-	type PaymentTrack,
 	type RestaurantFieldErrors,
 	RestaurantFieldsFieldset,
 	type RestaurantFieldsValues,
-	TRACK_EXPERIENCES,
-	trackForExperience,
 } from "@/components/restaurant-fields-fieldset";
 import { restaurantFieldsSchema } from "@/server/routers/restaurants.schema";
 
@@ -23,20 +20,7 @@ export function VenueSettingsForm({
 	submitError: string | null;
 }) {
 	const [values, setValues] = useState(initialValues);
-	const [track, setTrack] = useState<PaymentTrack>(
-		trackForExperience(initialValues.experience),
-	);
 	const [errors, setErrors] = useState<RestaurantFieldErrors>({});
-
-	function handleTrackChange(nextTrack: PaymentTrack) {
-		setTrack(nextTrack);
-		if (!TRACK_EXPERIENCES[nextTrack].includes(values.experience)) {
-			setField(
-				"experience",
-				nextTrack === "full-service" ? "guest" : "counter",
-			);
-		}
-	}
 
 	function setField<K extends keyof RestaurantFieldsValues>(
 		key: K,
@@ -94,8 +78,7 @@ export function VenueSettingsForm({
 				errors={errors}
 				setField={setField}
 				validateField={validateField}
-				track={track}
-				onTrackChange={handleTrackChange}
+				showExperienceField={false}
 			/>
 
 			<button

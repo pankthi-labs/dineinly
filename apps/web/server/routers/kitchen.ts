@@ -1,10 +1,15 @@
 import { TRPCError } from "@trpc/server";
 import type { Database } from "@workspace/db";
 import { z } from "zod";
+import type { StaffRole } from "@/lib/auth";
 import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
-import { requireFullServiceRole } from "../trpc/rbac";
+import {
+	assertFullServiceExperience,
+	requireFullServiceRole,
+	requireStaffRole,
+} from "../trpc/rbac";
 
 const restaurantIdSchema = z.string().uuid();
 
@@ -39,17 +44,10 @@ type OrderItemStatus = "placed" | "preparing" | "ready" | "served";
 async function assertCounterBillsSettled(
 	ctx: Context,
 	restaurantId: string,
+	experience: Database["public"]["Enums"]["restaurant_experience"] | null,
 	orderItemIds: string[],
 ): Promise<void> {
-	const restaurantResult = await ctx.auth
-		.from("restaurants")
-		.select("experience")
-		.eq("id", restaurantId)
-		.maybeSingle();
-	if (restaurantResult.error) {
-		throw dbError("Unable to update the order.", restaurantResult.error);
-	}
-	if (restaurantResult.data?.experience !== "counter") return;
+	if (experience !== "counter") return;
 
 	const itemsResult = await ctx.auth
 		.from("order_items")
@@ -231,7 +229,7 @@ export const kitchenRouter = router({
 			// "Update Order Status (Preparing/Ready)" (docs/product.md § RBAC)
 			// is Kitchen/Manager/Owner — Waiter can view the queue but not
 			// advance it.
-			await requireFullServiceRole(ctx, input.restaurantId, [
+			const experience = await requireFullServiceRole(ctx, input.restaurantId, [
 				"kitchen",
 				"manager",
 				"owner",
@@ -241,6 +239,7 @@ export const kitchenRouter = router({
 				await assertCounterBillsSettled(
 					ctx,
 					input.restaurantId,
+					experience,
 					input.orderItemIds,
 				);
 			}
@@ -275,24 +274,24 @@ export const kitchenRouter = router({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const restaurantResult = await ctx.auth
-				.from("restaurants")
-				.select("experience")
-				.eq("id", input.restaurantId)
-				.maybeSingle();
-			if (restaurantResult.error) {
-				throw dbError("Unable to update the order.", restaurantResult.error);
-			}
+			// Menu-block + experience read in one fetch, reused below instead of
+			// requireFullServiceRole's own internal one — Serve's allowed roles
+			// depend on the experience, so it has to be known before the role
+			// check runs, not just alongside it.
+			const experience = await assertFullServiceExperience(
+				ctx,
+				input.restaurantId,
+			);
 
 			// Counter is self-service — Kitchen marks the pickup complete
 			// (docs/product.md § Dineinly Experiences), unlike Full-Service where
 			// only Waiter/Manager/Owner may (Kitchen never touches Serve there).
-			const allowedRoles: Parameters<typeof requireFullServiceRole>[2] =
-				restaurantResult.data?.experience === "counter"
+			const allowedRoles: StaffRole[] =
+				experience === "counter"
 					? ["kitchen", "manager", "owner"]
 					: ["waiter", "manager", "owner"];
 
-			await requireFullServiceRole(ctx, input.restaurantId, allowedRoles);
+			await requireStaffRole(ctx, input.restaurantId, allowedRoles);
 
 			return updateOrderItemsStatus(
 				ctx,

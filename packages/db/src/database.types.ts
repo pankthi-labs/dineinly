@@ -188,7 +188,7 @@ export type Database = {
 					restaurant_id: string;
 					sort: number;
 					status: Database["public"]["Enums"]["menu_category_status"];
-					tax_rate: number;
+					tax_rate: number | null;
 				};
 				Insert: {
 					id?: string;
@@ -196,7 +196,7 @@ export type Database = {
 					restaurant_id: string;
 					sort?: number;
 					status?: Database["public"]["Enums"]["menu_category_status"];
-					tax_rate: number;
+					tax_rate?: number | null;
 				};
 				Update: {
 					id?: string;
@@ -204,7 +204,7 @@ export type Database = {
 					restaurant_id?: string;
 					sort?: number;
 					status?: Database["public"]["Enums"]["menu_category_status"];
-					tax_rate?: number;
+					tax_rate?: number | null;
 				};
 				Relationships: [
 					{
@@ -505,47 +505,47 @@ export type Database = {
 			};
 			restaurants: {
 				Row: {
-					address: string;
-					city: string;
+					address: string | null;
+					city: string | null;
 					counter_qr_token: string | null;
 					created_at: string;
 					experience: Database["public"]["Enums"]["restaurant_experience"];
-					gst_number: string;
+					gst_number: string | null;
 					id: string;
 					name: string;
-					pincode: string;
+					pincode: string | null;
 					service_charge_rate: number | null;
-					state: string;
+					state: string | null;
 					status: Database["public"]["Enums"]["restaurant_status"];
 					updated_at: string;
 				};
 				Insert: {
-					address: string;
-					city: string;
+					address?: string | null;
+					city?: string | null;
 					counter_qr_token?: string | null;
 					created_at?: string;
 					experience?: Database["public"]["Enums"]["restaurant_experience"];
-					gst_number: string;
+					gst_number?: string | null;
 					id?: string;
 					name: string;
-					pincode: string;
+					pincode?: string | null;
 					service_charge_rate?: number | null;
-					state: string;
+					state?: string | null;
 					status?: Database["public"]["Enums"]["restaurant_status"];
 					updated_at?: string;
 				};
 				Update: {
-					address?: string;
-					city?: string;
+					address?: string | null;
+					city?: string | null;
 					counter_qr_token?: string | null;
 					created_at?: string;
 					experience?: Database["public"]["Enums"]["restaurant_experience"];
-					gst_number?: string;
+					gst_number?: string | null;
 					id?: string;
 					name?: string;
-					pincode?: string;
+					pincode?: string | null;
 					service_charge_rate?: number | null;
-					state?: string;
+					state?: string | null;
 					status?: Database["public"]["Enums"]["restaurant_status"];
 					updated_at?: string;
 				};

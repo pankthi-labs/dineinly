@@ -108,11 +108,13 @@ export default function RestaurantsDirectoryPage() {
 			ownerStatus: item.owner?.status ?? null,
 			values: {
 				name: item.name,
-				address: item.address,
-				city: item.city,
-				gstNumber: item.gstNumber,
-				state: item.state,
-				pincode: item.pincode,
+				// null on Menu/Guest, which never ask for these (restaurantFieldsSchema's
+				// refineBillingDetails) — "" is the form's own empty state, not a DB value.
+				address: item.address ?? "",
+				city: item.city ?? "",
+				gstNumber: item.gstNumber ?? "",
+				state: item.state ?? "",
+				pincode: item.pincode ?? "",
 				serviceChargePercent: item.serviceChargePercent,
 				experience: item.experience,
 				ownerName: item.owner?.name ?? "",

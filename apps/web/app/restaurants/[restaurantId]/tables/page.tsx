@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { downloadPdf } from "@/lib/download-pdf";
+import { visibleFilters as visiblePills } from "@/lib/filter-pills";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
@@ -208,6 +209,10 @@ export default function TableMatrixPage() {
 		occupied: tables.filter((t) => matchesFilter(t, "occupied")).length,
 		hidden: tables.filter((t) => matchesFilter(t, "hidden")).length,
 	};
+	const statusesPresent = (
+		["free", "occupied", "hidden"] as StatusFilter[]
+	).filter((status) => filterCounts[status] > 0);
+	const visibleFilters = visiblePills(FILTERS, statusesPresent);
 	const normalizedSearch = search.trim().toLowerCase();
 	const visibleTables = sortedTables
 		.filter((table) => matchesFilter(table, statusFilter))
@@ -265,9 +270,9 @@ export default function TableMatrixPage() {
 					}
 				/>
 
-				{tables.length === 0 ? null : (
+				{visibleFilters.length === 0 ? null : (
 					<div className="mt-8 flex flex-wrap items-center gap-2">
-						{FILTERS.map((filter) => (
+						{visibleFilters.map((filter) => (
 							<button
 								key={filter.value}
 								type="button"

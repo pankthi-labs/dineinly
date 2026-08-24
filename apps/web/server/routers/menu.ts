@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { menuItemInputSchema } from "@/lib/menu-item-schema";
+import { needsBillingDetails } from "@/server/routers/restaurants.schema";
 import type { Context } from "../trpc/context";
 import { authedProcedure, router } from "../trpc/init";
 import { requireStaffRole } from "../trpc/rbac";
@@ -92,7 +93,10 @@ const restaurantIdSchema = z.string().uuid();
 const menuCategoryInputSchema = z.object({
 	restaurantId: restaurantIdSchema,
 	name: z.string().trim().min(1),
-	taxRate: z.number().finite().min(0).max(1),
+	// Null on Menu/Guest — those experiences never generate a Dineinly bill,
+	// so there's no tax rate to snapshot (docs/product.md § Dineinly
+	// Experiences).
+	taxRate: z.number().finite().min(0).max(1).nullable(),
 });
 const menuLabelInputSchema = z.object({
 	restaurantId: restaurantIdSchema,
@@ -134,7 +138,7 @@ export const menuRouter = router({
 				await Promise.all([
 					ctx.auth
 						.from("restaurants")
-						.select("id, name")
+						.select("id, name, experience")
 						.eq("id", input.restaurantId)
 						.maybeSingle(),
 					ctx.auth
@@ -202,7 +206,7 @@ export const menuRouter = router({
 			const [restaurantResult, lastCategoryResult] = await Promise.all([
 				ctx.auth
 					.from("restaurants")
-					.select("id")
+					.select("id, experience")
 					.eq("id", input.restaurantId)
 					.maybeSingle(),
 				ctx.auth
@@ -226,6 +230,20 @@ export const menuRouter = router({
 				throw new TRPCError({
 					code: "NOT_FOUND",
 					message: "This restaurant is no longer available.",
+				});
+			}
+
+			// showTaxField (apps/web/app/restaurants/[restaurantId]/menu/
+			// add-category-panel.tsx) is UX only — One/Counter require a tax rate
+			// to snapshot onto every order_item at order time, so a null here on
+			// those experiences would silently under-bill.
+			if (
+				needsBillingDetails(restaurantResult.data.experience) &&
+				input.taxRate === null
+			) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Enter a tax rate for this category.",
 				});
 			}
 

@@ -44,6 +44,19 @@ function toServiceChargeRate(percent: number | null): number | null {
 	return percent === null ? null : percent / 100;
 }
 
+// ownerMobile is optional (see restaurants.schema.ts) — an empty string is
+// "not provided", stored as null (staff.mobile is nullable), not as "".
+function toOwnerMobile(mobile: string): string | null {
+	return mobile === "" ? null : mobile;
+}
+
+// address/city/gstNumber/state/pincode are only required on One/Counter
+// (restaurantFieldsSchema's refineBillingDetails) — Menu/Guest leave them
+// blank in the form, stored as null (the columns are nullable), not as "".
+function nullIfEmpty(value: string): string | null {
+	return value === "" ? null : value;
+}
+
 export const restaurantsRouter = router({
 	list: adminProcedure
 		.input(listRestaurantsInput)
@@ -202,11 +215,13 @@ export const restaurantsRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			const { data, error } = await ctx.auth.rpc("admin_create_restaurant", {
 				p_name: input.name,
-				p_address: input.address,
-				p_city: input.city,
-				p_gst_number: input.gstNumber,
-				p_state: input.state,
-				p_pincode: input.pincode,
+				// Same non-nullable-in-generated-types situation as
+				// p_service_charge_rate below — the columns themselves are nullable.
+				p_address: nullIfEmpty(input.address) as string,
+				p_city: nullIfEmpty(input.city) as string,
+				p_gst_number: nullIfEmpty(input.gstNumber) as string,
+				p_state: nullIfEmpty(input.state) as string,
+				p_pincode: nullIfEmpty(input.pincode) as string,
 				// numeric SQL params generate as non-nullable in database.types.ts —
 				// the column itself (restaurants.service_charge_rate) is nullable.
 				p_service_charge_rate: toServiceChargeRate(
@@ -215,7 +230,9 @@ export const restaurantsRouter = router({
 				p_experience: input.experience,
 				p_owner_name: input.ownerName,
 				p_owner_email: input.ownerEmail,
-				p_owner_mobile: input.ownerMobile,
+				// Same non-nullable-in-generated-types situation as
+				// p_service_charge_rate above — staff.mobile is nullable.
+				p_owner_mobile: toOwnerMobile(input.ownerMobile) as string,
 			});
 
 			if (error) {
@@ -235,18 +252,20 @@ export const restaurantsRouter = router({
 			const { data, error } = await ctx.auth.rpc("admin_update_restaurant", {
 				p_id: input.id,
 				p_name: input.name,
-				p_address: input.address,
-				p_city: input.city,
-				p_gst_number: input.gstNumber,
-				p_state: input.state,
-				p_pincode: input.pincode,
+				// Same non-nullable-in-generated-types situation as
+				// p_service_charge_rate below — the columns themselves are nullable.
+				p_address: nullIfEmpty(input.address) as string,
+				p_city: nullIfEmpty(input.city) as string,
+				p_gst_number: nullIfEmpty(input.gstNumber) as string,
+				p_state: nullIfEmpty(input.state) as string,
+				p_pincode: nullIfEmpty(input.pincode) as string,
 				p_service_charge_rate: toServiceChargeRate(
 					input.serviceChargePercent,
 				) as number,
 				p_experience: input.experience,
 				p_owner_name: input.ownerName,
 				p_owner_email: input.ownerEmail,
-				p_owner_mobile: input.ownerMobile,
+				p_owner_mobile: toOwnerMobile(input.ownerMobile) as string,
 			});
 
 			if (error) {
@@ -266,11 +285,13 @@ export const restaurantsRouter = router({
 			const { data, error } = await ctx.auth.rpc("owner_update_restaurant", {
 				p_id: input.id,
 				p_name: input.name,
-				p_address: input.address,
-				p_city: input.city,
-				p_gst_number: input.gstNumber,
-				p_state: input.state,
-				p_pincode: input.pincode,
+				// Same non-nullable-in-generated-types situation as
+				// p_service_charge_rate below — the columns themselves are nullable.
+				p_address: nullIfEmpty(input.address) as string,
+				p_city: nullIfEmpty(input.city) as string,
+				p_gst_number: nullIfEmpty(input.gstNumber) as string,
+				p_state: nullIfEmpty(input.state) as string,
+				p_pincode: nullIfEmpty(input.pincode) as string,
 				p_service_charge_rate: toServiceChargeRate(
 					input.serviceChargePercent,
 				) as number,

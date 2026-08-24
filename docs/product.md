@@ -10,9 +10,9 @@ Every feature must improve guest experience, staff efficiency, or restaurant vis
 
 ## Dineinly Experiences
 
-Dineinly is sold as packaged experiences so a restaurant can adopt at their own pace, on top of whatever they already run — not as a single all-or-nothing platform. A restaurant picks one experience (not per touchpoint); moving between experiences is a self-serve flag flip on the same restaurant record — same staff, menu, and history, no re-onboarding.
+Dineinly is sold as packaged experiences so a restaurant can adopt at their own pace, on top of whatever they already run — not as a single all-or-nothing platform. A restaurant picks one experience (not per touchpoint); moving between experiences is a flag flip on the same restaurant record — same staff, menu, and history, no re-onboarding.
 
-Backed by a `restaurant.experience` field, set at signup and editable from Dineinly Admin's Restaurants Directory or, self-serve, from the restaurant's own Venue Settings (Owner only — see RBAC below). Either path only moves a restaurant within its own track (Full-Service or Quick-Service, see below) — crossing tracks isn't a self-serve toggle. Kitchen/Floor/Bills/Table Matrix are blocked outright for Menu (view-only) at both the route layer (`requireFullServiceExperience`, `apps/web/lib/auth.ts`) and the tRPC layer (`requireFullServiceRole`/`assertFullServiceExperience`, `apps/web/server/trpc/rbac.ts`). Guest and Counter still get One's behavior on those routers beyond the Counter payment gate (see Lifecycle invariants) — the deeper Guest-specific behavior below (no real-time order status, billing left to the restaurant's existing system) is not yet routed.
+Backed by a `restaurant.experience` field, set at signup and only ever changed from Dineinly Admin's Restaurants Directory (`admin_update_restaurant`) — never self-serve; Venue Settings (Owner-facing, see RBAC below) offers Restaurant Details and service charge only, no experience change. Every path only moves a restaurant within its own track (Full-Service or Quick-Service, see below) — crossing tracks isn't a toggle. Kitchen/Floor/Bills/Table Matrix are blocked outright for Menu (view-only) at both the route layer (`requireFullServiceExperience`, `apps/web/lib/auth.ts`) and the tRPC layer (`requireFullServiceRole`/`assertFullServiceExperience`, `apps/web/server/trpc/rbac.ts`). Guest and Counter still get One's behavior on those routers beyond the Counter payment gate (see Lifecycle invariants) — the deeper Guest-specific behavior below (no real-time order status, billing left to the restaurant's existing system) is not yet routed.
 
 **Strategic shape:** Menu is the universal entry point. Guest is the adoption wedge — zero integration risk, sells itself on guest experience alone. One is the deep platform, full integration, the ceiling Guest grows into. Counter is a separate vertical entirely, not a deeper Guest — it serves quick-service restaurants, not an upgrade path for dine-in ones.
 
@@ -37,7 +37,7 @@ A restaurant only moves within its own track (Menu→Guest→One, or Menu→Coun
 - **Dineinly Menu** — view-only digital menu, either track. No ordering, no kitchen, no bill, no Table Matrix. Guests always see current prices/items/availability. Staff Roster only offers Manager/Owner — no Waiter or Kitchen role, since there's no floor or kitchen workflow to staff. One QR for the whole menu (not per-table), on its own QR Menu page — no Table Matrix, so it gets a dedicated route instead of living in Venue Settings.
 - **Dineinly Guest** *(Full-Service)* — adds guest ordering on top of Menu, with zero change to the restaurant's existing systems. Guest sends an order request; staff sees it in Dineinly and manually re-enters it into their existing POS/kitchen process exactly as they do today — or simply walks back to the table to confirm with the guest. No real-time order status shown to the guest (nobody in Dineinly ever advances an item's status, so the ladder would just hang on "Preparing" forever). Billing is untouched — the restaurant's existing billing flow runs exactly as it always has, disconnected from Dineinly.
 - **Dineinly One** *(Full-Service)* — full dine-in experience: real-time kitchen queue, live guest order status, full Bills tab (corrections, waivers, settlement). This is what's built today as MVP scope (see below) — the ceiling Guest grows into, not a separate build.
-- **Dineinly Counter** *(Quick-Service)* — payment happens before food is prepared. Guest orders, gets a token + bill from Dineinly, pays at the counter (external — Dineinly never touches the transaction), and only once payment is confirmed does the order auto-fire to kitchen; guest gets a ready notification. Terminal on its track by design: the pain point this track solves is queue/throughput, not staff availability, so only the payment-gated automation earns its keep — a lighter "digital order capture, staff still manually re-keys and relays to kitchen" version wouldn't move the line, so it isn't offered.
+- **Dineinly Counter** *(Quick-Service)* — payment happens before food is prepared. Guest orders, gets a token + bill from Dineinly, pays at the counter (external — Dineinly never touches the transaction), and only once payment is confirmed does the order auto-fire to kitchen; guest gets a ready notification. Terminal on its track by design: the pain point this track solves is queue/throughput, not staff availability, so only the payment-gated automation earns its keep — a lighter "digital order capture, staff still manually re-keys and relays to kitchen" version wouldn't move the line, so it isn't offered. Also has no Table Matrix, but unlike Menu its one QR stays on Venue Settings rather than getting a dedicated route — no per-table rows to separate it from.
 
 ## Principles
 
@@ -116,7 +116,7 @@ Spice, Salt, Ice are the only guest-selectable option groups in the MVP. At item
 
 ## Order Lifecycle
 
-**Item states:** `Placed` (auto, system event) → `Preparing` (Kitchen) → `Ready` (Kitchen) → `Served` (Waiter). `Cancelled` is terminal and reachable only from `Placed`; never after `Preparing`/`Ready`. Kitchen never cancels, only advances status.
+**Item states:** `Placed` (auto, system event) → `Preparing` (Kitchen) → `Ready` (Kitchen) → `Served` (Waiter). `Cancelled` is terminal and reachable only from `Placed`; never after `Preparing`/`Ready`. Kitchen never cancels, only advances status. Dineinly Counter has no Waiter station, so Kitchen also sets `Served` there — self-service pickup, not a delivered plate — and `Placed` → `Preparing` additionally requires the session's Bill to be `settled` (see `core-data-model.md` § Lifecycle invariants).
 
 **Cart vs. Order:** pre-confirm is the cart (any participant edits it). Post-confirm it's an order in `Placed`; only Waiter/Manager/Owner may cancel or modify it, and only while still `Placed`.
 
@@ -138,7 +138,7 @@ All permissions are enforced server-side. Client-side checks are UX-only, never 
 | Cancel / Modify Order (pre-prep only) | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | View Kitchen Queue | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Update Order Status (`Preparing`/`Ready`) | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Serve Order (set `Served`) | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Serve Order (set `Served`) | ❌ | ✅ | ❌† | ✅ | ✅ | ✅ |
 | Merge Tables | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Request Bill | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Mark Bill Settled | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ |
@@ -152,6 +152,7 @@ All permissions are enforced server-side. Client-side checks are UX-only, never 
 | Restaurant Settings | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 
 \* Managers may create/manage Waiters, Kitchen, and other Managers — never Owners.
+† Dineinly Counter has no Waiter station — Kitchen sets `Served` there instead (self-service pickup).
 
 ---
 

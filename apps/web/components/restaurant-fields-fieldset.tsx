@@ -1,7 +1,10 @@
 "use client";
 
 import type { z } from "zod";
-import type { restaurantFieldsSchema } from "@/server/routers/restaurants.schema";
+import {
+	needsBillingDetails,
+	type restaurantFieldsSchema,
+} from "@/server/routers/restaurants.schema";
 import { Field, FieldGroup, FieldRow } from "./form-sheet";
 
 export type RestaurantFieldsValues = z.infer<typeof restaurantFieldsSchema>;
@@ -51,6 +54,7 @@ export function RestaurantFieldsFieldset({
 	track,
 	onTrackChange,
 	showTrackSelector = false,
+	showExperienceField = true,
 }: {
 	values: RestaurantFieldsValues;
 	errors: RestaurantFieldErrors;
@@ -59,50 +63,61 @@ export function RestaurantFieldsFieldset({
 		value: RestaurantFieldsValues[keyof RestaurantFieldsValues],
 	) => void;
 	validateField: (key: keyof RestaurantFieldsValues) => void;
-	track: PaymentTrack;
-	onTrackChange: (track: PaymentTrack) => void;
+	/** Omit to derive from values.experience (trackForExperience) — every
+	 * caller that skips this also sets showExperienceField={false}, so
+	 * there's no Experience-options list or track selector left to feed. */
+	track?: PaymentTrack;
+	onTrackChange?: (track: PaymentTrack) => void;
 	/** Payment timing (Full-Service/Quick-Service) is only ever chosen at
 	 * creation — an existing restaurant only moves within its own track, so
 	 * callers editing an existing restaurant should leave this false. */
 	showTrackSelector?: boolean;
+	/** Dineinly Admin only (Restaurants Directory) — Venue Settings is
+	 * self-service and never offers this, only Restaurant Details below. */
+	showExperienceField?: boolean;
 }) {
+	const effectiveTrack = track ?? trackForExperience(values.experience);
 	return (
 		<>
-			<FieldGroup legend="Dineinly Experience">
-				{showTrackSelector ? (
-					<Field label="Payment timing">
+			{showExperienceField ? (
+				<FieldGroup legend="Dineinly Experience">
+					{showTrackSelector ? (
+						<Field label="Payment timing">
+							<select
+								value={effectiveTrack}
+								onChange={(e) =>
+									onTrackChange?.(e.target.value as PaymentTrack)
+								}
+							>
+								<option value="full-service">
+									Pay after the meal (Full-Service)
+								</option>
+								<option value="quick-service">
+									Pay before the meal (Quick-Service)
+								</option>
+							</select>
+						</Field>
+					) : null}
+					<Field label="Experience" error={errors.experience}>
 						<select
-							value={track}
-							onChange={(e) => onTrackChange(e.target.value as PaymentTrack)}
+							value={values.experience}
+							onChange={(e) =>
+								setField(
+									"experience",
+									e.target.value as RestaurantFieldsValues["experience"],
+								)
+							}
+							onBlur={() => validateField("experience")}
 						>
-							<option value="full-service">
-								Pay after the meal (Full-Service)
-							</option>
-							<option value="quick-service">
-								Pay before the meal (Quick-Service)
-							</option>
+							{TRACK_EXPERIENCES[effectiveTrack].map((experience) => (
+								<option key={experience} value={experience}>
+									{EXPERIENCE_LABELS[experience]}
+								</option>
+							))}
 						</select>
 					</Field>
-				) : null}
-				<Field label="Experience" error={errors.experience}>
-					<select
-						value={values.experience}
-						onChange={(e) =>
-							setField(
-								"experience",
-								e.target.value as RestaurantFieldsValues["experience"],
-							)
-						}
-						onBlur={() => validateField("experience")}
-					>
-						{TRACK_EXPERIENCES[track].map((experience) => (
-							<option key={experience} value={experience}>
-								{EXPERIENCE_LABELS[experience]}
-							</option>
-						))}
-					</select>
-				</Field>
-			</FieldGroup>
+				</FieldGroup>
+			) : null}
 
 			<FieldGroup legend="Restaurant Details">
 				<Field label="Restaurant name" error={errors.name}>
@@ -113,68 +128,72 @@ export function RestaurantFieldsFieldset({
 						placeholder="Enter establishment name"
 					/>
 				</Field>
-				<Field label="Address" error={errors.address}>
-					<input
-						value={values.address}
-						onChange={(e) => setField("address", e.target.value)}
-						onBlur={() => validateField("address")}
-						placeholder="Street, area"
-					/>
-				</Field>
-				<FieldRow columns={3}>
-					<Field label="City" error={errors.city}>
-						<input
-							value={values.city}
-							onChange={(e) => setField("city", e.target.value)}
-							onBlur={() => validateField("city")}
-							placeholder="e.g. Mumbai"
-						/>
-					</Field>
-					<Field label="State" error={errors.state}>
-						<input
-							value={values.state}
-							onChange={(e) => setField("state", e.target.value)}
-							onBlur={() => validateField("state")}
-							placeholder="e.g. Maharashtra"
-						/>
-					</Field>
-					<Field label="Pincode" error={errors.pincode}>
-						<input
-							value={values.pincode}
-							onChange={(e) => setField("pincode", e.target.value)}
-							onBlur={() => validateField("pincode")}
-							placeholder="6-digit code"
-							inputMode="numeric"
-						/>
-					</Field>
-				</FieldRow>
-				<Field label="GST number" error={errors.gstNumber}>
-					<input
-						value={values.gstNumber}
-						onChange={(e) =>
-							setField("gstNumber", e.target.value.toUpperCase())
-						}
-						onBlur={() => validateField("gstNumber")}
-						placeholder="15-character GSTIN"
-					/>
-				</Field>
-				<Field
-					label="Service charge (optional)"
-					error={errors.serviceChargePercent}
-				>
-					<input
-						value={values.serviceChargePercent ?? ""}
-						onChange={(e) =>
-							setField(
-								"serviceChargePercent",
-								e.target.value === "" ? null : Number(e.target.value),
-							)
-						}
-						onBlur={() => validateField("serviceChargePercent")}
-						placeholder="e.g. 5"
-						inputMode="decimal"
-					/>
-				</Field>
+				{needsBillingDetails(values.experience) ? (
+					<>
+						<Field label="Address" error={errors.address}>
+							<input
+								value={values.address}
+								onChange={(e) => setField("address", e.target.value)}
+								onBlur={() => validateField("address")}
+								placeholder="Street, area"
+							/>
+						</Field>
+						<FieldRow columns={3}>
+							<Field label="City" error={errors.city}>
+								<input
+									value={values.city}
+									onChange={(e) => setField("city", e.target.value)}
+									onBlur={() => validateField("city")}
+									placeholder="e.g. Mumbai"
+								/>
+							</Field>
+							<Field label="State" error={errors.state}>
+								<input
+									value={values.state}
+									onChange={(e) => setField("state", e.target.value)}
+									onBlur={() => validateField("state")}
+									placeholder="e.g. Maharashtra"
+								/>
+							</Field>
+							<Field label="Pincode" error={errors.pincode}>
+								<input
+									value={values.pincode}
+									onChange={(e) => setField("pincode", e.target.value)}
+									onBlur={() => validateField("pincode")}
+									placeholder="6-digit code"
+									inputMode="numeric"
+								/>
+							</Field>
+						</FieldRow>
+						<Field label="GST number" error={errors.gstNumber}>
+							<input
+								value={values.gstNumber}
+								onChange={(e) =>
+									setField("gstNumber", e.target.value.toUpperCase())
+								}
+								onBlur={() => validateField("gstNumber")}
+								placeholder="15-character GSTIN"
+							/>
+						</Field>
+						<Field
+							label="Service charge (optional)"
+							error={errors.serviceChargePercent}
+						>
+							<input
+								value={values.serviceChargePercent ?? ""}
+								onChange={(e) =>
+									setField(
+										"serviceChargePercent",
+										e.target.value === "" ? null : Number(e.target.value),
+									)
+								}
+								onBlur={() => validateField("serviceChargePercent")}
+								placeholder="e.g. 5"
+								inputMode="decimal"
+							/>
+						</Field>
+					</>
+				) : null}
 			</FieldGroup>
 		</>
 	);

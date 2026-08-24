@@ -665,7 +665,12 @@ begin
 		raise exception 'Restaurant not found';
 	end if;
 
-	if (v_current_experience = 'counter') <> (p_new_experience = 'counter') then
+	-- Menu is track-neutral (docs/product.md "spans either track") — only a
+	-- non-Menu -> non-Menu move across the counter/non-counter line is the
+	-- blocked "different operating model" crossing.
+	if v_current_experience <> 'menu' and p_new_experience <> 'menu'
+		and (v_current_experience = 'counter') <> (p_new_experience = 'counter')
+	then
 		raise exception 'Cannot change payment timing (Full-Service/Quick-Service) — only the Dineinly Experience within the current track';
 	end if;
 end;
@@ -681,8 +686,8 @@ grant execute on function public.assert_restaurant_track_unchanged(
 -- Shared by admin_create_restaurant and both update RPCs below, called only
 -- when p_experience = 'menu'. Dineinly Menu exposes no Table Matrix (it's
 -- view-only, no per-table anything) — the Owner never creates a table
--- themselves, but the one QR shown on Venue Settings still hangs off a
--- restaurant_tables row under the hood, reusing the same qr_token/
+-- themselves, but the one QR shown on its dedicated QR Menu page still
+-- hangs off a restaurant_tables row under the hood, reusing the same qr_token/
 -- resolve_qr_token machinery every other experience uses. Idempotent: a
 -- restaurant that already has a table (its own, or from a prior stint on
 -- Menu) keeps it — switching Menu -> another experience -> Menu again
@@ -753,7 +758,7 @@ begin
 
 	update public.restaurants
 	set counter_qr_token = gen_random_uuid()::text
-	where id = p_restaurant_id
+	where id = p_restaurant_id and experience = 'counter'
 	returning counter_qr_token into v_token;
 
 	if v_token is null then
@@ -861,6 +866,12 @@ grant execute on function public.admin_update_restaurant(
 -- as every staff-roster write RPC (invite_staff, update_staff, etc.,
 -- supabase/migrations/20260816164344_add_staff_roster_rpcs.sql) — the
 -- explicit role check above is what makes bypassing RLS here safe.
+-- p_experience is accepted but ignored — Venue Settings never offers a
+-- Dineinly Experience change (docs/product.md § Dineinly Experiences: that's
+-- Dineinly Admin's Restaurants Directory only, via admin_update_restaurant,
+-- not self-serve). Kept as a parameter rather than dropped so this
+-- signature/grant doesn't need to change, and to accept whatever stale
+-- value a caller's own restaurantFieldsSchema-shaped payload still carries.
 create or replace function public.owner_update_restaurant(
 	p_id uuid,
 	p_name text,
@@ -885,8 +896,6 @@ begin
 		raise exception 'Only the restaurant owner may update these settings';
 	end if;
 
-	perform public.assert_restaurant_track_unchanged(p_id, p_experience);
-
 	update public.restaurants
 	set
 		name = p_name,
@@ -895,15 +904,8 @@ begin
 		gst_number = p_gst_number,
 		state = p_state,
 		pincode = p_pincode,
-		service_charge_rate = p_service_charge_rate,
-		experience = p_experience
+		service_charge_rate = p_service_charge_rate
 	where id = p_id;
-
-	if p_experience = 'menu' then
-		perform public.ensure_menu_qr_table(p_id);
-	elsif p_experience = 'counter' then
-		perform public.ensure_counter_qr_token(p_id);
-	end if;
 
 	return p_id;
 end;
@@ -1154,6 +1156,7 @@ declare
 	v_session_id uuid;
 	v_order_id uuid;
 	v_experience public.restaurant_experience;
+	v_service_charge_rate numeric;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
 	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
@@ -1239,12 +1242,16 @@ begin
 		return v_order_id;
 	end if;
 
+	-- order_items.tax_rate is NOT NULL; menu_categories.tax_rate is null on
+	-- Menu/Guest (docs/product.md § Dineinly Experiences). Guest still
+	-- confirms orders here even though it never generates a Dineinly bill, so
+	-- coalesce to 0 — inert, since nothing ever reads a Guest order's tax.
 	insert into public.order_items (
 		restaurant_id, order_id, item_name, unit_price, tax_rate, diet,
 		quantity, spice, salt, ice, menu_item_id, added_by_staff_id
 	)
 	select
-		ci.restaurant_id, v_order_id, mi.name, mi.price, mc.tax_rate, mi.diet,
+		ci.restaurant_id, v_order_id, mi.name, mi.price, coalesce(mc.tax_rate, 0), mi.diet,
 		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id, ci.added_by_staff_id
 	from public.cart_items ci
 	join public.menu_items mi
@@ -1262,18 +1269,13 @@ begin
 	-- unconditionally reset status/service_charge_rate, or it collides with
 	-- bills_settled_check on an already-settled row (same race request_bill()
 	-- guards against on every poll).
-	select experience into v_experience
+	select experience, service_charge_rate into v_experience, v_service_charge_rate
 	from public.restaurants
 	where id = v_restaurant_id;
 
 	if v_experience = 'counter' then
 		insert into public.bills (restaurant_id, session_id, status, service_charge_rate)
-		values (
-			v_restaurant_id,
-			v_session_id,
-			'requested',
-			(select service_charge_rate from public.restaurants where id = v_restaurant_id)
-		)
+		values (v_restaurant_id, v_session_id, 'requested', v_service_charge_rate)
 		on conflict (session_id) do update
 		set
 			status = case
@@ -1398,12 +1400,16 @@ begin
 		return v_order_id;
 	end if;
 
+	-- order_items.tax_rate is NOT NULL; menu_categories.tax_rate is null on
+	-- Menu/Guest (docs/product.md § Dineinly Experiences). Guest still
+	-- confirms orders here even though it never generates a Dineinly bill, so
+	-- coalesce to 0 — inert, since nothing ever reads a Guest order's tax.
 	insert into public.order_items (
 		restaurant_id, order_id, item_name, unit_price, tax_rate, diet,
 		quantity, spice, salt, ice, menu_item_id, added_by_staff_id
 	)
 	select
-		ci.restaurant_id, v_order_id, mi.name, mi.price, mc.tax_rate, mi.diet,
+		ci.restaurant_id, v_order_id, mi.name, mi.price, coalesce(mc.tax_rate, 0), mi.diet,
 		ci.quantity, ci.spice, ci.salt, ci.ice, mi.id, ci.added_by_staff_id
 	from public.cart_items ci
 	join public.menu_items mi
@@ -1831,10 +1837,11 @@ create trigger broadcast_table_session_change
 after insert or update of status on public.table_sessions
 for each row execute function public.broadcast_table_session_change();
 
--- menu_items: availability (86'd) or status (hide/show) change ->
--- menu:{restaurant_id} (guests + staff both read this topic). Both columns
--- share one trigger/event since either one changes what a guest sees on the
--- menu, and the client side just invalidates and refetches either way.
+-- menu_items: a new dish, or an availability (86'd) / status (hide/show)
+-- change -> menu:{restaurant_id} (guests + staff both read this topic). The
+-- insert case and both update columns share one trigger/event since any of
+-- them changes what a guest sees on the menu, and the client side just
+-- invalidates and refetches either way.
 create or replace function public.broadcast_menu_item_change()
 returns trigger
 language plpgsql
@@ -1856,12 +1863,13 @@ end;
 $$;
 
 create trigger broadcast_menu_item_change
-after update of availability, status on public.menu_items
+after insert or update of availability, status on public.menu_items
 for each row execute function public.broadcast_menu_item_change();
 
--- menu_categories: sort (Menu Desk reorder) or status change ->
--- menu:{restaurant_id}, same topic and reasoning as menu_items above — a
--- guest's category order/visibility is live too, not just item state.
+-- menu_categories: a new category, or a sort (Menu Desk reorder) / status
+-- change -> menu:{restaurant_id}, same topic and reasoning as menu_items
+-- above — a guest's category list/order/visibility is live too, not just
+-- item state.
 create or replace function public.broadcast_menu_category_change()
 returns trigger
 language plpgsql
@@ -1879,7 +1887,7 @@ end;
 $$;
 
 create trigger broadcast_menu_category_change
-after update of sort, status on public.menu_categories
+after insert or update of sort, status on public.menu_categories
 for each row execute function public.broadcast_menu_category_change();
 
 -- ============================================================================

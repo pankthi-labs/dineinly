@@ -382,13 +382,16 @@ export const guestRouter = router({
 			);
 
 			return {
+				// A Bill only ever exists on One/Counter, which require these fields
+				// at creation (restaurantFieldsSchema's refineBillingDetails) — null
+				// only on Menu/Guest, which never reach this procedure.
 				restaurant: {
 					name: restaurantResult.data.name,
-					address: restaurantResult.data.address,
-					city: restaurantResult.data.city,
-					gstNumber: restaurantResult.data.gst_number,
-					state: restaurantResult.data.state,
-					pincode: restaurantResult.data.pincode,
+					address: restaurantResult.data.address as string,
+					city: restaurantResult.data.city as string,
+					gstNumber: restaurantResult.data.gst_number as string,
+					state: restaurantResult.data.state as string,
+					pincode: restaurantResult.data.pincode as string,
 				},
 				tableLabel: ctx.guest.table_label,
 				billId: billResult.data?.id ?? null,

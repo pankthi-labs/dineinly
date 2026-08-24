@@ -9,7 +9,7 @@ import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { billableQuantity } from "@/lib/bill-math";
 import { downloadPdf } from "@/lib/download-pdf";
-import { formatBillAmount, titleCase } from "@/lib/format";
+import { formatBillAmount, formatBillLocation, titleCase } from "@/lib/format";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
@@ -278,9 +278,7 @@ export default function BillDetailPage() {
 				    tab). */}
 				<div className="mt-6 flex items-baseline justify-between print:hidden">
 					<div>
-						<h1 className="text-3xl">
-							{data.tableLabel ? `Table ${data.tableLabel}` : "Counter"}
-						</h1>
+						<h1 className="text-3xl">{formatBillLocation(data.tableLabel)}</h1>
 						<p className="text-secondary text-sm">
 							{data.billNumber
 								? `Bill #${data.billNumber}`
@@ -595,7 +593,7 @@ export default function BillDetailPage() {
 							{data.billNumber
 								? `Bill #${data.billNumber}`
 								: "Not yet requested"}{" "}
-							· {data.tableLabel ? `Table ${data.tableLabel}` : "Counter"}
+							· {formatBillLocation(data.tableLabel)}
 						</p>
 					</header>
 

@@ -11,7 +11,9 @@ import {
 } from "@/components/restaurant-fields-fieldset";
 import {
 	ownerContactSchema,
+	refineBillingDetails,
 	restaurantFieldsSchema,
+	restaurantFieldsShape,
 } from "@/server/routers/restaurants.schema";
 
 type OwnerContact = z.infer<typeof ownerContactSchema>;
@@ -45,7 +47,9 @@ const EMPTY_VALUES: RestaurantFormValues = {
 
 type FieldErrors = Partial<Record<keyof RestaurantFormValues, string>>;
 
-const formSchema = restaurantFieldsSchema.merge(ownerContactSchema);
+const formSchema = restaurantFieldsShape
+	.merge(ownerContactSchema)
+	.superRefine(refineBillingDetails);
 
 export function RestaurantFormSheet({
 	editTarget,
@@ -176,6 +180,10 @@ export function RestaurantFormSheet({
 				{submitError ? (
 					<p role="alert" className="text-error text-sm">
 						{submitError}
+					</p>
+				) : Object.keys(errors).length > 0 ? (
+					<p role="alert" className="text-error text-sm">
+						Fix the highlighted fields below.
 					</p>
 				) : null}
 

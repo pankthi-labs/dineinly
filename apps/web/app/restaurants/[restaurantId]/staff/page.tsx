@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import type { StaffRole } from "@/lib/auth";
+import { visibleFilters } from "@/lib/filter-pills";
 import { ROLE_LABEL } from "@/lib/format";
 import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import { trpc } from "@/lib/trpc-client";
@@ -35,10 +36,7 @@ type StaffListItem = inferRouterOutputs<AppRouter>["staff"]["list"][number];
 const ALL_ROLES: StaffRole[] = ["waiter", "kitchen", "manager", "owner"];
 const ROLE_FILTERS: Array<{ value: StaffRole | "all"; label: string }> = [
 	{ value: "all", label: "All" },
-	{ value: "owner", label: ROLE_LABEL.owner },
-	{ value: "manager", label: ROLE_LABEL.manager },
-	{ value: "waiter", label: ROLE_LABEL.waiter },
-	{ value: "kitchen", label: ROLE_LABEL.kitchen },
+	...ALL_ROLES.map((role) => ({ value: role, label: ROLE_LABEL[role] })),
 ];
 
 // Owner and Dineinly Admin may touch an Owner-role row or hand out the Owner
@@ -69,10 +67,11 @@ function availableRolesFor(
 		: roles;
 }
 
-// The primary owner row is locked for edit/remove — reassign_primary_owner
-// is the only way to touch it (see ReassignOwnerDialog below) — server-
-// enforced identically, for every caller including Admin (update_staff/
-// remove_staff's is_primary_owner check).
+// The primary owner's role/email are locked — reassign_primary_owner is the
+// only way to touch those (see ReassignOwnerDialog below), same as remove
+// (never allowed for this row, see canRemoveRow) — but their name is
+// editable like any other owner-level row, server-enforced identically
+// (update_staff's is_primary_owner check permits a name-only change).
 function canManageRow(
 	staff: StaffListItem,
 	viewerIsAdmin: boolean,
@@ -82,8 +81,19 @@ function canManageRow(
 	// (station-panel.tsx) — pairing and revoking, never edit/remove. Removing
 	// it here would leave the restaurant unable to pair a tablet at all.
 	if (staff.email.endsWith(STATION_EMAIL_SUFFIX)) return false;
-	if (staff.is_primary_owner) return false;
 	return isOwnerLevel(viewerIsAdmin, viewerRole) || staff.role !== "owner";
+}
+
+// Narrower than canManageRow — the primary owner is never removable here,
+// only reassigned (remove_staff's is_primary_owner check rejects it too).
+function canRemoveRow(
+	staff: StaffListItem,
+	viewerIsAdmin: boolean,
+	viewerRole: StaffRole | null,
+): boolean {
+	return (
+		!staff.is_primary_owner && canManageRow(staff, viewerIsAdmin, viewerRole)
+	);
 }
 
 // Active first (actionable), then Invited (pending), Removed last — same
@@ -201,6 +211,7 @@ export default function StaffRosterPage() {
 				role: staff.role,
 			},
 			status: staff.status,
+			isPrimaryOwner: staff.is_primary_owner,
 		});
 		setSheetMode("edit");
 	}
@@ -214,6 +225,10 @@ export default function StaffRosterPage() {
 
 	const staffList = listQuery.data ?? [];
 	const currentOwner = staffList.find((staff) => staff.is_primary_owner);
+	const rolesPresent = ALL_ROLES.filter((role) =>
+		staffList.some((staff) => staff.role === role),
+	);
+	const roleFilters = visibleFilters(ROLE_FILTERS, rolesPresent);
 	const searchTerm = search.trim().toLowerCase();
 	const filteredStaff = staffList.filter((staff) => {
 		if (roleFilter !== "all" && staff.role !== roleFilter) return false;
@@ -258,9 +273,9 @@ export default function StaffRosterPage() {
 					}
 				/>
 
-				{staffList.length === 0 ? null : (
+				{roleFilters.length === 0 ? null : (
 					<div className="mt-8 flex flex-wrap items-center gap-2">
-						{ROLE_FILTERS.map(({ value, label }) => (
+						{roleFilters.map(({ value, label }) => (
 							<button
 								key={value}
 								type="button"
@@ -331,6 +346,11 @@ export default function StaffRosterPage() {
 								key={staff.id}
 								staff={staff}
 								canManageThisRow={canManageRow(
+									staff,
+									viewerIsAdmin,
+									viewerRole,
+								)}
+								canRemoveThisRow={canRemoveRow(
 									staff,
 									viewerIsAdmin,
 									viewerRole,

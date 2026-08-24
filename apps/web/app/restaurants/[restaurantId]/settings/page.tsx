@@ -43,7 +43,7 @@ export default function VenueSettingsPage() {
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
 					title="Venue Settings"
-					description="Restaurant details, Dineinly experience, and service charge."
+					description="Update your restaurant's details and service charge."
 				/>
 
 				<div className="mt-8 max-w-2xl">
@@ -73,7 +73,17 @@ export default function VenueSettingsPage() {
 					) : (
 						<VenueSettingsForm
 							key={settingsQuery.data.id}
-							initialValues={settingsQuery.data}
+							initialValues={{
+								...settingsQuery.data,
+								// null on Menu/Guest, which never ask for these
+								// (restaurantFieldsSchema's refineBillingDetails) — ""
+								// is the form's own empty state, not a DB value.
+								address: settingsQuery.data.address ?? "",
+								city: settingsQuery.data.city ?? "",
+								gstNumber: settingsQuery.data.gstNumber ?? "",
+								state: settingsQuery.data.state ?? "",
+								pincode: settingsQuery.data.pincode ?? "",
+							}}
 							onSubmit={(values) =>
 								updateMutation.mutate({ id: restaurantId, ...values })
 							}

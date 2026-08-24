@@ -27,7 +27,7 @@ export function AdminRow({
 			<p className="truncate text-secondary text-sm">{admin.email}</p>
 
 			{canManageThisRow ? (
-				<div className="mt-1 flex flex-nowrap items-center gap-x-4 overflow-x-auto border-divider border-t pt-3 text-caps">
+				<div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 border-divider border-t pt-3 text-caps">
 					<button
 						type="button"
 						onClick={onEdit}

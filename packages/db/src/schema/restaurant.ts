@@ -5,17 +5,19 @@ import { createdAt, id, updatedAt } from "./helpers.js";
 
 // Tenant root. Restaurant settings folded in as columns — read on nearly
 // every request, no join. Soft-delete via `status`, never hard-deleted.
-// address/city/gstNumber/state/pincode are the bill header fields.
+// address/city/gstNumber/state/pincode are the bill header fields — null on
+// Menu/Guest, which never generate a Dineinly bill (docs/product.md §
+// Dineinly Experiences).
 export const restaurants = pgTable(
 	"restaurants",
 	{
 		id: id(),
 		name: text("name").notNull(),
-		address: text("address").notNull(),
-		city: text("city").notNull(),
-		gstNumber: text("gst_number").notNull(),
-		state: text("state").notNull(),
-		pincode: text("pincode").notNull(),
+		address: text("address"),
+		city: text("city"),
+		gstNumber: text("gst_number"),
+		state: text("state"),
+		pincode: text("pincode"),
 		// Nullable — null means this restaurant levies no service charge.
 		serviceChargeRate: numeric("service_charge_rate", {
 			precision: 5,

@@ -82,12 +82,17 @@ export function EditDishPanel({
 	item,
 	categories,
 	labels,
+	showPreferenceFields,
 	onClose,
 }: {
 	restaurantId: string;
 	item: EditableMenuItem;
 	categories: MenuCategory[];
 	labels: MenuLabel[];
+	/** False for Dineinly Menu (docs/product.md § Dineinly Experiences) — it
+	 * never takes orders, so offering a spice/salt/ice preference has
+	 * nothing to apply to. */
+	showPreferenceFields: boolean;
 	onClose: () => void;
 }) {
 	const [form, setForm] = useState<FormState>(() => toFormState(item));
@@ -297,14 +302,16 @@ export function EditDishPanel({
 						selected={form.labels}
 						onChange={(value) => updateForm("labels", value)}
 					/>
-					<PreferenceFields
-						offersSpice={form.offersSpice}
-						offersSalt={form.offersSalt}
-						offersIce={form.offersIce}
-						onOffersSpiceChange={(value) => updateForm("offersSpice", value)}
-						onOffersSaltChange={(value) => updateForm("offersSalt", value)}
-						onOffersIceChange={(value) => updateForm("offersIce", value)}
-					/>
+					{showPreferenceFields ? (
+						<PreferenceFields
+							offersSpice={form.offersSpice}
+							offersSalt={form.offersSalt}
+							offersIce={form.offersIce}
+							onOffersSpiceChange={(value) => updateForm("offersSpice", value)}
+							onOffersSaltChange={(value) => updateForm("offersSalt", value)}
+							onOffersIceChange={(value) => updateForm("offersIce", value)}
+						/>
+					) : null}
 				</FieldGroup>
 
 				{formError || updateItem.error ? (

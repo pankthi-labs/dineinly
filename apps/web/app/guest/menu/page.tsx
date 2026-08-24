@@ -14,7 +14,7 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { QuantityPill } from "@/components/quantity-pill";
-import { formatPrice, titleCase } from "@/lib/format";
+import { capitalizeFirst, formatPrice, titleCase } from "@/lib/format";
 import {
 	ICE_LABELS,
 	ICE_OPTIONS,
@@ -212,8 +212,12 @@ export default function GuestMenuPage() {
 		setActiveCategoryId(categoryId);
 		const node = document.getElementById(`category-${categoryId}`);
 		if (!node) return;
-		const top =
-			node.getBoundingClientRect().top + window.scrollY - stickyHeight;
+		// Measured live rather than trusting the `stickyHeight` state — that
+		// state only updates after a ResizeObserver callback lands, so a click
+		// landing before it catches up would undershoot the real bar height
+		// and the heading would land partly hidden underneath it.
+		const offset = stickyRef.current?.getBoundingClientRect().height ?? 0;
+		const top = node.getBoundingClientRect().top + window.scrollY - offset;
 		window.scrollTo({ top, behavior: "smooth" });
 	}
 
@@ -386,6 +390,15 @@ export default function GuestMenuPage() {
 						</section>
 					))
 				)}
+				{/* Without this, a category near the end of the list can't scroll far
+				enough for its heading to clear the sticky header — the page runs
+				out of content below it, so jumpToCategory's target position gets
+				clamped short and the section lands mid-screen instead of at the
+				top. */}
+				<div
+					aria-hidden="true"
+					style={{ height: `calc(100dvh - ${stickyHeight}px)` }}
+				/>
 			</main>
 
 			{openItem ? (
@@ -475,7 +488,9 @@ function MenuItemCard({
 						</span>
 						{titleCase(item.name)}
 					</h3>
-					<p className="prose text-secondary text-sm">{item.description}</p>
+					<p className="prose text-secondary text-sm">
+						{capitalizeFirst(item.description)}
+					</p>
 				</button>
 				{/* No add control on a view-only menu (Dineinly Menu package) — the
 				price is the row's one point of emphasis, so it takes the gold
@@ -564,8 +579,12 @@ function MenuItemDrawer({
 	const [ice, setIce] = useState<(typeof ICE_OPTIONS)[number]>("regular");
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	// Dineinly Menu is view-only (orderingEnabled false) — spice/salt/ice
+	// only mean anything at order time, so they're never shown there even if
+	// the dish itself offers them.
 	const hasPreferences =
-		item.offers_spice || item.offers_salt || item.offers_ice;
+		orderingEnabled &&
+		(item.offers_spice || item.offers_salt || item.offers_ice);
 
 	async function handleAddToOrder() {
 		setIsSubmitting(true);
@@ -635,7 +654,9 @@ function MenuItemDrawer({
 					</div>
 				</div>
 
-				<p className="prose text-base text-secondary">{item.description}</p>
+				<p className="prose text-base text-secondary">
+					{capitalizeFirst(item.description)}
+				</p>
 
 				<div className="border-divider border-t" aria-hidden="true" />
 
