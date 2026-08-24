@@ -356,7 +356,7 @@ export default function StaffRosterPage() {
 									viewerRole,
 								)}
 								canReassignOwner={canReassignOwner}
-								canResetPin={viewerIsAdmin}
+								canResetPin={viewerIsAdmin && !isMenuOnly}
 								onEdit={() => openEditSheet(staff)}
 								onRemove={() =>
 									setRemoveTarget({

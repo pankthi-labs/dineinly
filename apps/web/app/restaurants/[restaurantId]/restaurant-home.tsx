@@ -153,6 +153,7 @@ export function RestaurantHome({
 						<AdminHeaderActions
 							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
 							restaurantId={isAdmin ? undefined : restaurantId}
+							isMenuOnly={isMenuOnly}
 						/>
 					</div>
 				</div>

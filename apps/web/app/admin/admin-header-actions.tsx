@@ -23,6 +23,7 @@ const menuItemClass =
 export function AdminHeaderActions({
 	directoryHref,
 	restaurantId,
+	isMenuOnly = false,
 }: {
 	directoryHref?: string;
 	/** Present only for a restaurant-tree viewer who has a Staff row (not
@@ -33,6 +34,11 @@ export function AdminHeaderActions({
 	 * Dineinly Admin (no Staff row anywhere), whose "Profile" edits just
 	 * their name via auth.updateDisplayName instead. */
 	restaurantId?: string;
+	/** Dineinly Menu has no Waiter/Kitchen roles or station devices
+	 * (docs/product.md § Dineinly Experiences) — drops ProfileSheet's PIN
+	 * section. Defaults false for the Dineinly Admin caller, which never
+	 * passes restaurantId anyway. */
+	isMenuOnly?: boolean;
 }) {
 	const router = useRouter();
 	const [isOpen, setIsOpen] = useState(false);
@@ -166,6 +172,7 @@ export function AdminHeaderActions({
 						restaurantId={restaurantId}
 						name={profileName ?? ""}
 						hasPin={!!restaurantId && (staffProfile.data?.hasPin ?? false)}
+						isMenuOnly={isMenuOnly}
 						onClose={() => setIsProfileSheetOpen(false)}
 					/>
 				)

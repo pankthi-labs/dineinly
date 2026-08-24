@@ -67,13 +67,19 @@ export function RestaurantRow({
 					<dl
 						className={`grid grid-cols-1 gap-6 border-divider border-b pb-6 sm:grid-cols-2 lg:grid-cols-3 ${dimClass}`}
 					>
-						<Detail label="Address" value={addressLine} />
+						{restaurant.address || restaurant.city || restaurant.state ? (
+							<Detail label="Address" value={addressLine} />
+						) : null}
 						<Detail
 							label="Dineinly Experience"
 							value={EXPERIENCE_LABELS[restaurant.experience]}
 						/>
-						<Detail label="GST Number" value={restaurant.gstNumber ?? "—"} />
-						<Detail label="Pincode" value={restaurant.pincode ?? "—"} />
+						{restaurant.gstNumber ? (
+							<Detail label="GST Number" value={restaurant.gstNumber} />
+						) : null}
+						{restaurant.pincode ? (
+							<Detail label="Pincode" value={restaurant.pincode} />
+						) : null}
 						<Detail
 							label="Service Charge"
 							value={
@@ -86,14 +92,12 @@ export function RestaurantRow({
 							label="Owner Name"
 							value={restaurant.owner?.name ?? "Not assigned"}
 						/>
-						<Detail
-							label="Owner Email"
-							value={restaurant.owner?.email ?? "—"}
-						/>
-						<Detail
-							label="Owner Mobile"
-							value={restaurant.owner?.mobile ?? "—"}
-						/>
+						{restaurant.owner?.email ? (
+							<Detail label="Owner Email" value={restaurant.owner.email} />
+						) : null}
+						{restaurant.owner?.mobile ? (
+							<Detail label="Owner Mobile" value={restaurant.owner.mobile} />
+						) : null}
 					</dl>
 
 					<div className="flex items-center gap-6 pt-6">

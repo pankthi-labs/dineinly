@@ -15,16 +15,20 @@ import { PIN_PATTERN } from "@/server/routers/staff.schema";
 // Dineinly Admin has no Staff row anywhere, so `restaurantId` is omitted for
 // them — name-only, backed by auth.updateDisplayName instead of the
 // staff-scoped mutations, and no PIN section (nothing to attribute on a
-// shared kitchen/floor device for an Admin identity).
+// shared kitchen/floor device for an Admin identity). Dineinly Menu has no
+// Waiter/Kitchen roles or station devices either (docs/product.md §
+// Dineinly Experiences), so isMenuOnly drops the PIN section the same way.
 export function ProfileSheet({
 	restaurantId,
 	name,
 	hasPin,
+	isMenuOnly,
 	onClose,
 }: {
 	restaurantId?: string;
 	name: string;
 	hasPin: boolean;
+	isMenuOnly: boolean;
 	onClose: () => void;
 }) {
 	const [nameValue, setNameValue] = useState(name);
@@ -48,7 +52,7 @@ export function ProfileSheet({
 			setError("Name must be at least 2 characters.");
 			return;
 		}
-		if (restaurantId && pin && !PIN_PATTERN.test(pin)) {
+		if (restaurantId && !isMenuOnly && pin && !PIN_PATTERN.test(pin)) {
 			setError("PIN must be 4 to 6 digits.");
 			return;
 		}
@@ -66,7 +70,7 @@ export function ProfileSheet({
 				}
 			}
 			if (restaurantId) {
-				if (pin) {
+				if (!isMenuOnly && pin) {
 					await setPinMutation.mutateAsync({ restaurantId, pin });
 				}
 				utils.staff.myProfile.invalidate({ restaurantId });
@@ -123,7 +127,7 @@ export function ProfileSheet({
 					</Field>
 				</FieldGroup>
 
-				{restaurantId ? (
+				{restaurantId && !isMenuOnly ? (
 					<FieldGroup legend="Attribution PIN">
 						<Field
 							label={hasPin ? "New PIN" : "PIN"}
