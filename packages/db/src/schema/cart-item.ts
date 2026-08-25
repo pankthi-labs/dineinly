@@ -69,7 +69,7 @@ export const cartItems = pgTable(
 		}).onDelete("set null"),
 		check(
 			"cart_items_added_by_staff_id_check",
-			sql`(${table.addedByType} = 'staff' AND ${table.addedByStaffId} IS NOT NULL) OR (${table.addedByType} = 'guest' AND ${table.addedByStaffId} IS NULL)`,
+			sql`(${table.addedByType} = 'staff' AND ${table.addedByStaffId} IS NOT NULL) OR (${table.addedByType} = 'guest' AND ${table.addedByStaffId} IS NULL) OR (${table.addedByType} = 'dineinly_admin' AND ${table.addedByStaffId} IS NULL)`,
 		),
 		check(
 			"cart_items_quantity_check",

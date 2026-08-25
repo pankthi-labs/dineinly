@@ -14,6 +14,7 @@ import {
 	getBillInput,
 	listBillsInput,
 	requestBillInput,
+	setOrderItemQuantityInput,
 	settleBillInput,
 	waiveOrderItemInput,
 } from "./bills.schema";
@@ -173,7 +174,9 @@ export const billsRouter = router({
 		const [billsResult, tablesResult, ordersResult] = await Promise.all([
 			ctx.auth
 				.from("bills")
-				.select("id, session_id, bill_number, status, total, settled_at")
+				.select(
+					"id, session_id, bill_number, daily_token, status, total, settled_at",
+				)
 				.eq("restaurant_id", input.restaurantId)
 				.in("session_id", sessionIds),
 			ctx.auth
@@ -272,6 +275,7 @@ export const billsRouter = router({
 				sessionId: session.id,
 				billId: bill?.id ?? null,
 				billNumber: bill?.bill_number ?? null,
+				dailyToken: bill?.daily_token ?? null,
 				tableLabel,
 				status,
 				total,
@@ -320,7 +324,7 @@ export const billsRouter = router({
 				ctx.auth
 					.from("bills")
 					.select(
-						"id, bill_number, status, subtotal, tax_amount, total, settled_at",
+						"id, bill_number, daily_token, status, subtotal, tax_amount, total, settled_at",
 					)
 					.eq("session_id", session.id)
 					.maybeSingle(),
@@ -420,6 +424,7 @@ export const billsRouter = router({
 			tableLabel: (tablesResult.data ?? []).map((t) => t.label).join(", "),
 			billId: bill?.id ?? null,
 			billNumber: bill?.bill_number ?? null,
+			dailyToken: bill?.daily_token ?? null,
 			status,
 			settledAt: bill?.settled_at ?? null,
 			hasItemsInProgress,
@@ -589,6 +594,72 @@ export const billsRouter = router({
 				});
 			}
 			return { id: data.id, cancelledQuantity: input.cancelledQuantity };
+		}),
+
+	// Counter only (bills/[sessionId]/page.tsx's inline quantity pill): unlike
+	// cancelOrderItem/waiveOrderItem, which record a correction against the
+	// originally ordered quantity, this replaces `quantity` outright — nothing
+	// has reached the kitchen yet (still 'placed'), so there's no "originally
+	// ordered" figure worth preserving. Clears any prior waive/cancel
+	// bookkeeping so the item's displayed quantity stays the single source of
+	// truth. 0 maps onto a full cancel instead of violating
+	// order_items_quantity_check (quantity must stay > 0).
+	setOrderItemQuantity: authedProcedure
+		.input(setOrderItemQuantityInput)
+		.mutation(async ({ ctx, input }) => {
+			const itemResult = await ctx.auth
+				.from("order_items")
+				.select("order_id, restaurant_id, quantity")
+				.eq("id", input.orderItemId)
+				.maybeSingle();
+			if (itemResult.error)
+				throw dbError("Unable to update the item.", itemResult.error);
+			if (!itemResult.data) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Order item not found.",
+				});
+			}
+			await requireFullServiceRole(
+				ctx,
+				itemResult.data.restaurant_id,
+				BILLS_WRITE_ROLES,
+			);
+			await assertBillNotSettled(
+				ctx.auth,
+				itemResult.data.order_id,
+				"Unable to update the item.",
+			);
+
+			const { data, error } = await ctx.auth
+				.from("order_items")
+				.update(
+					input.quantity === 0
+						? {
+								cancelled_quantity: itemResult.data.quantity,
+								waived_quantity: 0,
+								status: "cancelled" as const,
+							}
+						: {
+								quantity: input.quantity,
+								cancelled_quantity: 0,
+								waived_quantity: 0,
+							},
+				)
+				.eq("id", input.orderItemId)
+				.eq("status", "placed")
+				.select("id")
+				.maybeSingle();
+
+			if (error) throw dbError("Unable to update the item.", error);
+			if (!data) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message:
+						"This item has already started preparing and can no longer be corrected.",
+				});
+			}
+			return { id: data.id, quantity: input.quantity };
 		}),
 
 	// Waive an order item, in whole or in part: excludes waivedQuantity of it

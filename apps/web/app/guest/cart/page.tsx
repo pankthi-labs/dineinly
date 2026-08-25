@@ -52,6 +52,7 @@ export default function GuestCartPage() {
 	return (
 		<GuestCartContent
 			restaurantName={menu.data.restaurant.name}
+			isCounter={menu.data.restaurant.experience === "counter"}
 			tableLabel={menu.data.tableLabel}
 			items={cart.data ?? []}
 			idempotencyKey={idempotencyKey}
@@ -92,6 +93,7 @@ function preferenceNotes(item: CartLine): string[] {
 
 function GuestCartContent({
 	restaurantName,
+	isCounter,
 	tableLabel,
 	items,
 	idempotencyKey,
@@ -102,6 +104,7 @@ function GuestCartContent({
 	onRemove,
 }: {
 	restaurantName: string;
+	isCounter: boolean;
 	tableLabel: string | null;
 	items: CartLine[];
 	idempotencyKey: string;
@@ -220,7 +223,11 @@ function GuestCartContent({
 						}}
 						className="mt-3 w-full rounded-md bg-accent px-6 py-4 font-medium text-background text-sm disabled:cursor-not-allowed disabled:opacity-60"
 					>
-						{submitOrder.isPending ? "Sending…" : "Confirm Order"}
+						{submitOrder.isPending
+							? "Sending…"
+							: isCounter
+								? "Confirm Order & Generate Bill"
+								: "Confirm Order"}
 					</button>
 				</div>
 			) : null}

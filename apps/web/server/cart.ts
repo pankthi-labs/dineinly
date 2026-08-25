@@ -82,7 +82,7 @@ export async function upsertCartItem(
 		spice?: Spice | null;
 		salt?: Salt | null;
 		ice?: Ice | null;
-		addedByType: "guest" | "staff";
+		addedByType: "guest" | "staff" | "dineinly_admin";
 		addedByStaffId?: string | null;
 	},
 ): Promise<void> {

@@ -35,12 +35,14 @@ function assertNoQueueError(error: unknown): void {
 type OrderItemStatus = "placed" | "preparing" | "ready" | "served";
 
 // Counter-experience gate (docs/core-data-model.md § Lifecycle invariants):
-// placed -> preparing additionally requires the session's Bill to be
-// settled, for counter-experience restaurants only — kitchen never starts
-// on an unpaid counter order. Full-Service experiences (guest/one) have no
-// such gate. Raises for the whole batch if any item in it belongs to a
-// session whose bill isn't settled yet, same all-or-nothing shape
-// submit_order() uses for its own availability guard.
+// placed -> preparing additionally requires the session's Bill to be settled
+// AND the guest to have released this item to the kitchen (order-items.
+// released_at, set by guest.orders.release) — the queue already hides
+// anything failing either check (listQueue above), but that's UX only; this
+// is the server-enforced version, same "not just hidden, rejected too"
+// pattern the rest of the app follows. Counter-experience restaurants only.
+// Raises for the whole batch if any item fails either check, same
+// all-or-nothing shape submit_order() uses for its own availability guard.
 async function assertCounterBillsSettled(
 	ctx: Context,
 	restaurantId: string,
@@ -51,11 +53,17 @@ async function assertCounterBillsSettled(
 
 	const itemsResult = await ctx.auth
 		.from("order_items")
-		.select("order_id")
+		.select("order_id, released_at")
 		.eq("restaurant_id", restaurantId)
 		.in("id", orderItemIds);
 	if (itemsResult.error) {
 		throw dbError("Unable to update the order.", itemsResult.error);
+	}
+	if ((itemsResult.data ?? []).some((row) => row.released_at == null)) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "The guest hasn't sent this item to the kitchen yet.",
+		});
 	}
 	const orderIds = [
 		...new Set((itemsResult.data ?? []).map((row) => row.order_id)),
@@ -136,13 +144,13 @@ export const kitchenRouter = router({
 			const [restaurantResult, itemsResult] = await Promise.all([
 				ctx.auth
 					.from("restaurants")
-					.select("id, name")
+					.select("id, name, experience")
 					.eq("id", input.restaurantId)
 					.maybeSingle(),
 				ctx.auth
 					.from("order_items")
 					.select(
-						"id, item_name, quantity, cancelled_quantity, status, order_id, preparing_at, ready_at",
+						"id, item_name, quantity, cancelled_quantity, status, order_id, preparing_at, ready_at, released_at",
 					)
 					.eq("restaurant_id", input.restaurantId)
 					.in("status", ["placed", "preparing", "ready"]),
@@ -182,12 +190,13 @@ export const kitchenRouter = router({
 					.in("session_id", sessionIds),
 				// Counter has no restaurant_tables row (tableLabelsBySession stays
 				// empty for it), so its guest-facing identifier here is the same
-				// daily_token shown on the guest bill page — an item only ever
-				// reaches this queue post-settle for Counter, so daily_token is
-				// always assigned by the time it would render.
+				// daily_token shown on the guest bill page. `status` rides along so
+				// unpaid Counter orders can be filtered out below — the item's own
+				// `preparing`/`ready` status can't tell an unsettled bill apart from
+				// a settled one, since both permit those states.
 				ctx.auth
 					.from("bills")
-					.select("session_id, daily_token")
+					.select("session_id, daily_token, status")
 					.eq("restaurant_id", input.restaurantId)
 					.in("session_id", sessionIds),
 			]);
@@ -203,10 +212,14 @@ export const kitchenRouter = router({
 			}
 
 			const tokenBySession = new Map<string, number>();
+			const billStatusBySession = new Map<string, string>();
 			for (const bill of bills ?? []) {
-				if (bill.daily_token == null) continue;
-				tokenBySession.set(bill.session_id, bill.daily_token);
+				if (bill.daily_token != null) {
+					tokenBySession.set(bill.session_id, bill.daily_token);
+				}
+				billStatusBySession.set(bill.session_id, bill.status);
 			}
+			const isCounter = restaurantResult.data.experience === "counter";
 
 			return {
 				restaurant: restaurantResult.data,
@@ -230,9 +243,31 @@ export const kitchenRouter = router({
 							token: order
 								? (tokenBySession.get(order.session_id) ?? null)
 								: null,
+							sessionId: order?.session_id ?? null,
+							releasedAt: item.released_at,
 						};
 					})
-					.filter((item) => item.quantity > 0),
+					.filter((item) => item.quantity > 0)
+					// Counter-experience gate (core-data-model.md § Lifecycle
+					// invariants): kitchen never starts on an unpaid counter order —
+					// drop an unsettled 'placed' counter item from the queue
+					// entirely, same as before. On top of that, the guest now
+					// releases each paid item to the kitchen at their own pace
+					// (docs/product.md § Order Lifecycle) — a settled-but-unreleased
+					// item still has nothing for the kitchen to do yet either.
+					.filter(
+						(item) =>
+							!(
+								isCounter &&
+								item.status === "placed" &&
+								(billStatusBySession.get(item.sessionId ?? "") !== "settled" ||
+									item.releasedAt == null)
+							),
+					)
+					.map(
+						({ sessionId: _sessionId, releasedAt: _releasedAt, ...item }) =>
+							item,
+					),
 			};
 		}),
 

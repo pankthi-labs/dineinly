@@ -1323,13 +1323,15 @@ revoke execute on function public.submit_order(text) from public;
 grant execute on function public.submit_order(text) to authenticated;
 
 -- Staff equivalent of submit_order() above, for Order on behalf of guest
--- (docs/product.md § RBAC "Submit Order": Waiter/Manager/Owner — Dineinly
--- Admin excluded here, unlike most staff RPCs, since orders.placed_by_type
--- = 'staff' requires a real staff row via orders_placed_by_staff_id_check,
--- and Admin never has one). A staff caller has no guest JWT claims to read
--- tenancy/session from, so both are explicit arguments instead of JWT
--- claims. Mirrors submit_order()'s idempotency, empty-cart, availability,
--- and settled-bill guards exactly; only the actor attribution differs.
+-- (docs/product.md § RBAC "Submit Order": Waiter/Manager/Owner, plus
+-- Dineinly Admin — the one staff RPC Admin does reach without a Staff row,
+-- since placed_by_type has its own 'dineinly_admin' branch alongside 'staff'
+-- on orders_placed_by_staff_id_check/cart_items_added_by_staff_id_check
+-- specifically so this path doesn't need one). A staff caller has no guest
+-- JWT claims to read tenancy/session from, so both are explicit arguments
+-- instead of JWT claims. Mirrors submit_order()'s idempotency, empty-cart,
+-- availability, and settled-bill guards exactly; only the actor attribution
+-- differs.
 create or replace function public.staff_submit_order(
 	p_restaurant_id uuid,
 	p_session_id uuid,
@@ -1342,28 +1344,46 @@ set search_path = ''
 as $$
 declare
 	v_staff_id uuid;
+	v_placed_by_type public.actor_type;
 	v_order_id uuid;
 	v_experience public.restaurant_experience;
 begin
-	select id into v_staff_id
-	from public.staff
-	where restaurant_id = p_restaurant_id
-		and user_id = auth.uid()
-		and status = 'active'
-		and role in ('waiter', 'manager', 'owner');
-
-	if v_staff_id is null then
-		raise exception 'Only an active Waiter, Manager, or Owner may place an order';
-	end if;
+	select experience into v_experience from public.restaurants where id = p_restaurant_id;
 
 	-- Dineinly Menu is view-only, no floor ordering (docs/product.md §
 	-- Dineinly Experiences) — the tRPC layer already blocks floor.cart.addItem
 	-- for it, so a Menu restaurant's cart can never hold items in practice,
 	-- but this SECURITY DEFINER function checks directly rather than relying
 	-- on that alone.
-	select experience into v_experience from public.restaurants where id = p_restaurant_id;
 	if v_experience = 'menu' then
 		raise exception 'This feature isn''t available on the Dineinly Menu package';
+	end if;
+
+	if public.is_dineinly_admin() then
+		v_placed_by_type := 'dineinly_admin';
+	else
+		-- Counter has no Waiter station (docs/product.md § Dineinly
+		-- Experiences), same role split floor.ts's floorRolesFor enforces at
+		-- the tRPC layer — checked again here since this SECURITY DEFINER
+		-- function is the one place that actually places the order.
+		select id into v_staff_id
+		from public.staff
+		where restaurant_id = p_restaurant_id
+			and user_id = auth.uid()
+			and status = 'active'
+			and (
+				role in ('manager', 'owner')
+				or (role = 'waiter' and v_experience is distinct from 'counter')
+			);
+
+		if v_staff_id is null then
+			raise exception '%', case
+				when v_experience = 'counter' then 'Only an active Manager or Owner may place an order'
+				else 'Only an active Waiter, Manager, or Owner may place an order'
+			end;
+		end if;
+
+		v_placed_by_type := 'staff';
 	end if;
 
 	if not exists (
@@ -1412,7 +1432,7 @@ begin
 	end if;
 
 	insert into public.orders (restaurant_id, session_id, placed_by_type, placed_by_staff_id, idempotency_key)
-	values (p_restaurant_id, p_session_id, 'staff', v_staff_id, p_idempotency_key)
+	values (p_restaurant_id, p_session_id, v_placed_by_type, v_staff_id, p_idempotency_key)
 	on conflict (idempotency_key) do nothing
 	returning id into v_order_id;
 
@@ -1672,6 +1692,59 @@ $$;
 revoke execute on function public.request_bill() from public;
 grant execute on function public.request_bill() to authenticated;
 
+-- Counter only: the guest sends each paid item to the kitchen at their own
+-- pace rather than every item firing at once on settle (docs/product.md §
+-- Order Lifecycle) — this is the guest-side release, kitchen.ts's queue
+-- excludes a 'placed' item until released_at is set here, on top of the
+-- existing settled-bill gate. Idempotent (`released_at is null` in the
+-- WHERE) — a retry/double-tap on an already-released item is a silent
+-- no-op, not an error, same as request_bill()'s repeat-poll behavior.
+create or replace function public.release_order_item_to_kitchen(p_order_item_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid;
+	v_session_id uuid;
+	v_bill_status public.bill_status;
+begin
+	select oi.restaurant_id, o.session_id
+	into v_restaurant_id, v_session_id
+	from public.order_items oi
+	join public.orders o
+		on o.restaurant_id = oi.restaurant_id and o.id = oi.order_id
+	where oi.id = p_order_item_id;
+
+	-- Same "not found" message whether the item doesn't exist or belongs to
+	-- someone else's session — a guest can't use this to probe another
+	-- session's order items (same reasoning as submit_order()'s claims-only
+	-- tenancy, no client-supplied restaurant/session id to spoof here either,
+	-- only the item id).
+	if v_restaurant_id is null
+		or not public.jwt_is_guest_for_session(v_restaurant_id, v_session_id)
+	then
+		raise exception 'Order item not found';
+	end if;
+
+	select status into v_bill_status
+	from public.bills
+	where session_id = v_session_id;
+
+	if v_bill_status is distinct from 'settled' then
+		raise exception 'Pay the bill before sending items to the kitchen';
+	end if;
+
+	update public.order_items
+	set released_at = now()
+	where id = p_order_item_id and released_at is null;
+end;
+$$;
+
+revoke execute on function public.release_order_item_to_kitchen(uuid) from public;
+grant execute on function public.release_order_item_to_kitchen(uuid) to authenticated;
+
 -- ============================================================================
 -- 12. Realtime broadcast: publish side (docs/realtime.md)
 -- ============================================================================
@@ -1811,8 +1884,13 @@ begin
 end;
 $$;
 
+-- Also fires on released_at (Counter's guest-side kitchen release,
+-- release_order_item_to_kitchen() above): that's not a `status` change, but
+-- it does change which queue column the item belongs in on the Kitchen
+-- Display (kitchen.ts's listQueue excludes an unreleased item entirely) —
+-- without this, a release would need a manual refresh to reach the kitchen.
 create trigger broadcast_order_item_status
-after update of status on public.order_items
+after update of status, released_at on public.order_items
 for each row execute function public.broadcast_order_item_status();
 
 -- bills: status change -> session:{id} (guest + staff on that session,

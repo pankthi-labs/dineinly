@@ -239,7 +239,9 @@ export const guestRouter = router({
 
 			const itemsResult = await ctx.supabase
 				.from("order_items")
-				.select("order_id, item_name, quantity, cancelled_quantity, status")
+				.select(
+					"id, order_id, item_name, quantity, cancelled_quantity, status, released_at",
+				)
 				.eq("restaurant_id", ctx.guest.restaurant_id)
 				.in(
 					"order_id",
@@ -280,6 +282,7 @@ export const guestRouter = router({
 					placedAt: order.placed_at,
 					status,
 					items: items.map((item) => ({
+						id: item.id,
 						name: item.item_name,
 						quantity: item.quantity - item.cancelled_quantity,
 						served: item.status === "served",
@@ -288,10 +291,37 @@ export const guestRouter = router({
 						// Preparing -> Ready for Pickup") — Full-Service ignores this
 						// and keeps grouping purely on `served`.
 						ready: item.status === "ready",
+						// Counter only (always true elsewhere, since nothing gates
+						// Full-Service's kitchen fire): whether the guest has sent
+						// this paid item to the kitchen yet.
+						released: item.released_at != null,
 					})),
 				};
 			});
 		}),
+
+		// Counter only: the guest's own per-item kitchen release
+		// (release_order_item_to_kitchen(), RLS migration § "Guest ordering") —
+		// gated there on the item belonging to this guest's own session and the
+		// bill being settled, so a stale/racing tap fails cleanly rather than
+		// silently releasing an item on an unpaid or already-served order.
+		release: guestProcedure
+			.input(z.object({ orderItemId: z.uuid() }))
+			.mutation(async ({ ctx, input }) => {
+				requireOrderingEnabled(ctx.experience);
+
+				const { error } = await ctx.supabase.rpc(
+					"release_order_item_to_kitchen",
+					{ p_order_item_id: input.orderItemId },
+				);
+				if (error) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: error.message,
+						cause: error,
+					});
+				}
+			}),
 	}),
 
 	bill: router({

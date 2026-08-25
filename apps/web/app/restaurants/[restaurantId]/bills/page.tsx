@@ -26,6 +26,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 export default function BillsPage() {
 	const { restaurantId } = useParams<{ restaurantId: string }>();
 	const [search, setSearch] = useState("");
+	const [tokenSearch, setTokenSearch] = useState("");
 	const [exactDate, setExactDate] = useState("");
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
@@ -65,7 +66,9 @@ export default function BillsPage() {
 		["open", "requested", "settled"] as StatusFilter[]
 	).filter((status) => filterCounts[status] > 0);
 	const visibleStatusFilters = visibleFilters(STATUS_FILTERS, statusesPresent);
+	const isCounter = restaurantQuery.data?.experience === "counter";
 	const normalizedSearch = search.trim().toLowerCase();
+	const normalizedTokenSearch = tokenSearch.trim();
 	const visibleBills = bills
 		.filter((b) => statusFilter === "all" || b.status === statusFilter)
 		.filter(
@@ -73,6 +76,11 @@ export default function BillsPage() {
 				!normalizedSearch ||
 				b.billNumber?.toLowerCase().includes(normalizedSearch) ||
 				b.tableLabel.toLowerCase().includes(normalizedSearch),
+		)
+		.filter(
+			(b: Bill) =>
+				!normalizedTokenSearch ||
+				String(b.dailyToken ?? "").includes(normalizedTokenSearch),
 		);
 
 	return (
@@ -88,47 +96,75 @@ export default function BillsPage() {
 					search={{
 						value: search,
 						onChange: setSearch,
-						label: "Search by bill number or table",
+						label: isCounter
+							? "Search by bill number"
+							: "Search by bill number or table",
 					}}
 					title="Bills"
 					description="Generate, correct, settle, and close bills for every table."
 				/>
 
-				<div className="mt-8 flex flex-wrap items-center gap-2">
-					<button
-						type="button"
-						onClick={() => setExactDate("")}
-						aria-pressed={!exactDate}
-						className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
-							!exactDate
-								? "border-accent text-primary"
-								: "border-divider text-secondary hover:text-primary"
-						}`}
-					>
-						Today
-					</button>
-					<input
-						type="date"
-						value={exactDate}
-						onChange={(event) => setExactDate(event.target.value)}
-						aria-label="Filter by exact date"
-						className="rounded-sm border border-divider bg-surface px-3 py-2 text-primary text-sm"
-					/>
-					{visibleStatusFilters.map((filter) => (
-						<button
-							key={filter.value}
-							type="button"
-							onClick={() => setStatusFilter(filter.value)}
-							aria-pressed={statusFilter === filter.value}
-							className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
-								statusFilter === filter.value
-									? "border-accent text-primary"
-									: "border-divider text-secondary hover:text-primary"
-							}`}
-						>
-							{filter.label} ({filterCounts[filter.value]})
-						</button>
-					))}
+				<div className="mt-8 flex flex-wrap items-start gap-x-8 gap-y-5">
+					<div className="flex flex-col gap-2">
+						<span className="text-caps text-muted">Date</span>
+						<div className="flex flex-wrap items-center gap-2">
+							<button
+								type="button"
+								onClick={() => setExactDate("")}
+								aria-pressed={!exactDate}
+								className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
+									!exactDate
+										? "border-accent text-primary"
+										: "border-divider text-secondary hover:text-primary"
+								}`}
+							>
+								Today
+							</button>
+							<input
+								type="date"
+								value={exactDate}
+								onChange={(event) => setExactDate(event.target.value)}
+								aria-label="Filter by exact date"
+								className="rounded-sm border border-divider bg-surface px-3 py-2 text-primary text-sm"
+							/>
+						</div>
+					</div>
+
+					{isCounter ? (
+						<div className="flex flex-col gap-2">
+							<span className="text-caps text-muted">Token</span>
+							<input
+								type="text"
+								inputMode="numeric"
+								value={tokenSearch}
+								onChange={(event) => setTokenSearch(event.target.value)}
+								placeholder="Search by token"
+								aria-label="Search by token number"
+								className="w-24 rounded-sm border border-divider bg-surface px-3 py-2 text-primary text-sm"
+							/>
+						</div>
+					) : null}
+
+					<div className="flex flex-col gap-2">
+						<span className="text-caps text-muted">Status</span>
+						<div className="flex flex-wrap gap-2">
+							{visibleStatusFilters.map((filter) => (
+								<button
+									key={filter.value}
+									type="button"
+									onClick={() => setStatusFilter(filter.value)}
+									aria-pressed={statusFilter === filter.value}
+									className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
+										statusFilter === filter.value
+											? "border-accent text-primary"
+											: "border-divider text-secondary hover:text-primary"
+									}`}
+								>
+									{filter.label} ({filterCounts[filter.value]})
+								</button>
+							))}
+						</div>
+					</div>
 				</div>
 
 				<div className="mt-8 flex flex-col gap-3">
@@ -169,6 +205,7 @@ export default function BillsPage() {
 								type="button"
 								onClick={() => {
 									setSearch("");
+									setTokenSearch("");
 									setStatusFilter("all");
 								}}
 								className="mt-3 text-accent text-caps hover:opacity-80"

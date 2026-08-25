@@ -1,10 +1,12 @@
 import { TRPCError } from "@trpc/server";
+import type { Database } from "@workspace/db";
+import { isDineinlyAdmin, type StaffRole } from "@/lib/auth";
 import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import { listCartItems, upsertCartItem } from "../cart";
 import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
-import { assertSeatedExperience, requireSeatedRole } from "../trpc/rbac";
+import { assertFullServiceExperience, requireStaffRole } from "../trpc/rbac";
 import {
 	addCartItemInput,
 	listCartInput,
@@ -13,7 +15,26 @@ import {
 	submitFloorOrderInput,
 } from "./floor.schema";
 
-const FLOOR_ROLES = ["waiter", "manager", "owner"] as const;
+// Counter has no Waiter station (docs/product.md § Dineinly Experiences —
+// self-service pickup, no serving role there), so its allowed role list
+// drops "waiter" rather than reusing Full-Service's — a stray Waiter-role
+// Staff row at a Counter restaurant (there shouldn't be one, but nothing
+// stops Staff Roster from creating one) shouldn't be able to act here either.
+const SEATED_FLOOR_ROLES = ["waiter", "manager", "owner"] as const;
+const COUNTER_FLOOR_ROLES = ["manager", "owner"] as const;
+
+function floorRolesFor(
+	experience: Database["public"]["Enums"]["restaurant_experience"] | null,
+): readonly StaffRole[] {
+	return experience === "counter" ? COUNTER_FLOOR_ROLES : SEATED_FLOOR_ROLES;
+}
+
+function floorRoleErrorMessage(allowedRoles: readonly StaffRole[]): string {
+	const label = allowedRoles.includes("waiter")
+		? "Waiter, Manager, or Owner"
+		: "Manager or Owner";
+	return `Only an active ${label} may order for a guest.`;
+}
 
 // Order on behalf of guest (docs/product.md § RBAC "Add to Cart"/"Submit
 // Order": Waiter/Manager/Owner). The cart itself is the same shared,
@@ -24,13 +45,36 @@ const FLOOR_ROLES = ["waiter", "manager", "owner"] as const;
 // go through ctx.auth directly (staff_all_cart_items RLS, § 5 of the RLS
 // migration, is any-active-staff) — only submitOrder needs the RPC, for the
 // same idempotent cart-to-order transaction submit_order() gives guests.
+//
+// Gated Full-Service-or-Counter (requireFullServiceRole/
+// assertFullServiceExperience — only Menu excluded), not seated-only:
+// Counter's Bills tab reuses this same cart+submit machinery for its own
+// "Add Item" action (a Counter session just has no restaurant_tables row to
+// look up, which every read/write here already scopes by sessionId, not by
+// table). submit_order()/staff_submit_order() themselves still reject once
+// the session's bill is settled — same global "a settled bill never
+// reopens" rule as guest ordering (core-data-model.md § Lifecycle
+// invariants), so this only ever adds pre-settle.
+export type FloorActor =
+	| { actorType: "staff"; staffId: string }
+	| { actorType: "dineinly_admin"; staffId: null };
+
 export async function requireOwnStaffId(
 	ctx: Context,
 	restaurantId: string,
-): Promise<string> {
+	allowedRoles: readonly StaffRole[],
+): Promise<FloorActor> {
 	const {
 		data: { user },
 	} = await ctx.auth.auth.getUser();
+
+	// Dineinly Admin has no Staff row — orders.placed_by_type/
+	// cart_items.added_by_type carry a 'dineinly_admin' branch specifically so
+	// this doesn't need one (orders_placed_by_staff_id_check/
+	// cart_items_added_by_staff_id_check, packages/db/src/schema).
+	if (isDineinlyAdmin(user)) {
+		return { actorType: "dineinly_admin", staffId: null };
+	}
 
 	const staffResult = await ctx.auth
 		.from("staff")
@@ -38,24 +82,20 @@ export async function requireOwnStaffId(
 		.eq("restaurant_id", restaurantId)
 		.eq("user_id", user?.id ?? "")
 		.eq("status", "active")
-		.in("role", FLOOR_ROLES)
+		.in("role", allowedRoles)
 		.maybeSingle();
 	if (staffResult.error) {
 		throw dbError("Unable to identify staff member.", staffResult.error);
 	}
 	if (!staffResult.data) {
-		// Dineinly Admin has no Staff row — orders_placed_by_staff_id_check
-		// requires one for placed_by_type = 'staff', so Admin can't place an
-		// order on a restaurant's behalf the same way Waiter/Manager/Owner do.
 		throw new TRPCError({
 			code: "FORBIDDEN",
-			message:
-				"Only an active Waiter, Manager, or Owner may order for a guest.",
+			message: floorRoleErrorMessage(allowedRoles),
 		});
 	}
 
 	if (!staffResult.data.email.endsWith(STATION_EMAIL_SUFFIX)) {
-		return staffResult.data.id;
+		return { actorType: "staff", staffId: staffResult.data.id };
 	}
 
 	// A shared station device's own Staff row is never the actor — the PIN-
@@ -107,13 +147,21 @@ export async function requireOwnStaffId(
 		}
 	}
 
-	return actingStaff[0].id;
+	return { actorType: "staff", staffId: actingStaff[0].id };
 }
 
 export const floorRouter = router({
 	cart: router({
 		list: authedProcedure.input(listCartInput).query(async ({ ctx, input }) => {
-			await requireSeatedRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
+			const experience = await assertFullServiceExperience(
+				ctx,
+				input.restaurantId,
+			);
+			await requireStaffRole(
+				ctx,
+				input.restaurantId,
+				floorRolesFor(experience),
+			);
 
 			return listCartItems(ctx.auth, input.restaurantId, input.sessionId);
 		}),
@@ -123,8 +171,15 @@ export const floorRouter = router({
 		addItem: authedProcedure
 			.input(addCartItemInput)
 			.mutation(async ({ ctx, input }) => {
-				await assertSeatedExperience(ctx, input.restaurantId);
-				const staffId = await requireOwnStaffId(ctx, input.restaurantId);
+				const experience = await assertFullServiceExperience(
+					ctx,
+					input.restaurantId,
+				);
+				const actor = await requireOwnStaffId(
+					ctx,
+					input.restaurantId,
+					floorRolesFor(experience),
+				);
 
 				const sessionResult = await ctx.auth
 					.from("table_sessions")
@@ -151,15 +206,23 @@ export const floorRouter = router({
 					spice: input.spice,
 					salt: input.salt,
 					ice: input.ice,
-					addedByType: "staff",
-					addedByStaffId: staffId,
+					addedByType: actor.actorType,
+					addedByStaffId: actor.staffId,
 				});
 			}),
 
 		setQuantity: authedProcedure
 			.input(setCartItemQuantityInput)
 			.mutation(async ({ ctx, input }) => {
-				await requireSeatedRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
+				const experience = await assertFullServiceExperience(
+					ctx,
+					input.restaurantId,
+				);
+				await requireStaffRole(
+					ctx,
+					input.restaurantId,
+					floorRolesFor(experience),
+				);
 
 				const { error } =
 					input.quantity === 0
@@ -183,7 +246,15 @@ export const floorRouter = router({
 		removeItem: authedProcedure
 			.input(removeCartItemInput)
 			.mutation(async ({ ctx, input }) => {
-				await requireSeatedRole(ctx, input.restaurantId, [...FLOOR_ROLES]);
+				const experience = await assertFullServiceExperience(
+					ctx,
+					input.restaurantId,
+				);
+				await requireStaffRole(
+					ctx,
+					input.restaurantId,
+					floorRolesFor(experience),
+				);
 
 				const { error } = await ctx.auth
 					.from("cart_items")

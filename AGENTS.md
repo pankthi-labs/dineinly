@@ -43,7 +43,7 @@ This also rules out narrating what the code used to do or the bug that motivated
 
 Marked `TBD` in the docs — do not guess these, flag and ask:
 
-None currently open.
+See `docs/tbd.md` — currently: Order More orphaning unreleased items, and partial release of a single order line.
 
 If a doc introduces another `TBD`, do not invent entities, schema, or relationships to fill the gap — flag it and ask instead of guessing.
 

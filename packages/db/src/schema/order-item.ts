@@ -63,6 +63,15 @@ export const orderItems = pgTable(
 			mode: "string",
 		}),
 		readyAt: timestamp("ready_at", { withTimezone: true, mode: "string" }),
+		// Counter only: guest sends each paid item to the kitchen at their own
+		// pace rather than every item firing at once on settle (docs/product.md
+		// § Order Lifecycle). Null until the guest releases it; the kitchen
+		// queue excludes a 'placed' Counter item until this is set, on top of
+		// the existing settled-bill gate (kitchen.ts).
+		releasedAt: timestamp("released_at", {
+			withTimezone: true,
+			mode: "string",
+		}),
 		// Plain column — the real constraint is the composite FK below, so
 		// menu_item_id can never name an item from another restaurant.
 		menuItemId: uuid("menu_item_id"),

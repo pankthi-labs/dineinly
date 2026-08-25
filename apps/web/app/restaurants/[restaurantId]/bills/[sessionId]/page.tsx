@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, Download, Printer } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Fragment, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -72,6 +73,11 @@ export default function BillDetailPage() {
 		onError: (error) => {
 			notifyError(error);
 		},
+	});
+
+	const setQuantityMutation = trpc.bills.setOrderItemQuantity.useMutation({
+		onSuccess: () => invalidateAndNotify("Item updated."),
+		onError: notifyError,
 	});
 
 	const waiveItemMutation = trpc.bills.waiveOrderItem.useMutation({
@@ -210,6 +216,7 @@ export default function BillDetailPage() {
 	const data = billQuery.data;
 	const isSettled = data.status === "settled";
 	const canCorrect = !isSettled;
+	const isCounterBill = data.dailyToken != null;
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
@@ -268,9 +275,13 @@ export default function BillDetailPage() {
 				    not the narrow printed-bill look — that's reserved for the guest
 				    screen and the print/download output below (product.md § Bills
 				    tab). */}
-				<div className="mt-6 flex items-baseline justify-between print:hidden">
+				<div className="mt-6 flex items-baseline justify-between gap-4 print:hidden">
 					<div>
-						<h1 className="text-3xl">{formatBillLocation(data.tableLabel)}</h1>
+						<h1 className="text-3xl">
+							{data.dailyToken != null
+								? `Token ${data.dailyToken}`
+								: formatBillLocation(data.tableLabel)}
+						</h1>
 						<p className="text-secondary text-sm">
 							{data.billNumber
 								? `Bill #${data.billNumber}`
@@ -281,6 +292,15 @@ export default function BillDetailPage() {
 						{formatBillAmount(data.total)}
 					</span>
 				</div>
+
+				{data.dailyToken != null && data.status !== "settled" ? (
+					<Link
+						href={`/restaurants/${restaurantId}/floor/${sessionId}`}
+						className="mt-4 inline-flex items-center gap-1 text-accent text-caps hover:opacity-80 print:hidden"
+					>
+						Add Items
+					</Link>
+				) : null}
 
 				<div className="mt-6 grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start lg:gap-8 print:hidden">
 					{data.items.length === 0 ? (
@@ -362,8 +382,27 @@ export default function BillDetailPage() {
 														{formatBillAmount(item.unitPrice * billedQuantity)}
 													</td>
 													<td className="px-5 py-5 align-top">
-														<div className="flex flex-col items-end gap-2">
-															{item.waivable && canCorrect ? (
+														{isCounterBill ? (
+															item.cancellable && canCorrect ? (
+																<div className="flex justify-end">
+																	<QuantityPill
+																		value={billedQuantity}
+																		disabled={setQuantityMutation.isPending}
+																		onDecrement={() =>
+																			setQuantityMutation.mutate({
+																				orderItemId: item.id,
+																				quantity: billedQuantity - 1,
+																			})
+																		}
+																		onIncrement={() =>
+																			setQuantityMutation.mutate({
+																				orderItemId: item.id,
+																				quantity: billedQuantity + 1,
+																			})
+																		}
+																	/>
+																</div>
+															) : item.waivable && canCorrect ? (
 																<button
 																	type="button"
 																	onClick={() =>
@@ -380,26 +419,49 @@ export default function BillDetailPage() {
 																		? "Edit waiver"
 																		: "Waive"}
 																</button>
-															) : null}
-															{item.cancellable && canCorrect ? (
-																<button
-																	type="button"
-																	onClick={() =>
-																		isEditingThis && editing?.kind === "cancel"
-																			? closeEditor()
-																			: openEditor(item, "cancel")
-																	}
-																	aria-expanded={
-																		isEditingThis && editing?.kind === "cancel"
-																	}
-																	className="text-accent-secondary text-caps hover:opacity-80"
-																>
-																	{item.cancelledQuantity > 0
-																		? "Edit cancel"
-																		: "Cancel"}
-																</button>
-															) : null}
-														</div>
+															) : null
+														) : (
+															<div className="flex flex-col items-end gap-2">
+																{item.waivable && canCorrect ? (
+																	<button
+																		type="button"
+																		onClick={() =>
+																			isEditingThis && editing?.kind === "waive"
+																				? closeEditor()
+																				: openEditor(item, "waive")
+																		}
+																		aria-expanded={
+																			isEditingThis && editing?.kind === "waive"
+																		}
+																		className="text-caps text-secondary hover:text-primary"
+																	>
+																		{item.waivedQuantity > 0
+																			? "Edit waiver"
+																			: "Waive"}
+																	</button>
+																) : null}
+																{item.cancellable && canCorrect ? (
+																	<button
+																		type="button"
+																		onClick={() =>
+																			isEditingThis &&
+																			editing?.kind === "cancel"
+																				? closeEditor()
+																				: openEditor(item, "cancel")
+																		}
+																		aria-expanded={
+																			isEditingThis &&
+																			editing?.kind === "cancel"
+																		}
+																		className="text-accent-secondary text-caps hover:opacity-80"
+																	>
+																		{item.cancelledQuantity > 0
+																			? "Edit cancel"
+																			: "Cancel"}
+																	</button>
+																) : null}
+															</div>
+														)}
 													</td>
 												</tr>
 												{isEditingThis ? (
@@ -480,7 +542,7 @@ export default function BillDetailPage() {
 					<div className="flex flex-col gap-6 lg:sticky lg:top-8">
 						<dl className="flex flex-col gap-2 rounded-xl border border-divider bg-surface p-5 tabular-nums">
 							<TaxAndServiceRows data={data} />
-							<div className="mt-2 flex items-baseline justify-between border-divider border-t pt-2">
+							<div className="mt-2 flex items-baseline justify-between gap-4 border-divider border-t pt-2">
 								<span className="text-lg">Grand Total</span>
 								<span className="text-accent text-xl">
 									{formatBillAmount(data.total)}
@@ -567,7 +629,10 @@ export default function BillDetailPage() {
 							{data.billNumber
 								? `Bill #${data.billNumber}`
 								: "Not yet requested"}{" "}
-							· {formatBillLocation(data.tableLabel)}
+							·{" "}
+							{data.dailyToken != null
+								? `Token ${data.dailyToken}`
+								: formatBillLocation(data.tableLabel)}
 						</p>
 					</header>
 
@@ -630,7 +695,7 @@ export default function BillDetailPage() {
 
 					<div className="mt-4 border-divider border-t" />
 
-					<div className="mt-4 flex items-baseline justify-between">
+					<div className="mt-4 flex items-baseline justify-between gap-4">
 						<span className="text-xl">Grand Total</span>
 						<span className="text-2xl text-accent">
 							{formatBillAmount(data.total)}

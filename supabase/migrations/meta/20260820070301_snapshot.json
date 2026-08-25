@@ -380,7 +380,7 @@
       "checkConstraints": {
         "cart_items_added_by_staff_id_check": {
           "name": "cart_items_added_by_staff_id_check",
-          "value": "(\"cart_items\".\"added_by_type\" = 'staff' AND \"cart_items\".\"added_by_staff_id\" IS NOT NULL) OR (\"cart_items\".\"added_by_type\" = 'guest' AND \"cart_items\".\"added_by_staff_id\" IS NULL)"
+          "value": "(\"cart_items\".\"added_by_type\" = 'staff' AND \"cart_items\".\"added_by_staff_id\" IS NOT NULL) OR (\"cart_items\".\"added_by_type\" = 'guest' AND \"cart_items\".\"added_by_staff_id\" IS NULL) OR (\"cart_items\".\"added_by_type\" = 'dineinly_admin' AND \"cart_items\".\"added_by_staff_id\" IS NULL)"
         },
         "cart_items_quantity_check": {
           "name": "cart_items_quantity_check",
@@ -859,7 +859,7 @@
       "checkConstraints": {
         "orders_placed_by_staff_id_check": {
           "name": "orders_placed_by_staff_id_check",
-          "value": "(\"orders\".\"placed_by_type\" = 'staff' AND \"orders\".\"placed_by_staff_id\" IS NOT NULL) OR (\"orders\".\"placed_by_type\" = 'guest' AND \"orders\".\"placed_by_staff_id\" IS NULL)"
+          "value": "(\"orders\".\"placed_by_type\" = 'staff' AND \"orders\".\"placed_by_staff_id\" IS NOT NULL) OR (\"orders\".\"placed_by_type\" = 'guest' AND \"orders\".\"placed_by_staff_id\" IS NULL) OR (\"orders\".\"placed_by_type\" = 'dineinly_admin' AND \"orders\".\"placed_by_staff_id\" IS NULL)"
         }
       },
       "isRLSEnabled": false
@@ -969,6 +969,12 @@
         },
         "ready_at": {
           "name": "ready_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "released_at": {
+          "name": "released_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -1837,7 +1843,8 @@
       "schema": "public",
       "values": [
         "staff",
-        "guest"
+        "guest",
+        "dineinly_admin"
       ]
     },
     "public.availability": {

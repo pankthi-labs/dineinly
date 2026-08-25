@@ -123,7 +123,7 @@ export const restaurantsRouter = router({
 		.query(async ({ ctx, input }) => {
 			const { data, error } = await ctx.auth
 				.from("restaurants")
-				.select("id, name, status")
+				.select("id, name, status, experience")
 				.eq("id", input.id)
 				.maybeSingle();
 

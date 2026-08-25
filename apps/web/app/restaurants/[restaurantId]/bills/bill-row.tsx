@@ -39,11 +39,20 @@ export function BillRow({
 				<span className={`text-caps ${STATUS_COLOR[bill.status]}`}>
 					{STATUS_LABEL[bill.status]}
 				</span>
-				<h3 className="truncate text-lg text-primary">
-					{bill.billNumber ? `Bill #${bill.billNumber}` : "Not yet requested"}
-				</h3>
+				<div className="flex items-center gap-2">
+					<h3 className="truncate text-lg text-primary">
+						{bill.billNumber ? `Bill #${bill.billNumber}` : "Not yet requested"}
+					</h3>
+					{bill.dailyToken != null ? (
+						<span className="shrink-0 rounded-pill border border-accent px-3 py-0.5 font-semibold text-accent text-sm tabular-nums">
+							Token {bill.dailyToken}
+						</span>
+					) : null}
+				</div>
 				<p className="text-secondary text-sm">
-					{formatBillLocation(bill.tableLabel)} ·{" "}
+					{bill.dailyToken == null
+						? `${formatBillLocation(bill.tableLabel)} · `
+						: ""}
 					{new Date(bill.date).toLocaleString("en-IN", {
 						day: "numeric",
 						month: "short",

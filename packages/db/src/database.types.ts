@@ -324,6 +324,7 @@ export type Database = {
 					preparing_at: string | null;
 					quantity: number;
 					ready_at: string | null;
+					released_at: string | null;
 					restaurant_id: string;
 					salt: Database["public"]["Enums"]["salt"] | null;
 					spice: Database["public"]["Enums"]["spice"] | null;
@@ -344,6 +345,7 @@ export type Database = {
 					preparing_at?: string | null;
 					quantity: number;
 					ready_at?: string | null;
+					released_at?: string | null;
 					restaurant_id: string;
 					salt?: Database["public"]["Enums"]["salt"] | null;
 					spice?: Database["public"]["Enums"]["spice"] | null;
@@ -364,6 +366,7 @@ export type Database = {
 					preparing_at?: string | null;
 					quantity?: number;
 					ready_at?: string | null;
+					released_at?: string | null;
 					restaurant_id?: string;
 					salt?: Database["public"]["Enums"]["salt"] | null;
 					spice?: Database["public"]["Enums"]["spice"] | null;
@@ -943,6 +946,10 @@ export type Database = {
 				Args: { p_restaurant_id: string };
 				Returns: string;
 			};
+			release_order_item_to_kitchen: {
+				Args: { p_order_item_id: string };
+				Returns: undefined;
+			};
 			remove_staff: {
 				Args: { p_staff_id: string };
 				Returns: {
@@ -1048,7 +1055,7 @@ export type Database = {
 			};
 		};
 		Enums: {
-			actor_type: "staff" | "guest";
+			actor_type: "staff" | "guest" | "dineinly_admin";
 			availability: "available" | "sold_out";
 			bill_status: "open" | "requested" | "settled";
 			diet: "veg" | "non_veg";
@@ -1216,7 +1223,7 @@ export const Constants = {
 	},
 	public: {
 		Enums: {
-			actor_type: ["staff", "guest"],
+			actor_type: ["staff", "guest", "dineinly_admin"],
 			availability: ["available", "sold_out"],
 			bill_status: ["open", "requested", "settled"],
 			diet: ["veg", "non_veg"],

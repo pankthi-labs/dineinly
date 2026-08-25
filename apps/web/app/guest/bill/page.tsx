@@ -2,7 +2,8 @@
 
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { GuestPageHeader } from "@/components/guest-page-header";
 import {
 	GuestError,
 	GuestLoading,
@@ -34,6 +35,13 @@ export default function GuestBillPage() {
 		enabled: showOrderStatus,
 	});
 	const utils = trpc.useUtils();
+	const [sendingItemId, setSendingItemId] = useState<string | null>(null);
+	const releaseItem = trpc.guest.orders.release.useMutation({
+		onSettled: () => {
+			setSendingItemId(null);
+			utils.guest.orders.list.invalidate();
+		},
+	});
 
 	const { client, tableSessionId } = useGuestRealtime();
 	useBroadcastChannel(
@@ -76,18 +84,33 @@ export default function GuestBillPage() {
 	}
 
 	const data = bill.data;
+	const isCounter = data.dailyToken != null;
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
+			<GuestPageHeader
+				restaurantName={data.restaurant.name}
+				tableLabel={isCounter ? null : data.tableLabel}
+			/>
 			<main className="px-5 pt-4 pb-16">
-				<button
-					type="button"
-					onClick={() => router.push("/guest/orders")}
-					className="-my-3 flex items-center gap-1 py-3 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
-				>
-					<ArrowLeft className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
-					Orders
-				</button>
+				{isCounter ? (
+					<p className="text-secondary text-sm">
+						Please show this token at the counter to complete your payment.
+					</p>
+				) : (
+					<button
+						type="button"
+						onClick={() => router.push("/guest/orders")}
+						className="-my-3 flex items-center gap-1 py-3 text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
+					>
+						<ArrowLeft
+							className="icon-sm"
+							strokeWidth={1.5}
+							aria-hidden="true"
+						/>
+						Orders
+					</button>
+				)}
 
 				{data.dailyToken != null ? (
 					<div className="mx-auto mt-6 max-w-md rounded-xl border border-divider bg-surface py-5 text-center">
@@ -100,7 +123,7 @@ export default function GuestBillPage() {
 
 				<div className="mx-auto mt-6 max-w-md rounded-xl border border-divider bg-surface p-5 tabular-nums">
 					<header className="text-center">
-						<h1 className="text-3xl">{titleCase(data.restaurant.name)}</h1>
+						<h2 className="text-3xl">{titleCase(data.restaurant.name)}</h2>
 						<p className="mt-2 text-secondary text-sm">
 							{data.restaurant.address}, {data.restaurant.city},{" "}
 							{data.restaurant.state} {data.restaurant.pincode}
@@ -186,7 +209,7 @@ export default function GuestBillPage() {
 
 							<div className="mt-4 border-divider border-t" />
 
-							<div className="mt-4 flex items-baseline justify-between">
+							<div className="mt-4 flex items-baseline justify-between gap-4">
 								<span className="text-xl">Grand Total</span>
 								<span className="text-2xl text-accent">
 									{formatBillAmount(data.total)}
@@ -199,9 +222,39 @@ export default function GuestBillPage() {
 				{showOrderStatus ? (
 					<div className="mx-auto mt-6 flex max-w-md flex-col gap-6">
 						{counterOrderGroups(orders.data ?? []).map((group) => (
-							<OrderGroupCard key={group.key} group={group} />
+							<OrderGroupCard
+								key={group.key}
+								group={group}
+								onSend={(itemId) => {
+									setSendingItemId(itemId);
+									releaseItem.mutate({ orderItemId: itemId });
+								}}
+								sendingItemId={sendingItemId}
+							/>
 						))}
 					</div>
+				) : null}
+
+				{showOrderStatus ? (
+					<a
+						href="/guest/reorder"
+						className="mx-auto mt-6 block max-w-md rounded-md border border-divider px-6 py-4 text-center font-medium text-primary text-sm no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
+					>
+						Order More
+					</a>
+				) : null}
+
+				{/* Counter, pre-settle: submit_order() only rejects an already-settled
+				bill, so more orders still append to this same session/bill — this
+				just gives the guest a way back to the menu to place one. */}
+				{isCounter && data.status === "requested" ? (
+					<button
+						type="button"
+						onClick={() => router.push("/guest/menu")}
+						className="mx-auto mt-6 block w-full max-w-md rounded-md border border-divider px-6 py-4 text-center font-medium text-primary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
+					>
+						Add More Items
+					</button>
 				) : null}
 			</main>
 		</div>

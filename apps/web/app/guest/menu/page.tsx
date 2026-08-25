@@ -118,7 +118,23 @@ export default function GuestMenuPage() {
 	useBroadcastChannel(
 		client,
 		tableSessionId ? `session:${tableSessionId}` : null,
-		{ "cart_item.change": () => utils.guest.cart.list.invalidate() },
+		{
+			"cart_item.change": () => utils.guest.cart.list.invalidate(),
+			// Counter's "My Orders" badge (myOrdersStatus below) reads order/bill
+			// status live — without these, kitchen marking an item Ready never
+			// reaches this page until the guest happens to navigate elsewhere and
+			// back (app/guest/orders/page.tsx and app/guest/bill/page.tsx already
+			// subscribe to all three; this page only had cart_item.change before).
+			"order.new": () => {
+				utils.guest.orders.list.invalidate();
+				utils.guest.bill.get.invalidate();
+			},
+			"order_item.status": () => {
+				utils.guest.orders.list.invalidate();
+				utils.guest.bill.get.invalidate();
+			},
+			"bill.status": () => utils.guest.bill.get.invalidate(),
+		},
 	);
 	useBroadcastChannel(client, restaurantId ? `menu:${restaurantId}` : null, {
 		"menu_item.change": () => utils.guest.menu.invalidate(),
@@ -454,7 +470,9 @@ export default function GuestMenuPage() {
 						{hasOrders ? (
 							<button
 								type="button"
-								onClick={() => router.push("/guest/orders")}
+								onClick={() =>
+									router.push(isCounter ? "/guest/bill" : "/guest/orders")
+								}
 								className="-my-3 py-3 font-semibold text-accent text-sm"
 							>
 								My Orders{myOrdersStatus ? ` · ${myOrdersStatus}` : ""}

@@ -59,7 +59,7 @@ export const orders = pgTable(
 		}).onDelete("set null"),
 		check(
 			"orders_placed_by_staff_id_check",
-			sql`(${table.placedByType} = 'staff' AND ${table.placedByStaffId} IS NOT NULL) OR (${table.placedByType} = 'guest' AND ${table.placedByStaffId} IS NULL)`,
+			sql`(${table.placedByType} = 'staff' AND ${table.placedByStaffId} IS NOT NULL) OR (${table.placedByType} = 'guest' AND ${table.placedByStaffId} IS NULL) OR (${table.placedByType} = 'dineinly_admin' AND ${table.placedByStaffId} IS NULL)`,
 		),
 	],
 );

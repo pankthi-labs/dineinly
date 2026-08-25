@@ -10,8 +10,54 @@ import {
 	type OrderGroup,
 } from "@/lib/order-groups";
 
-export function OrderGroupCard({ group }: { group: OrderGroup }) {
+export function OrderGroupCard({
+	group,
+	onSend,
+	sendingItemId,
+}: {
+	group: OrderGroup;
+	// Counter only: present when the guest can act on this group (unsent
+	// items) — omitted entirely for Full-Service's orderGroups(), which never
+	// produces an "unsent" group in the first place.
+	onSend?: (itemId: string) => void;
+	sendingItemId?: string | null;
+}) {
 	const [expanded, setExpanded] = useState(false);
+
+	if (group.status === "unsent") {
+		return (
+			<div className="border-divider border-b pb-6">
+				<h3 className="text-lg text-primary">
+					Ready to send · {group.items.length}{" "}
+					{group.items.length === 1 ? "item" : "items"}
+				</h3>
+				<div className="mt-4 flex flex-col gap-3">
+					{group.items.map((item) => (
+						<div
+							key={item.id}
+							className="flex items-center justify-between gap-4"
+						>
+							<span className="text-base text-primary">
+								<span className="mr-1 text-muted text-sm">
+									{item.quantity}x
+								</span>
+								{titleCase(item.name)}
+							</span>
+							<button
+								type="button"
+								onClick={() => onSend?.(item.id)}
+								disabled={sendingItemId === item.id}
+								className="shrink-0 rounded-md border border-divider px-4 py-3 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								{sendingItemId === item.id ? "Sending…" : "Send to Kitchen"}
+							</button>
+						</div>
+					))}
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="border-divider border-b pb-6">
 			<button
@@ -36,18 +82,20 @@ export function OrderGroupCard({ group }: { group: OrderGroup }) {
 					className={`h-2 w-2 shrink-0 rounded-full ${GROUP_DOT_CLASS[group.status]}`}
 				/>
 				<span className={`text-caps ${GROUP_TEXT_CLASS[group.status]}`}>
-					{group.status === "preparing" ? "Preparing" : "Served"}
+					{group.status === "preparing"
+						? "Preparing"
+						: group.status === "ready"
+							? "Ready for Pickup"
+							: group.number === null
+								? "Picked Up"
+								: "Served"}
 				</span>
 			</p>
 
 			{expanded ? (
 				<div className="mt-4 flex flex-col gap-3 border-divider border-t pt-4">
-					{group.items.map((item, index) => (
-						<span
-							// biome-ignore lint/suspicious/noArrayIndexKey: no stable id — list is never reordered/edited
-							key={index}
-							className="text-base text-primary"
-						>
+					{group.items.map((item) => (
+						<span key={item.id} className="text-base text-primary">
 							{item.quantity}x {titleCase(item.name)}
 						</span>
 					))}
@@ -85,12 +133,8 @@ export function GuestOrderCard({ order }: { order: GuestOrder }) {
 
 			{expanded ? (
 				<div className="mt-4 flex flex-col gap-3 border-divider border-t pt-4">
-					{order.items.map((item, index) => (
-						<span
-							// biome-ignore lint/suspicious/noArrayIndexKey: no stable id — list is never reordered/edited
-							key={index}
-							className="text-base text-primary"
-						>
+					{order.items.map((item) => (
+						<span key={item.id} className="text-base text-primary">
 							{item.quantity}x {titleCase(item.name)}
 						</span>
 					))}

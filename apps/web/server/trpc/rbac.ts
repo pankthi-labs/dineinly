@@ -20,7 +20,7 @@ import { dbError } from "./errors";
 export async function requireStaffRole(
 	ctx: Context,
 	restaurantId: string,
-	allowedRoles: StaffRole[],
+	allowedRoles: readonly StaffRole[],
 ): Promise<void> {
 	const {
 		data: { user },
@@ -75,46 +75,6 @@ export async function requireFullServiceRole(
 	const [, experience] = await Promise.all([
 		requireStaffRole(ctx, restaurantId, allowedRoles),
 		assertFullServiceExperience(ctx, restaurantId),
-	]);
-	return experience;
-}
-
-// Menu and Counter seat no one at physical tables (docs/product.md §
-// Dineinly Experiences — Menu is view-only, Counter has zero Restaurant
-// Table rows) — Floor (Order on behalf of guest, Merge Tables) isn't a
-// permission question the caller's role could pass for either package,
-// unlike assertFullServiceExperience above which only excludes Menu
-// (Counter still has Kitchen and Bills).
-export async function assertSeatedExperience(
-	ctx: Context,
-	restaurantId: string,
-): Promise<Database["public"]["Enums"]["restaurant_experience"] | null> {
-	const { data, error } = await ctx.auth
-		.from("restaurants")
-		.select("experience")
-		.eq("id", restaurantId)
-		.maybeSingle();
-
-	if (error) {
-		throw dbError("Unable to verify this restaurant's package.", error);
-	}
-	if (data?.experience === "menu" || data?.experience === "counter") {
-		throw new TRPCError({
-			code: "FORBIDDEN",
-			message: "This feature isn't available on this restaurant's package.",
-		});
-	}
-	return data?.experience ?? null;
-}
-
-export async function requireSeatedRole(
-	ctx: Context,
-	restaurantId: string,
-	allowedRoles: StaffRole[],
-): Promise<Database["public"]["Enums"]["restaurant_experience"] | null> {
-	const [, experience] = await Promise.all([
-		requireStaffRole(ctx, restaurantId, allowedRoles),
-		assertSeatedExperience(ctx, restaurantId),
 	]);
 	return experience;
 }

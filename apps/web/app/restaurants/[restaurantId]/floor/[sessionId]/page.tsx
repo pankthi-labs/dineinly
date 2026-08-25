@@ -12,12 +12,20 @@ import { trpc } from "@/lib/trpc-client";
 import { RestaurantNavHeader } from "../../restaurant-nav-header";
 
 // Order on behalf of guest (docs/product.md § RBAC "Add to Cart"/"Submit
-// Order": Waiter/Manager/Owner). Menu browsing reuses menu.listForManagement
-// (Menu Desk's own query), filtered here to active + available — Menu Desk
-// itself needs archived/sold-out items visible to manage them, this screen
-// doesn't. No spice/salt/ice picker here (unlike the guest menu) — a phoned-
-// in or table-side order is relayed verbally more often than tapped through
-// preference chips; add one if staff feedback asks for it.
+// Order": Waiter/Manager/Owner, or Dineinly Admin). Menu browsing reuses
+// menu.listForManagement (Menu Desk's own query), filtered here to active +
+// available — Menu Desk itself needs archived/sold-out items visible to
+// manage them, this screen doesn't. No spice/salt/ice picker here (unlike
+// the guest menu) — a phoned-in or table-side order is relayed verbally more
+// often than tapped through preference chips; add one if staff feedback asks
+// for it.
+//
+// Reused for Counter's Bills tab "Add Item" action too (no tableLabel there,
+// since Counter has no restaurant_tables row) — copy below branches on that,
+// since staff_submit_order() still gates on settle regardless of package:
+// Full-Service fires to kitchen the moment this submits; Counter's order
+// only joins the guest's paid bill — the guest still releases each item to
+// the kitchen at their own pace afterward (app/guest/bill/page.tsx).
 export default function FloorOrderPage() {
 	const router = useRouter();
 	const { restaurantId, sessionId } = useParams<{
@@ -49,21 +57,31 @@ export default function FloorOrderPage() {
 	const removeItem = trpc.floor.cart.removeItem.useMutation({
 		onSuccess: invalidateCart,
 	});
-	const submitOrder = trpc.floor.submitOrder.useMutation({
-		onSuccess: () => {
-			invalidateCart();
-			setToast({ message: "Order sent to the kitchen.", tone: "success" });
-			router.push(`/restaurants/${restaurantId}/floor`);
-		},
-		onError: (error) => setToast({ message: error.message, tone: "error" }),
-	});
-
 	const tableLabel = (tablesQuery.data ?? [])
 		.filter((t) => t.session_id === sessionId)
 		.map((t) => t.label)
 		.join(", ");
+	const isCounter = !tableLabel;
 	const cart = cartQuery.data ?? [];
 	const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+	const submitOrder = trpc.floor.submitOrder.useMutation({
+		onSuccess: () => {
+			invalidateCart();
+			setToast({
+				message: isCounter
+					? "Items added to the bill."
+					: "Order sent to the kitchen.",
+				tone: "success",
+			});
+			router.push(
+				isCounter
+					? `/restaurants/${restaurantId}/bills/${sessionId}`
+					: `/restaurants/${restaurantId}/floor`,
+			);
+		},
+		onError: (error) => setToast({ message: error.message, tone: "error" }),
+	});
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
@@ -84,8 +102,12 @@ export default function FloorOrderPage() {
 				</button>
 
 				<PageHeader
-					title={`Order for Table ${tableLabel || "—"}`}
-					description="Add items on the guest's behalf — this goes straight to the kitchen."
+					title={tableLabel ? `Order for Table ${tableLabel}` : "Add Items"}
+					description={
+						tableLabel
+							? "Add items on the guest's behalf — this goes straight to the kitchen."
+							: "Add items to this guest's order before they pay — becomes part of their bill."
+					}
 				/>
 
 				<div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
@@ -224,7 +246,13 @@ export default function FloorOrderPage() {
 						}
 						className="mx-auto block w-full max-w-md rounded-md bg-accent px-6 py-4 font-medium text-background text-sm disabled:cursor-not-allowed disabled:opacity-60"
 					>
-						{submitOrder.isPending ? "Sending…" : "Send to Kitchen"}
+						{isCounter
+							? submitOrder.isPending
+								? "Adding…"
+								: "Add to Bill"
+							: submitOrder.isPending
+								? "Sending…"
+								: "Send to Kitchen"}
 					</button>
 				</div>
 			) : null}

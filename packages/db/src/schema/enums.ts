@@ -54,8 +54,15 @@ export const restaurantTableStatus = pgEnum("restaurant_table_status", [
 
 export const sessionStatus = pgEnum("session_status", ["active", "closed"]);
 
-// Who performed an action: staff (see staffId FK) or an anonymous guest.
-export const actorType = pgEnum("actor_type", ["staff", "guest"]);
+// Who performed an action: staff (see staffId FK), an anonymous guest, or
+// Dineinly Admin acting on a restaurant's behalf (no Staff row of their own —
+// see order.ts/cart-item.ts check constraints, both of which require a null
+// staffId for this branch same as 'guest').
+export const actorType = pgEnum("actor_type", [
+	"staff",
+	"guest",
+	"dineinly_admin",
+]);
 
 export const diet = pgEnum("diet", ["veg", "non_veg"]);
 

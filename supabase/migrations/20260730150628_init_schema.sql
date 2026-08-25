@@ -1,4 +1,4 @@
-CREATE TYPE "public"."actor_type" AS ENUM('staff', 'guest');--> statement-breakpoint
+CREATE TYPE "public"."actor_type" AS ENUM('staff', 'guest', 'dineinly_admin');--> statement-breakpoint
 CREATE TYPE "public"."availability" AS ENUM('available', 'sold_out');--> statement-breakpoint
 CREATE TYPE "public"."bill_status" AS ENUM('open', 'requested', 'settled');--> statement-breakpoint
 CREATE TYPE "public"."diet" AS ENUM('veg', 'non_veg');--> statement-breakpoint
@@ -97,7 +97,7 @@ CREATE TABLE "cart_items" (
 	"added_by_type" "actor_type" NOT NULL,
 	"added_by_staff_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "cart_items_added_by_staff_id_check" CHECK (("cart_items"."added_by_type" = 'staff' AND "cart_items"."added_by_staff_id" IS NOT NULL) OR ("cart_items"."added_by_type" = 'guest' AND "cart_items"."added_by_staff_id" IS NULL)),
+	CONSTRAINT "cart_items_added_by_staff_id_check" CHECK (("cart_items"."added_by_type" = 'staff' AND "cart_items"."added_by_staff_id" IS NOT NULL) OR ("cart_items"."added_by_type" = 'guest' AND "cart_items"."added_by_staff_id" IS NULL) OR ("cart_items"."added_by_type" = 'dineinly_admin' AND "cart_items"."added_by_staff_id" IS NULL)),
 	CONSTRAINT "cart_items_quantity_check" CHECK ("cart_items"."quantity" > 0 AND "cart_items"."quantity" <= 99)
 );
 --> statement-breakpoint
@@ -151,7 +151,7 @@ CREATE TABLE "orders" (
 	"idempotency_key" text NOT NULL,
 	CONSTRAINT "orders_idempotency_key_unique" UNIQUE("idempotency_key"),
 	CONSTRAINT "orders_restaurant_id_id_key" UNIQUE("restaurant_id","id"),
-	CONSTRAINT "orders_placed_by_staff_id_check" CHECK (("orders"."placed_by_type" = 'staff' AND "orders"."placed_by_staff_id" IS NOT NULL) OR ("orders"."placed_by_type" = 'guest' AND "orders"."placed_by_staff_id" IS NULL))
+	CONSTRAINT "orders_placed_by_staff_id_check" CHECK (("orders"."placed_by_type" = 'staff' AND "orders"."placed_by_staff_id" IS NOT NULL) OR ("orders"."placed_by_type" = 'guest' AND "orders"."placed_by_staff_id" IS NULL) OR ("orders"."placed_by_type" = 'dineinly_admin' AND "orders"."placed_by_staff_id" IS NULL))
 );
 --> statement-breakpoint
 CREATE TABLE "order_items" (
@@ -171,6 +171,7 @@ CREATE TABLE "order_items" (
 	"cancelled_quantity" integer DEFAULT 0 NOT NULL,
 	"preparing_at" timestamp with time zone,
 	"ready_at" timestamp with time zone,
+	"released_at" timestamp with time zone,
 	"menu_item_id" uuid,
 	"added_by_staff_id" uuid,
 	CONSTRAINT "order_items_quantity_check" CHECK ("order_items"."quantity" > 0 AND "order_items"."quantity" <= 99),
