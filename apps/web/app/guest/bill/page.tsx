@@ -8,7 +8,9 @@ import {
 	GuestLoading,
 	NoGuestSession,
 } from "@/components/guest-page-states";
+import { OrderGroupCard } from "@/components/order-status-groups";
 import { formatBillAmount, titleCase } from "@/lib/format";
+import { counterOrderGroups } from "@/lib/order-groups";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
 import { trpc } from "@/lib/trpc-client";
@@ -22,6 +24,15 @@ import { trpc } from "@/lib/trpc-client";
 export default function GuestBillPage() {
 	const router = useRouter();
 	const bill = trpc.guest.bill.get.useQuery(undefined, { retry: false });
+	// Counter only (dailyToken is null on every other experience): once
+	// settled, the kitchen has started, so per-item status becomes meaningful
+	// — reuses the same guest.orders.list query and OrderGroup pattern as the
+	// Full-Service "My Orders" screen (app/guest/orders/page.tsx).
+	const showOrderStatus =
+		bill.data?.dailyToken != null && bill.data.status === "settled";
+	const orders = trpc.guest.orders.list.useQuery(undefined, {
+		enabled: showOrderStatus,
+	});
 	const utils = trpc.useUtils();
 
 	const { client, tableSessionId } = useGuestRealtime();
@@ -30,8 +41,14 @@ export default function GuestBillPage() {
 		tableSessionId ? `session:${tableSessionId}` : null,
 		{
 			"bill.status": () => utils.guest.bill.get.invalidate(),
-			"order.new": () => utils.guest.bill.get.invalidate(),
-			"order_item.status": () => utils.guest.bill.get.invalidate(),
+			"order.new": () => {
+				utils.guest.bill.get.invalidate();
+				utils.guest.orders.list.invalidate();
+			},
+			"order_item.status": () => {
+				utils.guest.bill.get.invalidate();
+				utils.guest.orders.list.invalidate();
+			},
 		},
 	);
 
@@ -72,9 +89,18 @@ export default function GuestBillPage() {
 					Orders
 				</button>
 
+				{data.dailyToken != null ? (
+					<div className="mx-auto mt-6 max-w-md rounded-xl border border-divider bg-surface py-5 text-center">
+						<p className="text-caps text-muted">Token</p>
+						<p className="mt-1 font-semibold text-5xl text-accent tabular-nums">
+							{data.dailyToken}
+						</p>
+					</div>
+				) : null}
+
 				<div className="mx-auto mt-6 max-w-md rounded-xl border border-divider bg-surface p-5 tabular-nums">
 					<header className="text-center">
-						<h1 className="text-3xl">{data.restaurant.name}</h1>
+						<h1 className="text-3xl">{titleCase(data.restaurant.name)}</h1>
 						<p className="mt-2 text-secondary text-sm">
 							{data.restaurant.address}, {data.restaurant.city},{" "}
 							{data.restaurant.state} {data.restaurant.pincode}
@@ -156,12 +182,6 @@ export default function GuestBillPage() {
 										/>
 									</Fragment>
 								))}
-								{data.serviceChargeRatePercent > 0 ? (
-									<TotalsRow
-										label={`Service Charge (${data.serviceChargeRatePercent}%)`}
-										amount={data.serviceCharge}
-									/>
-								) : null}
 							</dl>
 
 							<div className="mt-4 border-divider border-t" />
@@ -175,6 +195,14 @@ export default function GuestBillPage() {
 						</>
 					)}
 				</div>
+
+				{showOrderStatus ? (
+					<div className="mx-auto mt-6 flex max-w-md flex-col gap-6">
+						{counterOrderGroups(orders.data ?? []).map((group) => (
+							<OrderGroupCard key={group.key} group={group} />
+						))}
+					</div>
+				) : null}
 			</main>
 		</div>
 	);

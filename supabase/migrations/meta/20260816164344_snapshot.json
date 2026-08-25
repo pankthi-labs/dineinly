@@ -34,6 +34,12 @@
           "notNull": true,
           "default": "encode_bill_number(nextval('bill_number_seq'::regclass))"
         },
+        "daily_token": {
+          "name": "daily_token",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "bill_status",
@@ -41,19 +47,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'open'"
-        },
-        "service_charge_rate": {
-          "name": "service_charge_rate",
-          "type": "numeric(5, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "service_charge_waived": {
-          "name": "service_charge_waived",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         },
         "subtotal": {
           "name": "subtotal",
@@ -63,12 +56,6 @@
         },
         "tax_amount": {
           "name": "tax_amount",
-          "type": "numeric(12, 2)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "service_charge_amount": {
-          "name": "service_charge_amount",
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": false
@@ -118,79 +105,75 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "bills_restaurant_id_restaurants_id_fk": {
           "name": "bills_restaurant_id_restaurants_id_fk",
           "tableFrom": "bills",
+          "tableTo": "restaurants",
           "columnsFrom": [
             "restaurant_id"
           ],
-          "tableTo": "restaurants",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "bills_restaurant_id_session_id_fkey": {
           "name": "bills_restaurant_id_session_id_fkey",
           "tableFrom": "bills",
+          "tableTo": "table_sessions",
           "columnsFrom": [
             "restaurant_id",
             "session_id"
           ],
-          "tableTo": "table_sessions",
           "columnsTo": [
             "restaurant_id",
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "bills_restaurant_id_settled_by_fkey": {
           "name": "bills_restaurant_id_settled_by_fkey",
           "tableFrom": "bills",
+          "tableTo": "staff",
           "columnsFrom": [
             "restaurant_id",
             "settled_by"
           ],
-          "tableTo": "staff",
           "columnsTo": [
             "restaurant_id",
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "bills_session_id_unique": {
           "name": "bills_session_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "session_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "bills_bill_number_key": {
           "name": "bills_bill_number_key",
+          "nullsNotDistinct": false,
           "columns": [
             "bill_number"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
       "checkConstraints": {
-        "bills_service_charge_rate_check": {
-          "name": "bills_service_charge_rate_check",
-          "value": "\"bills\".\"service_charge_rate\" between 0 and 1"
-        },
         "bills_subtotal_check": {
           "name": "bills_subtotal_check",
           "value": "\"bills\".\"subtotal\" >= 0"
@@ -198,10 +181,6 @@
         "bills_tax_amount_check": {
           "name": "bills_tax_amount_check",
           "value": "\"bills\".\"tax_amount\" >= 0"
-        },
-        "bills_service_charge_amount_check": {
-          "name": "bills_service_charge_amount_check",
-          "value": "\"bills\".\"service_charge_amount\" >= 0"
         },
         "bills_total_check": {
           "name": "bills_total_check",
@@ -1204,12 +1183,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "service_charge_rate": {
-          "name": "service_charge_rate",
-          "type": "numeric(5, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "restaurant_status",
@@ -1226,8 +1199,8 @@
           "notNull": true,
           "default": "'one'"
         },
-        "counter_qr_token": {
-          "name": "counter_qr_token",
+        "qr_token": {
+          "name": "qr_token",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1251,21 +1224,16 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "restaurants_counter_qr_token_unique": {
-          "name": "restaurants_counter_qr_token_unique",
+        "restaurants_qr_token_unique": {
+          "name": "restaurants_qr_token_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "counter_qr_token"
+            "qr_token"
           ]
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "restaurants_service_charge_rate_check": {
-          "name": "restaurants_service_charge_rate_check",
-          "value": "\"restaurants\".\"service_charge_rate\" between 0 and 1"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.restaurant_tables": {
@@ -1655,6 +1623,60 @@
           "value": "(\"table_sessions\".\"status\" = 'active' AND \"table_sessions\".\"closed_at\" IS NULL) OR (\"table_sessions\".\"status\" = 'closed' AND \"table_sessions\".\"closed_at\" IS NOT NULL)"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.restaurant_daily_tokens": {
+      "name": "restaurant_daily_tokens",
+      "schema": "",
+      "columns": {
+        "restaurant_id": {
+          "name": "restaurant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_date": {
+          "name": "token_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_token": {
+          "name": "last_token",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "restaurant_daily_tokens_restaurant_id_restaurants_id_fk": {
+          "name": "restaurant_daily_tokens_restaurant_id_restaurants_id_fk",
+          "tableFrom": "restaurant_daily_tokens",
+          "tableTo": "restaurants",
+          "columnsFrom": [
+            "restaurant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "restaurant_daily_tokens_restaurant_id_token_date_pk": {
+          "name": "restaurant_daily_tokens_restaurant_id_token_date_pk",
+          "columns": [
+            "restaurant_id",
+            "token_date"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },

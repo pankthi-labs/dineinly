@@ -149,10 +149,6 @@ export async function buildBillPdf(input: {
 		drawRow(`CGST (${slab.ratePercent}%)`, formatPdfAmount(slab.cgst));
 		drawRow(`SGST (${slab.ratePercent}%)`, formatPdfAmount(slab.sgst));
 	}
-	if (input.totals.serviceCharge > 0) {
-		drawRow("Service Charge", formatPdfAmount(input.totals.serviceCharge));
-	}
-
 	y -= LINE_HEIGHT / 4;
 	page.drawLine({
 		start: { x: MARGIN, y },

@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import {
-	boolean,
 	check,
 	foreignKey,
 	index,
+	integer,
 	numeric,
 	pgTable,
 	text,
@@ -41,26 +41,15 @@ export const bills = pgTable(
 		billNumber: text("bill_number")
 			.notNull()
 			.default(sql`encode_bill_number(nextval('bill_number_seq'::regclass))`),
+		// Counter only: the small, per-restaurant, per-day number guests are
+		// shown and pay against at the counter. Null for every other experience.
+		// Assigned once by request_bill() via next_daily_token() — never a
+		// column default, since it needs two arguments (restaurant, day).
+		dailyToken: integer("daily_token"),
 		status: billStatus("status").notNull().default("open"),
-		// Snapshotted at request/settle time — restaurant-level rate can change later.
-		serviceChargeRate: numeric("service_charge_rate", {
-			precision: 5,
-			scale: 4,
-		}),
-		// Staff correction (Bills tab "Waive Service Charge"). While true,
-		// request_bill()'s snapshot-on-every-call logic holds serviceChargeRate
-		// at 0 instead of re-copying the restaurant's rate, so a guest's own
-		// bill.get poll can't silently undo a waiver.
-		serviceChargeWaived: boolean("service_charge_waived")
-			.notNull()
-			.default(false),
 		// Nullable until settle; derived on read before that.
 		subtotal: numeric("subtotal", { precision: 12, scale: 2 }),
 		taxAmount: numeric("tax_amount", { precision: 12, scale: 2 }),
-		serviceChargeAmount: numeric("service_charge_amount", {
-			precision: 12,
-			scale: 2,
-		}),
 		total: numeric("total", { precision: 12, scale: 2 }),
 		settledAt: timestamp("settled_at", { withTimezone: true, mode: "string" }),
 		// Plain column — the real constraint is the composite FK below, so
@@ -89,16 +78,8 @@ export const bills = pgTable(
 			foreignColumns: [staff.restaurantId, staff.id],
 			name: "bills_restaurant_id_settled_by_fkey",
 		}).onDelete("set null"),
-		check(
-			"bills_service_charge_rate_check",
-			sql`${table.serviceChargeRate} between 0 and 1`,
-		),
 		check("bills_subtotal_check", sql`${table.subtotal} >= 0`),
 		check("bills_tax_amount_check", sql`${table.taxAmount} >= 0`),
-		check(
-			"bills_service_charge_amount_check",
-			sql`${table.serviceChargeAmount} >= 0`,
-		),
 		check("bills_total_check", sql`${table.total} >= 0`),
 		// Amounts and settledAt are frozen exactly at settle
 		// (core-data-model.md: "derived on read" until then, "frozen only at

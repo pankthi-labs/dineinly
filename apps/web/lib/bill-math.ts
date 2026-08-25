@@ -22,19 +22,10 @@ export type BillTotals = {
 	lines: BillLine[];
 	subtotal: number;
 	taxSlabs: TaxSlab[];
-	serviceCharge: number;
 	total: number;
 };
 
 const toPaisa = (rupees: number) => Math.round(rupees * 100);
-
-// Shared by every call site that displays a stored 0-1 rate as a percent
-// (restaurant service charge on Venue Settings, the Restaurants Directory,
-// the guest bill, and the staff Bills tab) — rounding to 2dp keeps float
-// round-trip noise (0.28 -> 14.000000000000002) out of the label.
-export function ratePercent(rate: number): number {
-	return Math.round(rate * 10000) / 100;
-}
 
 // Shared by every bill-math call site (staff list/detail/settle/PDF, guest
 // bill) that reads order_items: the portion of quantity still billable after
@@ -55,10 +46,7 @@ export function billableQuantity(
  * merged into one bill line per (name, unit price) pair, matching how a
  * physical restaurant bill groups repeat orders of the same dish.
  */
-export function computeBill(
-	rows: BillLineInput[],
-	serviceChargeRate: number,
-): BillTotals {
+export function computeBill(rows: BillLineInput[]): BillTotals {
 	const lineMap = new Map<string, BillLine & { unitPricePaisa: number }>();
 	for (const row of rows) {
 		const unitPricePaisa = toPaisa(row.unitPrice);
@@ -116,14 +104,12 @@ export function computeBill(
 		});
 	}
 
-	const serviceChargePaisa = Math.round(subtotalPaisa * serviceChargeRate);
-	const totalPaisa = subtotalPaisa + totalTaxPaisa + serviceChargePaisa;
+	const totalPaisa = subtotalPaisa + totalTaxPaisa;
 
 	return {
 		lines,
 		subtotal: subtotalPaisa / 100,
 		taxSlabs,
-		serviceCharge: serviceChargePaisa / 100,
 		total: totalPaisa / 100,
 	};
 }

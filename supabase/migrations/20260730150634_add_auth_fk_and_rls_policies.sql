@@ -34,6 +34,7 @@ alter table "cart_items" enable row level security;
 alter table "orders" enable row level security;
 alter table "order_items" enable row level security;
 alter table "bills" enable row level security;
+alter table "restaurant_daily_tokens" enable row level security;
 
 -- ============================================================================
 -- 3. Guest RLS: read access (menu, own session, own orders/bill) plus cart
@@ -603,7 +604,6 @@ create or replace function public.admin_create_restaurant(
 	p_gst_number text,
 	p_state text,
 	p_pincode text,
-	p_service_charge_rate numeric,
 	p_experience public.restaurant_experience,
 	p_owner_name text,
 	p_owner_email text,
@@ -622,8 +622,8 @@ begin
 		raise exception 'Only Dineinly Admin may create restaurants';
 	end if;
 
-	insert into public.restaurants (name, address, city, gst_number, state, pincode, service_charge_rate, experience)
-	values (p_name, p_address, p_city, p_gst_number, p_state, p_pincode, p_service_charge_rate, p_experience)
+	insert into public.restaurants (name, address, city, gst_number, state, pincode, experience)
+	values (p_name, p_address, p_city, p_gst_number, p_state, p_pincode, p_experience)
 	returning id into v_restaurant_id;
 
 	-- The restaurant's first owner: an invitation record, not a live
@@ -634,10 +634,8 @@ begin
 	values (v_restaurant_id, p_owner_email, p_owner_name, p_owner_mobile, 'owner', 'invited', now(), true)
 	returning id into v_staff_id;
 
-	if p_experience = 'menu' then
-		perform public.ensure_menu_qr_token(v_restaurant_id);
-	elsif p_experience = 'counter' then
-		perform public.ensure_counter_qr_token(v_restaurant_id);
+	if p_experience in ('menu', 'counter') then
+		perform public.ensure_qr_token(v_restaurant_id);
 	end if;
 
 	return query select v_restaurant_id, v_staff_id;
@@ -645,10 +643,10 @@ end;
 $$;
 
 revoke execute on function public.admin_create_restaurant(
-	text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
+	text, text, text, text, text, text, public.restaurant_experience, text, text, text
 ) from public;
 grant execute on function public.admin_create_restaurant(
-	text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
+	text, text, text, text, text, text, public.restaurant_experience, text, text, text
 ) to authenticated;
 
 -- Shared by admin_update_restaurant and owner_update_restaurant below —
@@ -694,18 +692,18 @@ grant execute on function public.assert_restaurant_track_unchanged(
 	uuid, public.restaurant_experience
 ) to authenticated;
 
--- Shared by admin_create_restaurant and both update RPCs below, called only
--- when p_experience = 'menu'. Dineinly Menu exposes no Table Matrix (it's
--- view-only, no per-table anything, no session a staff member ever closes)
--- — a restaurant-level token, same shape as ensure_counter_qr_token, not a
--- restaurant_tables row: that earlier design reused the table/session
--- machinery and left the QR permanently stuck "occupied" once a single
--- guest scanned it, since Menu has no Close Session flow to free it again.
--- Idempotent, same reasoning as ensure_counter_qr_token: a restaurant that
--- already has a token (its own, or from a prior stint on Menu) keeps it —
--- switching Menu -> another experience -> Menu again reuses the same QR
--- instead of alternating tokens.
-create or replace function public.ensure_menu_qr_token(p_restaurant_id uuid)
+-- Shared by admin_create_restaurant and both update RPCs below, called
+-- whenever p_experience is 'menu' or 'counter' — neither has a Table Matrix
+-- (Menu is view-only, no per-table anything; Counter has no physical tables
+-- either), so both share one restaurant-level token instead of a
+-- restaurant_tables row: an earlier design reused the table/session
+-- machinery for Menu and left the QR permanently stuck "occupied" once a
+-- single guest scanned it, since Menu has no Close Session flow to free it
+-- again. Idempotent — a restaurant that already has a token (its own, or
+-- from a prior stint on Menu or Counter) keeps it, so switching between the
+-- two — or away and back — reuses the same printed QR instead of minting a
+-- new one.
+create or replace function public.ensure_qr_token(p_restaurant_id uuid)
 returns void
 language plpgsql
 security invoker
@@ -713,44 +711,42 @@ set search_path = ''
 as $$
 begin
 	update public.restaurants
-	set menu_qr_token = gen_random_uuid()::text
-	where id = p_restaurant_id and menu_qr_token is null;
+	set qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id and qr_token is null;
 end;
 $$;
 
-revoke execute on function public.ensure_menu_qr_token(uuid) from public;
-grant execute on function public.ensure_menu_qr_token(uuid) to authenticated;
+revoke execute on function public.ensure_qr_token(uuid) from public;
+grant execute on function public.ensure_qr_token(uuid) to authenticated;
 
--- Shared by admin_create_restaurant and both update RPCs below, called only
--- when p_experience = 'counter'. Idempotent, same reasoning as
--- ensure_menu_qr_token: a restaurant that already has a token (its own, or
--- from a prior stint on Counter) keeps it — switching Counter -> another
--- experience -> Counter again reuses the same QR instead of alternating
--- tokens (any printed/laminated counter QR keeps working).
-create or replace function public.ensure_counter_qr_token(p_restaurant_id uuid)
-returns void
-language plpgsql
-security invoker
-set search_path = ''
-as $$
-begin
-	update public.restaurants
-	set counter_qr_token = gen_random_uuid()::text
-	where id = p_restaurant_id and counter_qr_token is null;
-end;
-$$;
-
-revoke execute on function public.ensure_counter_qr_token(uuid) from public;
-grant execute on function public.ensure_counter_qr_token(uuid) to authenticated;
-
--- Counter QR "Regenerate" (Task 6's counterQr.regenerate). SECURITY DEFINER
--- for the same reason as owner_update_restaurant just above it: restaurants
--- only has a write policy for Dineinly Admin (admin_all_restaurants) — a
--- plain Owner has row-level SELECT only (staff_select_own_restaurant), so an
--- invoker-mode UPDATE would silently affect 0 rows for that caller. The
--- explicit role check below is what makes bypassing RLS here safe, same
--- pattern as every staff-roster write RPC.
-create or replace function public.regenerate_counter_qr_token(p_restaurant_id uuid)
+-- Menu/Counter QR "Regenerate" (QrCodeSection / CounterQrSection). SECURITY
+-- DEFINER for the same reason as owner_update_restaurant above it:
+-- restaurants only has a write policy for Dineinly Admin
+-- (admin_all_restaurants) — a plain Owner has row-level SELECT only
+-- (staff_select_own_restaurant), so an invoker-mode UPDATE would silently
+-- affect 0 rows for that caller. The explicit role check below is what
+-- makes bypassing RLS here safe, same pattern as every staff-roster write
+-- RPC.
+--
+-- Unlike a
+-- Table Matrix table's regenerateQr (tables.ts), there is no occupied-row
+-- guard: neither Menu nor Counter has a table row to protect, so a new
+-- token is always minted on request.
+--
+-- Only Menu also closes every active table_session on this restaurant:
+-- every guest_select_own_restaurant/menu_categories/menu_items policy
+-- re-checks table_sessions.status = 'active' on each query (this file's § 2
+-- "Revocation is live-state, not expiry"), so that's what makes a guest
+-- already on the old QR lose access immediately rather than riding out
+-- their token's TTL. Safe to close in bulk for Menu: it has no ordering (no
+-- cart/orders/bills), so every active session on a menu-experience
+-- restaurant is a QR-menu viewer, never mid-order. Counter sessions can
+-- carry a real cart, a placed order, or an unpaid bill token the guest is
+-- holding at the counter — force-closing those on a QR rotation would
+-- strand an in-progress purchase, so a Counter session only ever ends via
+-- its own lifecycle (close_session), never as a side effect of regenerating
+-- the QR other guests scan next.
+create or replace function public.regenerate_qr_token(p_restaurant_id uuid)
 returns text
 language plpgsql
 security definer
@@ -758,6 +754,7 @@ set search_path = ''
 as $$
 declare
 	v_token text;
+	v_experience public.restaurant_experience;
 begin
 	if not (
 		public.is_dineinly_admin()
@@ -767,68 +764,26 @@ begin
 	end if;
 
 	update public.restaurants
-	set counter_qr_token = gen_random_uuid()::text
-	where id = p_restaurant_id and experience = 'counter'
-	returning counter_qr_token into v_token;
+	set qr_token = gen_random_uuid()::text
+	where id = p_restaurant_id and experience in ('menu', 'counter')
+	returning qr_token, experience into v_token, v_experience;
 
 	if v_token is null then
 		raise exception 'Restaurant not found';
+	end if;
+
+	if v_experience = 'menu' then
+		update public.table_sessions
+		set status = 'closed', closed_at = now()
+		where restaurant_id = p_restaurant_id and status = 'active';
 	end if;
 
 	return v_token;
 end;
 $$;
 
-revoke execute on function public.regenerate_counter_qr_token(uuid) from public;
-grant execute on function public.regenerate_counter_qr_token(uuid) to authenticated;
-
--- Menu QR "Regenerate" (QrCodeSection's regenerate) — same SECURITY DEFINER
--- reasoning and Owner/Admin-only gate as regenerate_counter_qr_token above.
--- Unlike a Table Matrix table's regenerateQr (tables.ts), there is no
--- occupied-row guard: Menu has no table and no session to protect, so a new
--- token is always minted on request. Also closes every active table_session
--- on this restaurant — every guest_select_own_restaurant/menu_categories/
--- menu_items policy re-checks table_sessions.status = 'active' on each
--- query (this file's § 2 "Revocation is live-state, not expiry"), so this is
--- what makes a guest already on the old QR lose access immediately rather
--- than riding out their token's TTL. Safe to close in bulk: Menu has no
--- ordering (no cart/orders/bills), so every active session on a
--- menu-experience restaurant is a QR-menu viewer, never mid-order.
-create or replace function public.regenerate_menu_qr_token(p_restaurant_id uuid)
-returns text
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-	v_token text;
-begin
-	if not (
-		public.is_dineinly_admin()
-		or public.staff_role_for_restaurant(p_restaurant_id) = 'owner'
-	) then
-		raise exception 'Only the restaurant owner may regenerate this QR code';
-	end if;
-
-	update public.restaurants
-	set menu_qr_token = gen_random_uuid()::text
-	where id = p_restaurant_id and experience = 'menu'
-	returning menu_qr_token into v_token;
-
-	if v_token is null then
-		raise exception 'Restaurant not found';
-	end if;
-
-	update public.table_sessions
-	set status = 'closed', closed_at = now()
-	where restaurant_id = p_restaurant_id and status = 'active';
-
-	return v_token;
-end;
-$$;
-
-revoke execute on function public.regenerate_menu_qr_token(uuid) from public;
-grant execute on function public.regenerate_menu_qr_token(uuid) to authenticated;
+revoke execute on function public.regenerate_qr_token(uuid) from public;
+grant execute on function public.regenerate_qr_token(uuid) to authenticated;
 
 -- admin_update_restaurant: updates the restaurant and its owner-contact row
 -- in one transaction. Once the primary owner has signed in, their
@@ -843,7 +798,6 @@ create or replace function public.admin_update_restaurant(
 	p_gst_number text,
 	p_state text,
 	p_pincode text,
-	p_service_charge_rate numeric,
 	p_experience public.restaurant_experience,
 	p_owner_name text,
 	p_owner_email text,
@@ -878,7 +832,6 @@ begin
 		gst_number = p_gst_number,
 		state = p_state,
 		pincode = p_pincode,
-		service_charge_rate = p_service_charge_rate,
 		experience = p_experience
 	where id = p_id;
 
@@ -895,10 +848,8 @@ begin
 		where id = v_primary_owner_id;
 	end if;
 
-	if p_experience = 'menu' then
-		perform public.ensure_menu_qr_token(p_id);
-	elsif p_experience = 'counter' then
-		perform public.ensure_counter_qr_token(p_id);
+	if p_experience in ('menu', 'counter') then
+		perform public.ensure_qr_token(p_id);
 	end if;
 
 	return p_id;
@@ -906,10 +857,10 @@ end;
 $$;
 
 revoke execute on function public.admin_update_restaurant(
-	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
+	uuid, text, text, text, text, text, text, public.restaurant_experience, text, text, text
 ) from public;
 grant execute on function public.admin_update_restaurant(
-	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience, text, text, text
+	uuid, text, text, text, text, text, text, public.restaurant_experience, text, text, text
 ) to authenticated;
 
 -- owner_update_restaurant: docs/product.md § RBAC "Restaurant Settings" is
@@ -938,7 +889,6 @@ create or replace function public.owner_update_restaurant(
 	p_gst_number text,
 	p_state text,
 	p_pincode text,
-	p_service_charge_rate numeric,
 	p_experience public.restaurant_experience
 )
 returns uuid
@@ -961,8 +911,7 @@ begin
 		city = p_city,
 		gst_number = p_gst_number,
 		state = p_state,
-		pincode = p_pincode,
-		service_charge_rate = p_service_charge_rate
+		pincode = p_pincode
 	where id = p_id;
 
 	return p_id;
@@ -970,10 +919,10 @@ end;
 $$;
 
 revoke execute on function public.owner_update_restaurant(
-	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience
+	uuid, text, text, text, text, text, text, public.restaurant_experience
 ) from public;
 grant execute on function public.owner_update_restaurant(
-	uuid, text, text, text, text, text, text, numeric, public.restaurant_experience
+	uuid, text, text, text, text, text, text, public.restaurant_experience
 ) to authenticated;
 
 -- ============================================================================
@@ -1150,31 +1099,18 @@ begin
 		return;
 	end if;
 
-	-- No table QR matched — try the counter-experience universal QR
+	-- No table QR matched — try the Menu/Counter universal QR
 	-- (docs/core-data-model.md § Experience Gating). Unlike the table branch
-	-- above, this never joins an existing session: one counter QR serves
+	-- above, this never joins an existing session: one universal QR serves
 	-- many concurrent guests, so every scan starts its own fresh, tableless
 	-- session. table_sessions already has no table_id column, so no schema
-	-- change is needed for this second entry path.
-	select r.id into v_restaurant_id
+	-- change is needed for this second entry path. Which behavior the guest
+	-- gets (view-only Menu vs order-taking Counter) comes from the live
+	-- `experience` value read here, not from a hardcoded branch — the same
+	-- token means whichever the restaurant is currently running as.
+	select r.id, r.experience into v_restaurant_id, v_experience
 	from public.restaurants r
-	where r.counter_qr_token = p_qr_token and r.experience = 'counter';
-
-	if v_restaurant_id is not null then
-		insert into public.table_sessions (restaurant_id)
-		values (v_restaurant_id)
-		returning id into v_session_id;
-
-		return query select v_restaurant_id, v_session_id, null::text, 'counter'::public.restaurant_experience;
-		return;
-	end if;
-
-	-- Try the menu-experience universal QR — same tableless-session shape as
-	-- counter above, for the same reason: Menu has no table to seat and no
-	-- staff Close Session flow, so nothing here is ever "occupied".
-	select r.id into v_restaurant_id
-	from public.restaurants r
-	where r.menu_qr_token = p_qr_token and r.experience = 'menu';
+	where r.qr_token = p_qr_token and r.experience in ('menu', 'counter');
 
 	if v_restaurant_id is null then
 		raise exception 'Invalid QR code';
@@ -1184,7 +1120,7 @@ begin
 	values (v_restaurant_id)
 	returning id into v_session_id;
 
-	return query select v_restaurant_id, v_session_id, null::text, 'menu'::public.restaurant_experience;
+	return query select v_restaurant_id, v_session_id, null::text, v_experience;
 end;
 $$;
 
@@ -1230,7 +1166,8 @@ declare
 	v_session_id uuid;
 	v_order_id uuid;
 	v_experience public.restaurant_experience;
-	v_service_charge_rate numeric;
+	v_bill_exists boolean;
+	v_daily_token integer;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
 	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
@@ -1255,8 +1192,12 @@ begin
 	-- 'requested', the settle could commit, and the upsert further down
 	-- would then see the now-settled row and silently keep it settled --
 	-- attaching this order's items to a bill whose total was frozen before
-	-- they existed, instead of raising here.
-	perform 1 from public.bills where session_id = v_session_id for update;
+	-- they existed, instead of raising here. Existence is also captured here
+	-- (not re-derived below) so the counter block knows whether it's about to
+	-- insert a fresh row or update one that already has its daily_token.
+	select exists (
+		select 1 from public.bills where session_id = v_session_id for update
+	) into v_bill_exists;
 
 	if exists (
 		select 1 from public.bills
@@ -1273,6 +1214,10 @@ begin
 	if v_order_id is not null then
 		return v_order_id;
 	end if;
+
+	select experience into v_experience
+	from public.restaurants
+	where id = v_restaurant_id;
 
 	-- Serialize concurrent Confirm Order taps on the same shared session
 	-- (docs/product.md: "any participant edits freely"). Without this lock,
@@ -1340,26 +1285,30 @@ begin
 	-- Staff's Mark Bill Settled mutation runs in its own transaction, so a
 	-- settle can commit between the settled-bill check earlier in this
 	-- function and this upsert. The on-conflict branch below must not
-	-- unconditionally reset status/service_charge_rate, or it collides with
-	-- bills_settled_check on an already-settled row (same race request_bill()
-	-- guards against on every poll).
-	select experience, service_charge_rate into v_experience, v_service_charge_rate
-	from public.restaurants
-	where id = v_restaurant_id;
-
+	-- unconditionally reset status, or it collides with bills_settled_check
+	-- on an already-settled row (same race request_bill() guards against on
+	-- every poll).
+	--
+	-- daily_token is drawn here too, not left to request_bill(): this insert
+	-- is what actually creates the bill row for Counter (v_bill_exists false
+	-- on a session's first confirm), so request_bill()'s own insert branch
+	-- never runs for Counter — the row is already there by the time a guest
+	-- could tap Request Bill.
 	if v_experience = 'counter' then
-		insert into public.bills (restaurant_id, session_id, status, service_charge_rate)
-		values (v_restaurant_id, v_session_id, 'requested', v_service_charge_rate)
+		if not v_bill_exists then
+			v_daily_token := public.next_daily_token(
+				v_restaurant_id,
+				(now() at time zone 'Asia/Kolkata')::date
+			);
+		end if;
+
+		insert into public.bills (restaurant_id, session_id, status, daily_token)
+		values (v_restaurant_id, v_session_id, 'requested', v_daily_token)
 		on conflict (session_id) do update
 		set
 			status = case
 				when public.bills.status = 'settled' then public.bills.status
 				else 'requested'
-			end,
-			service_charge_rate = case
-				when public.bills.status = 'settled' then public.bills.service_charge_rate
-				when public.bills.service_charge_waived then 0
-				else excluded.service_charge_rate
 			end;
 	end if;
 
@@ -1603,30 +1552,65 @@ grant execute on function public.link_staff_account() to authenticated;
 -- ============================================================================
 -- 11. Guest billing: request_bill
 -- ============================================================================
+-- next_daily_token: atomic per-restaurant, per-day counter backing
+-- bills.daily_token (Counter's guest-facing token, restaurant_daily_tokens
+-- table, init migration). INSERT ... ON CONFLICT DO UPDATE takes a row lock
+-- on the (restaurant_id, token_date) key, so concurrent guests requesting a
+-- bill at the same restaurant on the same day still get distinct,
+-- gap-tolerant increasing numbers — no separate advisory lock needed. Day
+-- boundary is fixed at Asia/Kolkata; the restaurants table has no timezone
+-- column today (Dineinly is single-region), so callers pass a date already
+-- computed in that zone.
+create or replace function public.next_daily_token(
+	p_restaurant_id uuid,
+	p_token_date date
+)
+returns integer
+language plpgsql
+set search_path = ''
+as $$
+declare
+	v_token integer;
+begin
+	insert into public.restaurant_daily_tokens (restaurant_id, token_date, last_token)
+	values (p_restaurant_id, p_token_date, 1)
+	on conflict (restaurant_id, token_date) do update
+	set last_token = public.restaurant_daily_tokens.last_token + 1
+	returning last_token into v_token;
+
+	return v_token;
+end;
+$$;
+
+-- Revoked from public and never re-granted to authenticated: this writes
+-- without request_bill()'s session/tenancy checks, so it's only reachable
+-- as a nested call from a SECURITY DEFINER function, not directly by a guest.
+revoke execute on function public.next_daily_token(uuid, date) from public;
+
+-- ============================================================================
 -- Request Bill (docs/product.md § Billing & Settlement): finds or creates
--- the session's Bill row and moves it open -> requested, snapshotting the
--- restaurant's current service_charge_rate onto it. bills grants guests
+-- the session's Bill row and moves it open -> requested. bills grants guests
 -- select-only (§ 3 above), so the insert/update needs SECURITY DEFINER, same
 -- reasoning as submit_order.
 --
 -- Tenancy and session come only from `auth.jwt()` claims, never arguments,
 -- same as submit_order. Idempotent: a guest revisiting the bill screen
--- (guest.bill.get polls this) just returns the same bill id, re-snapshotting
--- service_charge_rate every call while the bill is open or requested — both
--- stay derived-on-read (core-data-model.md), so the restaurant's rate can
--- still legitimately change before settle. Only `settled` freezes the row —
--- the CASE guards below stop touching status/rate once settled, so a late
--- poll can never un-settle or overwrite a bill the restaurant already closed
--- out. Subtotal/tax/total are never written here — bill.ts (schema)
+-- (guest.bill.get polls this) just returns the same bill id. Only `settled`
+-- freezes the row — the CASE guard below stops touching status once
+-- settled, so a late poll can never un-settle a bill the restaurant already
+-- closed out. Subtotal/tax/total are never written here — bill.ts (schema)
 -- and core-data-model.md both specify those stay derived-on-read until
 -- settle, computed by the caller from order_items, not this function.
 --
--- bill_number is assigned once, only on the row's first insert: the update
--- branch below runs first and handles every later poll, so a number is only
--- drawn on a session's first Request Bill. Its value comes from the
--- bill_number column's own default (bill_number_seq -> encode_bill_number(),
--- see init migration) — collision-free by construction, so no retry loop is
--- needed here.
+-- bill_number and daily_token are both assigned once, only on the row's
+-- first insert: the update branch below runs first and handles every later
+-- poll, so both are only drawn on a session's first Request Bill.
+-- bill_number's value comes from its own column default
+-- (bill_number_seq -> encode_bill_number(), see init migration) —
+-- collision-free by construction, so no retry loop is needed there.
+-- daily_token can't be a column default (next_daily_token() needs the
+-- restaurant and today's date, not just a bare sequence), so it's drawn
+-- explicitly here, Counter experience only.
 create or replace function public.request_bill()
 returns uuid
 language plpgsql
@@ -1636,8 +1620,9 @@ as $$
 declare
 	v_restaurant_id uuid;
 	v_session_id uuid;
-	v_service_charge_rate numeric;
 	v_bill_id uuid;
+	v_experience public.restaurant_experience;
+	v_daily_token integer;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
 	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
@@ -1650,40 +1635,32 @@ begin
 		raise exception 'Table session is not active';
 	end if;
 
-	select service_charge_rate into v_service_charge_rate
-	from public.restaurants
-	where id = v_restaurant_id;
-
-	-- Staff's Waive Service Charge correction (bills.service_charge_waived)
-	-- must survive this snapshot-on-every-call: once waived, keep the rate
-	-- at 0 instead of re-copying the restaurant's current rate, so a guest
-	-- revisiting the bill screen can't silently undo the waiver.
 	update public.bills
-	set
-		status = case when status = 'settled' then status else 'requested' end,
-		service_charge_rate = case
-			when status = 'settled' then service_charge_rate
-			when service_charge_waived then 0
-			else v_service_charge_rate
-		end
+	set status = case when status = 'settled' then status else 'requested' end
 	where session_id = v_session_id
 	returning id into v_bill_id;
 
 	if v_bill_id is null then
+		select experience into v_experience
+		from public.restaurants
+		where id = v_restaurant_id;
+
+		if v_experience = 'counter' then
+			v_daily_token := public.next_daily_token(
+				v_restaurant_id,
+				(now() at time zone 'Asia/Kolkata')::date
+			);
+		end if;
+
 		insert into public.bills
-			(restaurant_id, session_id, status, service_charge_rate)
+			(restaurant_id, session_id, status, daily_token)
 		values
-			(v_restaurant_id, v_session_id, 'requested', v_service_charge_rate)
+			(v_restaurant_id, v_session_id, 'requested', v_daily_token)
 		on conflict (session_id) do update
 		set
 			status = case
 				when public.bills.status = 'settled' then public.bills.status
 				else 'requested'
-			end,
-			service_charge_rate = case
-				when public.bills.status = 'settled' then public.bills.service_charge_rate
-				when public.bills.service_charge_waived then 0
-				else excluded.service_charge_rate
 			end
 		returning id into v_bill_id;
 	end if;
@@ -1964,14 +1941,17 @@ create trigger broadcast_menu_category_change
 after insert or update of sort, status on public.menu_categories
 for each row execute function public.broadcast_menu_category_change();
 
--- restaurants.menu_qr_token: QR "Regenerate" -> menu:{id}. An already-open
--- guest tab on the old QR is still subscribed to this topic even after
--- regenerate_menu_qr_token closes its session — can_access_menu_topic below
--- only checks restaurant_id, never session liveness — so this is what signs
--- it off immediately (client invalidates guest.menu, which then reads null
--- under the now-revoked session and shows "please rescan") instead of it
--- sitting on a stale menu until the guest happens to reload.
-create or replace function public.broadcast_menu_qr_regenerated()
+-- restaurants.qr_token: QR "Regenerate" -> menu:{id}, for Menu/Counter
+-- restaurants. An already-open guest tab on the old QR is still subscribed
+-- to this topic even after regenerate_qr_token closes a Menu session —
+-- can_access_menu_topic below only checks restaurant_id, never session
+-- liveness — so this is what signs it off immediately (client invalidates
+-- guest.menu, which then reads null under the now-revoked session and shows
+-- "please rescan") instead of it sitting on a stale menu until the guest
+-- happens to reload. Harmless no-op for a Counter guest whose session
+-- regenerate_qr_token deliberately left open — the invalidated refetch just
+-- returns the same still-active data.
+create or replace function public.broadcast_qr_regenerated()
 returns trigger
 language plpgsql
 security definer
@@ -1987,11 +1967,11 @@ begin
 end;
 $$;
 
-create trigger broadcast_menu_qr_regenerated
-after update of menu_qr_token on public.restaurants
+create trigger broadcast_qr_regenerated
+after update of qr_token on public.restaurants
 for each row
-when (old.menu_qr_token is distinct from new.menu_qr_token)
-execute function public.broadcast_menu_qr_regenerated();
+when (old.qr_token is distinct from new.qr_token)
+execute function public.broadcast_qr_regenerated();
 
 -- ============================================================================
 -- 13. Realtime broadcast: subscribe side — realtime.messages RLS

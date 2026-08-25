@@ -164,7 +164,7 @@ export default function RestaurantMenuPage() {
 					description={
 						<>
 							Review menu availability and item details for{" "}
-							{menu.data.restaurant.name}.
+							{titleCase(menu.data.restaurant.name)}.
 						</>
 					}
 					actions={

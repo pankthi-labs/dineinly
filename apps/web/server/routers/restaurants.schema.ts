@@ -15,9 +15,9 @@ export type RestaurantExperienceValue =
 
 // Only One and Counter have Dineinly compute a bill (docs/product.md §
 // Dineinly Experiences — Menu has no bill at all; Guest's billing is
-// untouched, left to the restaurant's existing system). Address/GST/service
-// charge/category tax only ever reach a bill header or its tax math, so
-// they're pointless to ask for on the other two.
+// untouched, left to the restaurant's existing system). Address/GST/
+// category tax only ever reach a bill header or its tax math, so they're
+// pointless to ask for on the other two.
 export function needsBillingDetails(
 	experience: RestaurantExperienceValue,
 ): boolean {
@@ -44,9 +44,6 @@ export const restaurantFieldsShape = z.object({
 	gstNumber: z.string().trim().toUpperCase().max(15),
 	state: z.string().trim().max(60),
 	pincode: z.string().trim().max(6),
-	// Percent (0-100) at the edge — restaurants.service_charge_rate stores
-	// the 0-1 fraction; converted at the router boundary, never in the UI.
-	serviceChargePercent: z.number().min(0).max(100).nullable(),
 	// Which Dineinly package this restaurant runs (docs/product.md § Dineinly
 	// Experiences) — asked at creation, changeable via the same edit flow.
 	experience: z.enum(restaurantExperienceValues),
@@ -141,20 +138,11 @@ export const listRestaurantsInput = z.object({
 	search: z.string().trim().max(120).optional(),
 });
 
-export const getCounterQrInput = z.object({
+export const getQrInput = z.object({
 	restaurantId: z.string().uuid(),
 });
 
-export const downloadCounterQrPdfInput = z.object({
-	restaurantId: z.string().uuid(),
-	origin: z.string().url(),
-});
-
-export const getMenuQrInput = z.object({
-	restaurantId: z.string().uuid(),
-});
-
-export const downloadMenuQrPdfInput = z.object({
+export const downloadQrPdfInput = z.object({
 	restaurantId: z.string().uuid(),
 	origin: z.string().url(),
 });

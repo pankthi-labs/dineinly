@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	createRestaurantInput,
-	getCounterQrInput,
+	getQrInput,
 	restaurantFieldsSchema,
 	updateOwnRestaurantInput,
 } from "@/server/routers/restaurants.schema";
@@ -13,7 +13,6 @@ const validRestaurant = {
 	gstNumber: "27ABCDE1234F1Z5",
 	state: "Maharashtra",
 	pincode: "400001",
-	serviceChargePercent: 5,
 	experience: "one",
 };
 
@@ -28,15 +27,6 @@ describe("restaurantFieldsSchema", () => {
 		expect(restaurantFieldsSchema.safeParse(validRestaurant).success).toBe(
 			true,
 		);
-	});
-
-	it("accepts a null service charge (restaurant levies none)", () => {
-		expect(
-			restaurantFieldsSchema.safeParse({
-				...validRestaurant,
-				serviceChargePercent: null,
-			}).success,
-		).toBe(true);
 	});
 
 	it("rejects a GST number that isn't 15 alphanumeric characters", () => {
@@ -65,15 +55,6 @@ describe("restaurantFieldsSchema", () => {
 		).toBe(false);
 	});
 
-	it("rejects a service charge over 100%", () => {
-		expect(
-			restaurantFieldsSchema.safeParse({
-				...validRestaurant,
-				serviceChargePercent: 150,
-			}).success,
-		).toBe(false);
-	});
-
 	it("rejects a blank address/GST/pincode on a bill-generating experience", () => {
 		expect(
 			restaurantFieldsSchema.safeParse({
@@ -99,7 +80,6 @@ describe("restaurantFieldsSchema", () => {
 					gstNumber: "",
 					state: "",
 					pincode: "",
-					serviceChargePercent: null,
 				}).success,
 			).toBe(true);
 		}
@@ -144,17 +124,14 @@ describe("updateOwnRestaurantInput", () => {
 	});
 });
 
-describe("getCounterQrInput", () => {
+describe("getQrInput", () => {
 	it("accepts a valid restaurant id", () => {
 		expect(
-			getCounterQrInput.safeParse({ restaurantId: crypto.randomUUID() })
-				.success,
+			getQrInput.safeParse({ restaurantId: crypto.randomUUID() }).success,
 		).toBe(true);
 	});
 
 	it("rejects a non-uuid restaurant id", () => {
-		expect(getCounterQrInput.safeParse({ restaurantId: "nope" }).success).toBe(
-			false,
-		);
+		expect(getQrInput.safeParse({ restaurantId: "nope" }).success).toBe(false);
 	});
 });

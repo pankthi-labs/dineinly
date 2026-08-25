@@ -1,15 +1,12 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
 import { isDineinlyAdmin } from "@/lib/auth";
-import { ratePercent } from "@/lib/bill-math";
 import { buildTableQrPdf } from "@/lib/qr-pdf";
 import { adminProcedure, authedProcedure, router } from "../trpc/init";
 import {
 	createRestaurantInput,
-	downloadCounterQrPdfInput,
-	downloadMenuQrPdfInput,
-	getCounterQrInput,
-	getMenuQrInput,
+	downloadQrPdfInput,
+	getQrInput,
 	getRestaurantInput,
 	listRestaurantsInput,
 	setRestaurantStatusInput,
@@ -37,14 +34,6 @@ type PrimaryOwnerRow = {
 	mobile: string | null;
 	status: "invited" | "active" | "removed";
 };
-
-function toServiceChargePercent(rate: number | null): number | null {
-	return rate === null ? null : ratePercent(rate);
-}
-
-function toServiceChargeRate(percent: number | null): number | null {
-	return percent === null ? null : percent / 100;
-}
 
 // ownerMobile is optional (see restaurants.schema.ts) — an empty string is
 // "not provided", stored as null (staff.mobile is nullable), not as "".
@@ -105,9 +94,6 @@ export const restaurantsRouter = router({
 						gstNumber: row.gst_number,
 						state: row.state,
 						pincode: row.pincode,
-						serviceChargePercent: toServiceChargePercent(
-							row.service_charge_rate,
-						),
 						status: row.status,
 						experience: row.experience,
 						owner: primaryOwner
@@ -184,7 +170,7 @@ export const restaurantsRouter = router({
 			const { data, error } = await ctx.auth
 				.from("restaurants")
 				.select(
-					"id, name, address, city, gst_number, state, pincode, service_charge_rate, experience",
+					"id, name, address, city, gst_number, state, pincode, experience",
 				)
 				.eq("id", input.id)
 				.maybeSingle();
@@ -207,7 +193,6 @@ export const restaurantsRouter = router({
 				gstNumber: data.gst_number,
 				state: data.state,
 				pincode: data.pincode,
-				serviceChargePercent: toServiceChargePercent(data.service_charge_rate),
 				experience: data.experience,
 			};
 		}),
@@ -217,23 +202,18 @@ export const restaurantsRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			const { data, error } = await ctx.auth.rpc("admin_create_restaurant", {
 				p_name: input.name,
-				// Same non-nullable-in-generated-types situation as
-				// p_service_charge_rate below — the columns themselves are nullable.
+				// Non-nullable-in-generated-types situation — the columns
+				// themselves are nullable.
 				p_address: nullIfEmpty(input.address) as string,
 				p_city: nullIfEmpty(input.city) as string,
 				p_gst_number: nullIfEmpty(input.gstNumber) as string,
 				p_state: nullIfEmpty(input.state) as string,
 				p_pincode: nullIfEmpty(input.pincode) as string,
-				// numeric SQL params generate as non-nullable in database.types.ts —
-				// the column itself (restaurants.service_charge_rate) is nullable.
-				p_service_charge_rate: toServiceChargeRate(
-					input.serviceChargePercent,
-				) as number,
 				p_experience: input.experience,
 				p_owner_name: input.ownerName,
 				p_owner_email: input.ownerEmail,
-				// Same non-nullable-in-generated-types situation as
-				// p_service_charge_rate above — staff.mobile is nullable.
+				// Same non-nullable-in-generated-types situation as above —
+				// staff.mobile is nullable.
 				p_owner_mobile: toOwnerMobile(input.ownerMobile) as string,
 			});
 
@@ -254,16 +234,13 @@ export const restaurantsRouter = router({
 			const { data, error } = await ctx.auth.rpc("admin_update_restaurant", {
 				p_id: input.id,
 				p_name: input.name,
-				// Same non-nullable-in-generated-types situation as
-				// p_service_charge_rate below — the columns themselves are nullable.
+				// Non-nullable-in-generated-types situation — the columns
+				// themselves are nullable.
 				p_address: nullIfEmpty(input.address) as string,
 				p_city: nullIfEmpty(input.city) as string,
 				p_gst_number: nullIfEmpty(input.gstNumber) as string,
 				p_state: nullIfEmpty(input.state) as string,
 				p_pincode: nullIfEmpty(input.pincode) as string,
-				p_service_charge_rate: toServiceChargeRate(
-					input.serviceChargePercent,
-				) as number,
 				p_experience: input.experience,
 				p_owner_name: input.ownerName,
 				p_owner_email: input.ownerEmail,
@@ -287,16 +264,13 @@ export const restaurantsRouter = router({
 			const { data, error } = await ctx.auth.rpc("owner_update_restaurant", {
 				p_id: input.id,
 				p_name: input.name,
-				// Same non-nullable-in-generated-types situation as
-				// p_service_charge_rate below — the columns themselves are nullable.
+				// Non-nullable-in-generated-types situation — the columns
+				// themselves are nullable.
 				p_address: nullIfEmpty(input.address) as string,
 				p_city: nullIfEmpty(input.city) as string,
 				p_gst_number: nullIfEmpty(input.gstNumber) as string,
 				p_state: nullIfEmpty(input.state) as string,
 				p_pincode: nullIfEmpty(input.pincode) as string,
-				p_service_charge_rate: toServiceChargeRate(
-					input.serviceChargePercent,
-				) as number,
 				p_experience: input.experience,
 			});
 
@@ -326,110 +300,15 @@ export const restaurantsRouter = router({
 			return { id: input.id, status: input.status };
 		}),
 
-	counterQr: router({
-		// Read + regenerate/download reuse the Owner+Admin gate every other
-		// Venue Settings write uses (RLS: staff_select_own_restaurant lets any
-		// staff read; the role check below narrows to Owner, matching
-		// getSettings above) — this is Venue Settings surface, not the
-		// broader authedProcedure reach tables.ts uses.
-		get: authedProcedure
-			.input(getCounterQrInput)
-			.query(async ({ ctx, input }) => {
-				const {
-					data: { user },
-				} = await ctx.auth.auth.getUser();
-
-				if (!isDineinlyAdmin(user)) {
-					const { data: role } = await ctx.auth.rpc(
-						"staff_role_for_restaurant",
-						{
-							p_restaurant_id: input.restaurantId,
-						},
-					);
-					if (role !== "owner") {
-						throw new TRPCError({
-							code: "FORBIDDEN",
-							message: "Only the restaurant owner may view this QR code.",
-						});
-					}
-				}
-
-				const { data, error } = await ctx.auth
-					.from("restaurants")
-					.select("counter_qr_token")
-					.eq("id", input.restaurantId)
-					.maybeSingle();
-
-				if (error) {
-					throw toTRPCError(error, "Unable to load the counter QR code.");
-				}
-
-				return { qrToken: data?.counter_qr_token ?? null };
-			}),
-
-		// Rotates the token in place — same "old printed QR stops working
-		// immediately" behavior as tables.regenerateQr (docs/product.md §
-		// Onboarding & Setup). Delegates to regenerate_counter_qr_token()
-		// (SECURITY DEFINER) rather than a direct table update: restaurants
-		// only grants Owners row-level SELECT via RLS (staff_select_own_
-		// restaurant), not UPDATE — same reasoning as owner_update_restaurant,
-		// see that RPC's comment in the migration.
-		regenerate: authedProcedure
-			.input(getCounterQrInput)
-			.mutation(async ({ ctx, input }) => {
-				const { data, error } = await ctx.auth.rpc(
-					"regenerate_counter_qr_token",
-					{ p_restaurant_id: input.restaurantId },
-				);
-
-				if (error) {
-					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message: error.message,
-						cause: error,
-					});
-				}
-
-				return { qrToken: data };
-			}),
-
-		downloadPdf: authedProcedure
-			.input(downloadCounterQrPdfInput)
-			.query(async ({ ctx, input }) => {
-				const { data, error } = await ctx.auth
-					.from("restaurants")
-					.select("name, counter_qr_token")
-					.eq("id", input.restaurantId)
-					.maybeSingle();
-
-				if (error) {
-					throw toTRPCError(error, "Unable to load the restaurant.");
-				}
-				if (!data?.counter_qr_token) {
-					throw new TRPCError({
-						code: "NOT_FOUND",
-						message: "No counter QR code for this restaurant.",
-					});
-				}
-
-				const pdf = await buildTableQrPdf(
-					[{ label: "Counter", qrToken: data.counter_qr_token }],
-					input.origin,
-				);
-
-				return {
-					fileName: `${data.name.replace(/[^a-zA-Z0-9-]+/g, "-")}-counter-qr.pdf`,
-					base64: Buffer.from(pdf).toString("base64"),
-				};
-			}),
-	}),
-
-	// Menu's single universal QR (docs/product.md § Dineinly Experiences —
-	// no Table Matrix, no per-table anything) — mirrors counterQr above
-	// exactly, a restaurant-level token with no table/session occupied-check
-	// to get stuck on, rather than tables.ts's per-table regenerateQr.
-	menuQr: router({
-		get: authedProcedure.input(getMenuQrInput).query(async ({ ctx, input }) => {
+	// Menu and Counter share one restaurant-level universal QR — neither has
+	// a Table Matrix (docs/product.md § Dineinly Experiences), so this is the
+	// Owner's only QR for either package. Read + regenerate/download reuse
+	// the Owner+Admin gate every other Venue Settings write uses (RLS:
+	// staff_select_own_restaurant lets any staff read; the role check below
+	// narrows to Owner, matching getSettings above) — this is Venue Settings
+	// surface, not the broader authedProcedure reach tables.ts uses.
+	qr: router({
+		get: authedProcedure.input(getQrInput).query(async ({ ctx, input }) => {
 			const {
 				data: { user },
 			} = await ctx.auth.auth.getUser();
@@ -448,21 +327,31 @@ export const restaurantsRouter = router({
 
 			const { data, error } = await ctx.auth
 				.from("restaurants")
-				.select("menu_qr_token")
+				.select("qr_token")
 				.eq("id", input.restaurantId)
 				.maybeSingle();
 
 			if (error) {
-				throw toTRPCError(error, "Unable to load the menu QR code.");
+				throw toTRPCError(error, "Unable to load the QR code.");
 			}
 
-			return { qrToken: data?.menu_qr_token ?? null };
+			return { qrToken: data?.qr_token ?? null };
 		}),
 
+		// Rotates the token in place — same "old printed QR stops working
+		// immediately" behavior as tables.regenerateQr (docs/product.md §
+		// Onboarding & Setup). Delegates to regenerate_qr_token() (SECURITY
+		// DEFINER) rather than a direct table update: restaurants only grants
+		// Owners row-level SELECT via RLS (staff_select_own_restaurant), not
+		// UPDATE — same reasoning as owner_update_restaurant, see that RPC's
+		// comment in the migration. For Menu restaurants this also closes
+		// every active guest session (see regenerate_qr_token's comment);
+		// Counter sessions are left running since they can carry a real
+		// order/bill a regenerate shouldn't strand.
 		regenerate: authedProcedure
-			.input(getMenuQrInput)
+			.input(getQrInput)
 			.mutation(async ({ ctx, input }) => {
-				const { data, error } = await ctx.auth.rpc("regenerate_menu_qr_token", {
+				const { data, error } = await ctx.auth.rpc("regenerate_qr_token", {
 					p_restaurant_id: input.restaurantId,
 				});
 
@@ -478,31 +367,32 @@ export const restaurantsRouter = router({
 			}),
 
 		downloadPdf: authedProcedure
-			.input(downloadMenuQrPdfInput)
+			.input(downloadQrPdfInput)
 			.query(async ({ ctx, input }) => {
 				const { data, error } = await ctx.auth
 					.from("restaurants")
-					.select("name, menu_qr_token")
+					.select("name, qr_token, experience")
 					.eq("id", input.restaurantId)
 					.maybeSingle();
 
 				if (error) {
 					throw toTRPCError(error, "Unable to load the restaurant.");
 				}
-				if (!data?.menu_qr_token) {
+				if (!data?.qr_token) {
 					throw new TRPCError({
 						code: "NOT_FOUND",
-						message: "No menu QR code for this restaurant.",
+						message: "No QR code for this restaurant.",
 					});
 				}
 
+				const label = data.experience === "counter" ? "Counter" : "Menu";
 				const pdf = await buildTableQrPdf(
-					[{ label: "Menu", qrToken: data.menu_qr_token }],
+					[{ label, qrToken: data.qr_token }],
 					input.origin,
 				);
 
 				return {
-					fileName: `${data.name.replace(/[^a-zA-Z0-9-]+/g, "-")}-menu-qr.pdf`,
+					fileName: `${data.name.replace(/[^a-zA-Z0-9-]+/g, "-")}-${label.toLowerCase()}-qr.pdf`,
 					base64: Buffer.from(pdf).toString("base64"),
 				};
 			}),

@@ -7,18 +7,19 @@ import { trpc } from "@/lib/trpc-client";
 import { QrModal } from "../tables/qr-modal";
 import { RegenerateConfirmDialog } from "../tables/regenerate-confirm-dialog";
 
-// Dineinly Menu has no Table Matrix (its package is view-only, no per-table
-// anything — docs/product.md § Dineinly Experiences) — this is the Owner's
-// only QR, provisioned automatically (ensure_menu_qr_token,
-// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql) the
-// moment the restaurant becomes Menu. A restaurant-level token, same shape
-// as Counter's — not a table, so regenerating it never hits an
+// Menu and Counter share one restaurant-level QR — neither has a Table
+// Matrix (docs/product.md § Dineinly Experiences) — provisioned
+// automatically (ensure_qr_token, supabase/migrations/
+// 20260730150634_add_auth_fk_and_rls_policies.sql) the moment the
+// restaurant becomes either. Not a table, so regenerating it never hits an
 // "occupied" check: there's no session here a staff member ever closes.
 export function QrCodeSection({
 	restaurantId,
+	label,
 	onToast,
 }: {
 	restaurantId: string;
+	label: "Menu" | "Counter";
 	onToast: (toast: ToastState) => void;
 }) {
 	const [showQr, setShowQr] = useState(false);
@@ -26,12 +27,12 @@ export function QrCodeSection({
 	const [isDownloading, setIsDownloading] = useState(false);
 
 	const utils = trpc.useUtils();
-	const qrQuery = trpc.restaurants.menuQr.get.useQuery({ restaurantId });
+	const qrQuery = trpc.restaurants.qr.get.useQuery({ restaurantId });
 
-	const regenerateMutation = trpc.restaurants.menuQr.regenerate.useMutation({
+	const regenerateMutation = trpc.restaurants.qr.regenerate.useMutation({
 		onSuccess: () => {
 			setShowRegenerateConfirm(false);
-			utils.restaurants.menuQr.get.invalidate({ restaurantId });
+			utils.restaurants.qr.get.invalidate({ restaurantId });
 			onToast({ message: "QR code regenerated.", tone: "success" });
 		},
 		onError: (error) => {
@@ -43,7 +44,7 @@ export function QrCodeSection({
 	async function handleDownloadPdf() {
 		setIsDownloading(true);
 		try {
-			const result = await utils.restaurants.menuQr.downloadPdf.fetch({
+			const result = await utils.restaurants.qr.downloadPdf.fetch({
 				restaurantId,
 				origin: window.location.origin,
 			});
@@ -88,7 +89,7 @@ export function QrCodeSection({
 
 			{showQr ? (
 				<QrModal
-					label="Menu QR Code"
+					label={`${label} QR Code`}
 					qrToken={qrQuery.data.qrToken}
 					onClose={() => setShowQr(false)}
 					onDownloadPdf={handleDownloadPdf}
@@ -98,7 +99,7 @@ export function QrCodeSection({
 
 			{showRegenerateConfirm ? (
 				<RegenerateConfirmDialog
-					target={{ id: restaurantId, label: "Menu" }}
+					target={{ id: restaurantId, label }}
 					onCancel={() => setShowRegenerateConfirm(false)}
 					onConfirm={() => regenerateMutation.mutate({ restaurantId })}
 					isPending={regenerateMutation.isPending}

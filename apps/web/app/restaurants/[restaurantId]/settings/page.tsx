@@ -7,14 +7,11 @@ import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { trpc } from "@/lib/trpc-client";
 import { RestaurantNavHeader } from "../restaurant-nav-header";
-import { useIsCounter } from "../viewer-context";
-import { CounterQrSection } from "./counter-qr-section";
 import { VenueSettingsForm } from "./venue-settings-form";
 
 export default function VenueSettingsPage() {
 	const { restaurantId } = useParams<{ restaurantId: string }>();
 	const [toast, setToast] = useState<ToastState | null>(null);
-	const isCounter = useIsCounter();
 
 	const utils = trpc.useUtils();
 	const restaurantQuery = trpc.restaurants.getById.useQuery({
@@ -92,10 +89,6 @@ export default function VenueSettingsPage() {
 						/>
 					)}
 				</div>
-
-				{isCounter ? (
-					<CounterQrSection restaurantId={restaurantId} onToast={setToast} />
-				) : null}
 			</main>
 
 			{toast ? <Toast toast={toast} onDismiss={() => setToast(null)} /> : null}

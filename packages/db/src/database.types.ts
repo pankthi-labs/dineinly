@@ -38,11 +38,9 @@ export type Database = {
 				Row: {
 					bill_number: string;
 					created_at: string;
+					daily_token: number | null;
 					id: string;
 					restaurant_id: string;
-					service_charge_amount: number | null;
-					service_charge_rate: number | null;
-					service_charge_waived: boolean;
 					session_id: string;
 					settled_at: string | null;
 					settled_by: string | null;
@@ -55,11 +53,9 @@ export type Database = {
 				Insert: {
 					bill_number?: string;
 					created_at?: string;
+					daily_token?: number | null;
 					id?: string;
 					restaurant_id: string;
-					service_charge_amount?: number | null;
-					service_charge_rate?: number | null;
-					service_charge_waived?: boolean;
 					session_id: string;
 					settled_at?: string | null;
 					settled_by?: string | null;
@@ -72,11 +68,9 @@ export type Database = {
 				Update: {
 					bill_number?: string;
 					created_at?: string;
+					daily_token?: number | null;
 					id?: string;
 					restaurant_id?: string;
-					service_charge_amount?: number | null;
-					service_charge_rate?: number | null;
-					service_charge_waived?: boolean;
 					session_id?: string;
 					settled_at?: string | null;
 					settled_by?: string | null;
@@ -461,6 +455,32 @@ export type Database = {
 					},
 				];
 			};
+			restaurant_daily_tokens: {
+				Row: {
+					last_token: number;
+					restaurant_id: string;
+					token_date: string;
+				};
+				Insert: {
+					last_token?: number;
+					restaurant_id: string;
+					token_date: string;
+				};
+				Update: {
+					last_token?: number;
+					restaurant_id?: string;
+					token_date?: string;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "restaurant_daily_tokens_restaurant_id_restaurants_id_fk";
+						columns: ["restaurant_id"];
+						isOneToOne: false;
+						referencedRelation: "restaurants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			restaurant_tables: {
 				Row: {
 					id: string;
@@ -507,15 +527,13 @@ export type Database = {
 				Row: {
 					address: string | null;
 					city: string | null;
-					counter_qr_token: string | null;
 					created_at: string;
 					experience: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number: string | null;
 					id: string;
-					menu_qr_token: string | null;
 					name: string;
 					pincode: string | null;
-					service_charge_rate: number | null;
+					qr_token: string | null;
 					state: string | null;
 					status: Database["public"]["Enums"]["restaurant_status"];
 					updated_at: string;
@@ -523,15 +541,13 @@ export type Database = {
 				Insert: {
 					address?: string | null;
 					city?: string | null;
-					counter_qr_token?: string | null;
 					created_at?: string;
 					experience?: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number?: string | null;
 					id?: string;
-					menu_qr_token?: string | null;
 					name: string;
 					pincode?: string | null;
-					service_charge_rate?: number | null;
+					qr_token?: string | null;
 					state?: string | null;
 					status?: Database["public"]["Enums"]["restaurant_status"];
 					updated_at?: string;
@@ -539,15 +555,13 @@ export type Database = {
 				Update: {
 					address?: string | null;
 					city?: string | null;
-					counter_qr_token?: string | null;
 					created_at?: string;
 					experience?: Database["public"]["Enums"]["restaurant_experience"];
 					gst_number?: string | null;
 					id?: string;
-					menu_qr_token?: string | null;
 					name?: string;
 					pincode?: string | null;
-					service_charge_rate?: number | null;
+					qr_token?: string | null;
 					state?: string | null;
 					status?: Database["public"]["Enums"]["restaurant_status"];
 					updated_at?: string;
@@ -738,7 +752,6 @@ export type Database = {
 					p_owner_mobile: string;
 					p_owner_name: string;
 					p_pincode: string;
-					p_service_charge_rate: number;
 					p_state: string;
 				};
 				Returns: {
@@ -762,7 +775,6 @@ export type Database = {
 					p_owner_mobile: string;
 					p_owner_name: string;
 					p_pincode: string;
-					p_service_charge_rate: number;
 					p_state: string;
 				};
 				Returns: string;
@@ -804,11 +816,7 @@ export type Database = {
 			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
-			ensure_counter_qr_token: {
-				Args: { p_restaurant_id: string };
-				Returns: undefined;
-			};
-			ensure_menu_qr_token: {
+			ensure_qr_token: {
 				Args: { p_restaurant_id: string };
 				Returns: undefined;
 			};
@@ -899,6 +907,10 @@ export type Database = {
 				Args: { p_session_id: string; p_table_id: string };
 				Returns: undefined;
 			};
+			next_daily_token: {
+				Args: { p_restaurant_id: string; p_token_date: string };
+				Returns: number;
+			};
 			owner_update_restaurant: {
 				Args: {
 					p_address: string;
@@ -908,7 +920,6 @@ export type Database = {
 					p_id: string;
 					p_name: string;
 					p_pincode: string;
-					p_service_charge_rate: number;
 					p_state: string;
 				};
 				Returns: string;
@@ -928,11 +939,7 @@ export type Database = {
 					station_type: Database["public"]["Enums"]["station_type"];
 				}[];
 			};
-			regenerate_counter_qr_token: {
-				Args: { p_restaurant_id: string };
-				Returns: string;
-			};
-			regenerate_menu_qr_token: {
+			regenerate_qr_token: {
 				Args: { p_restaurant_id: string };
 				Returns: string;
 			};

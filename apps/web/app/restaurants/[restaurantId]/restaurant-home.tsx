@@ -20,6 +20,7 @@ import {
 	useCanAccessSettings,
 	useCanManageStaff,
 	useIsAdmin,
+	useIsCounter,
 	useIsMenuOnly,
 } from "./viewer-context";
 
@@ -110,15 +111,18 @@ export function RestaurantHome({
 	const canAccessBills = useCanAccessBills();
 	const canAccessSettings = useCanAccessSettings();
 	const isMenuOnly = useIsMenuOnly();
+	const isCounter = useIsCounter();
 	const cardAccess: Partial<Record<CardTitle, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
 		// Dineinly Menu is view-only (docs/product.md § Dineinly Experiences)
 		// — no tables, kitchen, or bills, for any role.
 		Kitchen: !isMenuOnly,
-		"Table Matrix": canManageMenuAndTables && !isMenuOnly,
-		// The Menu package's one universal QR (docs/product.md § Dineinly
-		// Experiences) — Table Matrix's full-service counterpart.
-		"QR Menu": canManageMenuAndTables && isMenuOnly,
+		// Counter has zero Restaurant Table rows (docs/product.md § Dineinly
+		// Experiences) — no Table Matrix either, same as Menu.
+		"Table Matrix": canManageMenuAndTables && !isMenuOnly && !isCounter,
+		// Menu and Counter share one universal QR instead of per-table ones —
+		// Table Matrix's counterpart for both.
+		"QR Menu": canManageMenuAndTables && (isMenuOnly || isCounter),
 		"Staff Roster": canManageStaff,
 		"Venue Settings": canAccessSettings,
 		Bills: canAccessBills && !isMenuOnly,

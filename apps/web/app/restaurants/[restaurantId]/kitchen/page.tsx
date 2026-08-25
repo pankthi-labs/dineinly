@@ -180,7 +180,7 @@ export default function KitchenDisplayPage() {
 			<header className="flex shrink-0 flex-col gap-3 border-divider border-b bg-surface px-4 py-4 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-8 md:px-8 md:py-5">
 				<div className="min-w-0 md:justify-self-start">
 					<p className="truncate text-2xl text-primary">
-						{queue.data.restaurant.name}
+						{titleCase(queue.data.restaurant.name)}
 					</p>
 					<PoweredByDineinly className="mt-1" />
 				</div>
@@ -405,6 +405,15 @@ function BatchCard({
 					>
 						Table {table.label}
 						<span className="font-medium text-primary">× {table.quantity}</span>
+					</span>
+				))}
+				{batch.tokens.map((token) => (
+					<span
+						key={token.token}
+						className="flex items-center gap-2 whitespace-nowrap rounded-pill bg-surface-raised px-4 py-2 text-secondary text-xs"
+					>
+						Token {token.token}
+						<span className="font-medium text-primary">× {token.quantity}</span>
 					</span>
 				))}
 			</div>

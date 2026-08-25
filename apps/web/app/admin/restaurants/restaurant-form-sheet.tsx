@@ -40,7 +40,6 @@ const EMPTY_VALUES: RestaurantFormValues = {
 	gstNumber: "",
 	state: "",
 	pincode: "",
-	serviceChargePercent: null,
 	experience: "one",
 	...EMPTY_OWNER,
 };

@@ -169,12 +169,12 @@ group by status;
   the settle flow does when it isn't actually ready.
 
 3 `settled` bills on the historical closed sessions, with `subtotal` /
-`tax_amount` / `service_charge_amount` / `total` computed from their served
-order items using a **simple fixture formula** (subtotal + per-line tax by
-category rate + 5% service charge, rounded to 2dp). This is **not** the
-official tax/service/rounding formula (`docs/core-data-model.md`,
-implemented in `apps/web/lib/bill-math.ts`) — it's only here so the settled
-rows are internally consistent, not a claim about the real rounding rule.
+`tax_amount` / `total` computed from their served order items using a
+**simple fixture formula** (subtotal + per-line tax by category rate,
+rounded to 2dp). This is **not** the official tax/rounding formula
+(`docs/core-data-model.md`, implemented in `apps/web/lib/bill-math.ts`) —
+it's only here so the settled rows are internally consistent, not a claim
+about the real rounding rule.
 
 ## Explicitly not seeded
 

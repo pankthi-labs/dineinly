@@ -115,7 +115,6 @@ export default function RestaurantsDirectoryPage() {
 				gstNumber: item.gstNumber ?? "",
 				state: item.state ?? "",
 				pincode: item.pincode ?? "",
-				serviceChargePercent: item.serviceChargePercent,
 				experience: item.experience,
 				ownerName: item.owner?.name ?? "",
 				ownerEmail: item.owner?.email ?? "",

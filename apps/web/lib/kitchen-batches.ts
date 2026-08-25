@@ -7,6 +7,9 @@ export type KitchenQueueItem = {
 	preparingAt: string | null;
 	readyAt: string | null;
 	tables: string[];
+	// Counter's guest-facing identifier in place of a table label (see
+	// KitchenBatch.tokens below) — null for every non-Counter item.
+	token: number | null;
 };
 
 export type KitchenBatch = {
@@ -17,6 +20,7 @@ export type KitchenBatch = {
 	elapsedMinutes: number;
 	timeLabel: string;
 	tables: { label: string; quantity: number }[];
+	tokens: { token: number; quantity: number }[];
 	overdue: boolean;
 	orderItemIds: string[];
 };
@@ -89,9 +93,16 @@ export function batchQueueItems(items: KitchenQueueItem[]): KitchenBatch[] {
 		);
 
 		const tableTotals = new Map<string, number>();
+		const tokenTotals = new Map<number, number>();
 		for (const item of group) {
 			for (const label of item.tables) {
 				tableTotals.set(label, (tableTotals.get(label) ?? 0) + item.quantity);
+			}
+			if (item.token != null) {
+				tokenTotals.set(
+					item.token,
+					(tokenTotals.get(item.token) ?? 0) + item.quantity,
+				);
 			}
 		}
 
@@ -104,6 +115,10 @@ export function batchQueueItems(items: KitchenQueueItem[]): KitchenBatch[] {
 			timeLabel: timeSentence(status, elapsedMinutes),
 			tables: [...tableTotals.entries()].map(([label, quantity]) => ({
 				label,
+				quantity,
+			})),
+			tokens: [...tokenTotals.entries()].map(([token, quantity]) => ({
+				token,
 				quantity,
 			})),
 			overdue: status === "preparing" && elapsedMinutes >= OVERDUE_MINUTES,

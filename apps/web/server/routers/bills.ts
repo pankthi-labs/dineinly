@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import type { StaffRole } from "@/lib/auth";
-import { billableQuantity, computeBill, ratePercent } from "@/lib/bill-math";
+import { billableQuantity, computeBill } from "@/lib/bill-math";
 import { buildBillPdf } from "@/lib/bill-pdf";
 import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
@@ -16,7 +16,6 @@ import {
 	requestBillInput,
 	settleBillInput,
 	waiveOrderItemInput,
-	waiveServiceChargeInput,
 } from "./bills.schema";
 
 // Every Bills write (docs/product.md § RBAC) excludes Kitchen only.
@@ -50,8 +49,8 @@ type BillableItem = {
 // order_items (core-data-model.md — only settle freezes it), so both call
 // sites need the same non-cancelled-items-through-computeBill math the
 // guest bill screen already uses (apps/web/server/routers/guest.ts).
-function liveTotal(items: BillableItem[], serviceChargeRate: number): number {
-	return computeBill(items, serviceChargeRate).total;
+function liveTotal(items: BillableItem[]): number {
+	return computeBill(items).total;
 }
 
 // Shared by cancelOrderItem and waiveOrderItem: an item's cancelled and
@@ -154,17 +153,12 @@ export const billsRouter = router({
 					.eq("restaurant_id", input.restaurantId)
 					.eq("status", "active");
 
-		const [activeResult, closedResult, restaurantResult] = await Promise.all([
+		const [activeResult, closedResult] = await Promise.all([
 			activeQuery,
 			closedQuery,
-			ctx.auth
-				.from("restaurants")
-				.select("service_charge_rate")
-				.eq("id", input.restaurantId)
-				.maybeSingle(),
 		]);
 
-		for (const result of [activeResult, closedResult, restaurantResult]) {
+		for (const result of [activeResult, closedResult]) {
 			if (result.error) throw dbError("Unable to load bills.", result.error);
 		}
 
@@ -175,16 +169,11 @@ export const billsRouter = router({
 		if (sessions.length === 0) return [];
 
 		const sessionIds = sessions.map((s) => s.id);
-		const restaurantServiceChargeRate = Number(
-			restaurantResult.data?.service_charge_rate ?? 0,
-		);
 
 		const [billsResult, tablesResult, ordersResult] = await Promise.all([
 			ctx.auth
 				.from("bills")
-				.select(
-					"id, session_id, bill_number, status, service_charge_rate, service_charge_waived, total, settled_at",
-				)
+				.select("id, session_id, bill_number, status, total, settled_at")
 				.eq("restaurant_id", input.restaurantId)
 				.in("session_id", sessionIds),
 			ctx.auth
@@ -276,10 +265,7 @@ export const billsRouter = router({
 				const items = (orderIdsBySession.get(session.id) ?? []).flatMap(
 					(orderId) => itemsByOrder.get(orderId) ?? [],
 				);
-				const rate = bill?.service_charge_waived
-					? 0
-					: Number(bill?.service_charge_rate ?? restaurantServiceChargeRate);
-				total = liveTotal(items, rate);
+				total = liveTotal(items);
 			}
 
 			return {
@@ -328,15 +314,13 @@ export const billsRouter = router({
 			await Promise.all([
 				ctx.auth
 					.from("restaurants")
-					.select(
-						"name, address, city, gst_number, state, pincode, service_charge_rate",
-					)
+					.select("name, address, city, gst_number, state, pincode")
 					.eq("id", session.restaurant_id)
 					.maybeSingle(),
 				ctx.auth
 					.from("bills")
 					.select(
-						"id, bill_number, status, service_charge_rate, service_charge_waived, subtotal, tax_amount, service_charge_amount, total, settled_at",
+						"id, bill_number, status, subtotal, tax_amount, total, settled_at",
 					)
 					.eq("session_id", session.id)
 					.maybeSingle(),
@@ -385,7 +369,6 @@ export const billsRouter = router({
 		const allItems = itemsResult.data ?? [];
 		const bill = billResult.data;
 		const status: "open" | "requested" | "settled" = bill?.status ?? "open";
-		const waived = bill?.service_charge_waived ?? false;
 
 		const billableItems: BillableItem[] = allItems
 			.filter((item) => item.status !== "cancelled")
@@ -401,26 +384,17 @@ export const billsRouter = router({
 			}))
 			.filter((item) => item.quantity > 0);
 
-		const serviceChargeRate = waived
-			? 0
-			: Number(
-					bill?.service_charge_rate ??
-						restaurantResult.data.service_charge_rate ??
-						0,
-				);
-
 		// Frozen totals for a settled bill come straight from the row
 		// (core-data-model.md "frozen only at settle"); only the line/tax-slab
 		// breakdown — never stored on the row itself — is recomputed here,
 		// safe since nothing mutates order_items after settle.
-		const computed = computeBill(billableItems, serviceChargeRate);
+		const computed = computeBill(billableItems);
 		const totals =
 			status === "settled"
 				? {
 						lines: computed.lines,
 						subtotal: Number(bill?.subtotal ?? 0),
 						taxSlabs: computed.taxSlabs,
-						serviceCharge: Number(bill?.service_charge_amount ?? 0),
 						total: Number(bill?.total ?? 0),
 					}
 				: computed;
@@ -447,8 +421,6 @@ export const billsRouter = router({
 			billId: bill?.id ?? null,
 			billNumber: bill?.bill_number ?? null,
 			status,
-			serviceChargeWaived: waived,
-			serviceChargeRatePercent: ratePercent(serviceChargeRate),
 			settledAt: bill?.settled_at ?? null,
 			hasItemsInProgress,
 			items: allItems.map((item) => ({
@@ -509,7 +481,7 @@ export const billsRouter = router({
 
 			const existing = await ctx.auth
 				.from("bills")
-				.select("id, status, service_charge_waived")
+				.select("id, status")
 				.eq("session_id", input.sessionId)
 				.maybeSingle();
 			if (existing.error)
@@ -521,24 +493,10 @@ export const billsRouter = router({
 				return { billId: existing.data.id };
 			}
 
-			const restaurantResult = await ctx.auth
-				.from("restaurants")
-				.select("service_charge_rate")
-				.eq("id", restaurantId)
-				.maybeSingle();
-			if (restaurantResult.error) {
-				throw dbError("Unable to open the bill.", restaurantResult.error);
-			}
-
 			if (existing.data) {
 				const { data, error } = await ctx.auth
 					.from("bills")
-					.update({
-						status: "requested",
-						service_charge_rate: existing.data.service_charge_waived
-							? 0
-							: (restaurantResult.data?.service_charge_rate ?? null),
-					})
+					.update({ status: "requested" })
 					.eq("id", existing.data.id)
 					.select("id")
 					.single();
@@ -552,98 +510,11 @@ export const billsRouter = router({
 					restaurant_id: restaurantId,
 					session_id: input.sessionId,
 					status: "requested",
-					service_charge_rate:
-						restaurantResult.data?.service_charge_rate ?? null,
 				})
 				.select("id")
 				.single();
 			if (error) throw dbError("Unable to open the bill.", error);
 			return { billId: data.id };
-		}),
-
-	// Waive Service Charge. Only while the bill isn't settled — settle
-	// freezes serviceChargeAmount, so a waiver after that point would have
-	// nothing left to affect (core-data-model.md "frozen only at settle").
-	// Requires an existing bill row (i.e. Request Bill has already run):
-	// bills.bill_number draws unconditionally from bill_number_seq on any
-	// insert, so a get-or-create insert here would hand out a bill number
-	// while the row still reads "open" — contradicting product.md § Bills
-	// tab's "shown as Open with no bill number yet".
-	waiveServiceCharge: authedProcedure
-		.input(waiveServiceChargeInput)
-		.mutation(async ({ ctx, input }) => {
-			const sessionResult = await ctx.auth
-				.from("table_sessions")
-				.select("restaurant_id")
-				.eq("id", input.sessionId)
-				.maybeSingle();
-			if (sessionResult.error) {
-				throw dbError(
-					"Unable to update the service charge.",
-					sessionResult.error,
-				);
-			}
-			if (!sessionResult.data) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Table session not found.",
-				});
-			}
-			await requireFullServiceRole(
-				ctx,
-				sessionResult.data.restaurant_id,
-				BILLS_WRITE_ROLES,
-			);
-
-			const [existing, restaurantResult] = await Promise.all([
-				ctx.auth
-					.from("bills")
-					.select("id, status")
-					.eq("session_id", input.sessionId)
-					.maybeSingle(),
-				ctx.auth
-					.from("restaurants")
-					.select("service_charge_rate")
-					.eq("id", sessionResult.data.restaurant_id)
-					.maybeSingle(),
-			]);
-			if (existing.error) {
-				throw dbError("Unable to update the service charge.", existing.error);
-			}
-			if (restaurantResult.error) {
-				throw dbError(
-					"Unable to update the service charge.",
-					restaurantResult.error,
-				);
-			}
-			if (existing.data?.status === "settled") {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "This bill is already settled.",
-				});
-			}
-
-			const serviceChargeRate = input.waived
-				? 0
-				: (restaurantResult.data?.service_charge_rate ?? null);
-
-			if (!existing.data) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "Request the bill before waiving the service charge.",
-				});
-			}
-
-			const { error } = await ctx.auth
-				.from("bills")
-				.update({
-					service_charge_waived: input.waived,
-					service_charge_rate: serviceChargeRate,
-				})
-				.eq("id", existing.data.id)
-				.neq("status", "settled");
-			if (error) throw dbError("Unable to update the service charge.", error);
-			return { waived: input.waived };
 		}),
 
 	// Correct eligible order items, in whole or in part: cancel a mis-added
@@ -723,10 +594,10 @@ export const billsRouter = router({
 	// Waive an order item, in whole or in part: excludes waivedQuantity of it
 	// from bill math without touching status/quantity, for exceptional cases
 	// a cancel doesn't fit — a quality complaint on an already-served dish,
-	// or a short-served quantity (e.g. 3 ordered, only 2 came out). Mirrors
-	// waiveServiceCharge: adjustable until the bill settles. Unlike
-	// cancelOrderItem, not gated to `status = 'placed'` — the whole point is
-	// covering items past that point, so any non-cancelled item is eligible.
+	// or a short-served quantity (e.g. 3 ordered, only 2 came out). Adjustable
+	// until the bill settles. Unlike cancelOrderItem, not gated to
+	// `status = 'placed'` — the whole point is covering items past that
+	// point, so any non-cancelled item is eligible.
 	waiveOrderItem: authedProcedure
 		.input(waiveOrderItemInput)
 		.mutation(async ({ ctx, input }) => {
@@ -815,7 +686,7 @@ export const billsRouter = router({
 			const [billResult, ordersResult, userResult] = await Promise.all([
 				ctx.auth
 					.from("bills")
-					.select("id, service_charge_rate, service_charge_waived, status")
+					.select("id, status")
 					.eq("session_id", input.sessionId)
 					.maybeSingle(),
 				ctx.auth
@@ -858,10 +729,6 @@ export const billsRouter = router({
 				settledBy = staffResult.data?.id ?? null;
 			}
 
-			const serviceChargeRate = billResult.data.service_charge_waived
-				? 0
-				: Number(billResult.data.service_charge_rate ?? 0);
-
 			const orderIds = (ordersResult.data ?? []).map((o) => o.id);
 			const itemsResult =
 				orderIds.length === 0
@@ -890,7 +757,6 @@ export const billsRouter = router({
 						taxRate: Number(row.tax_rate),
 					}))
 					.filter((row) => row.quantity > 0),
-				serviceChargeRate,
 			);
 			const taxAmount = totals.taxSlabs.reduce(
 				(sum, slab) => sum + slab.cgst + slab.sgst,
@@ -899,10 +765,8 @@ export const billsRouter = router({
 
 			const settledFields = {
 				status: "settled" as const,
-				service_charge_rate: serviceChargeRate,
 				subtotal: totals.subtotal,
 				tax_amount: taxAmount,
-				service_charge_amount: totals.serviceCharge,
 				total: totals.total,
 				settled_at: new Date().toISOString(),
 				settled_by: settledBy,
@@ -991,16 +855,12 @@ export const billsRouter = router({
 				await Promise.all([
 					ctx.auth
 						.from("restaurants")
-						.select(
-							"name, address, city, gst_number, state, pincode, service_charge_rate",
-						)
+						.select("name, address, city, gst_number, state, pincode")
 						.eq("id", sessionResult.data.restaurant_id)
 						.maybeSingle(),
 					ctx.auth
 						.from("bills")
-						.select(
-							"bill_number, status, service_charge_rate, service_charge_waived, subtotal, tax_amount, service_charge_amount, total",
-						)
+						.select("bill_number, status, subtotal, tax_amount, total")
 						.eq("session_id", input.sessionId)
 						.maybeSingle(),
 					ctx.auth
@@ -1045,14 +905,6 @@ export const billsRouter = router({
 				throw dbError("Unable to build the bill.", itemsResult.error);
 
 			const bill = billResult.data;
-			const waived = bill?.service_charge_waived ?? false;
-			const serviceChargeRate = waived
-				? 0
-				: Number(
-						bill?.service_charge_rate ??
-							restaurantResult.data.service_charge_rate ??
-							0,
-					);
 			const computed = computeBill(
 				(itemsResult.data ?? [])
 					.map((row) => ({
@@ -1066,7 +918,6 @@ export const billsRouter = router({
 						taxRate: Number(row.tax_rate),
 					}))
 					.filter((row) => row.quantity > 0),
-				serviceChargeRate,
 			);
 			// Frozen totals for a settled bill come straight from the row, same
 			// as bills.get — only the line/tax-slab breakdown (never stored on
@@ -1078,7 +929,6 @@ export const billsRouter = router({
 							lines: computed.lines,
 							subtotal: Number(bill.subtotal ?? 0),
 							taxSlabs: computed.taxSlabs,
-							serviceCharge: Number(bill.service_charge_amount ?? 0),
 							total: Number(bill.total ?? 0),
 						}
 					: computed;

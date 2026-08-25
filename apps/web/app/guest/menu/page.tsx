@@ -14,6 +14,10 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { QuantityPill } from "@/components/quantity-pill";
+import {
+	COUNTER_STATUS_LABEL,
+	counterOrderStatus,
+} from "@/lib/counter-order-status";
 import { capitalizeFirst, formatPrice, titleCase } from "@/lib/format";
 import {
 	ICE_LABELS,
@@ -92,6 +96,23 @@ export default function GuestMenuPage() {
 		enabled: menu.isSuccess && orderingEnabled,
 	});
 	const hasOrders = (orders.data?.length ?? 0) > 0;
+	// Counter's "My Orders" link doubles as a status readout — Full-Service
+	// (one) and Guest never show this, since Counter is the only experience
+	// whose guest-facing status can be "Awaiting Payment" before the kitchen
+	// has even started (docs/core-data-model.md § Lifecycle invariants).
+	const isCounter = menu.data?.restaurant.experience === "counter";
+	const bill = trpc.guest.bill.get.useQuery(undefined, {
+		enabled: menu.isSuccess && isCounter,
+	});
+	const myOrdersStatus =
+		isCounter && orders.data && orders.data.length > 0
+			? COUNTER_STATUS_LABEL[
+					counterOrderStatus(
+						orders.data.flatMap((order) => order.items),
+						bill.data?.status === "settled",
+					)
+				]
+			: null;
 
 	const { client, restaurantId, tableSessionId } = useGuestRealtime();
 	useBroadcastChannel(
@@ -103,12 +124,14 @@ export default function GuestMenuPage() {
 		"menu_item.change": () => utils.guest.menu.invalidate(),
 		"menu_category.change": () => utils.guest.menu.invalidate(),
 		// Owner regenerated the QR (supabase/migrations/..._policies.sql's
-		// regenerate_menu_qr_token already closed this tab's session) — still
-		// subscribed to this topic since can_access_menu_topic only checks
-		// restaurant_id, not session liveness, so this fires even on an
-		// already-revoked session. Re-fetching now reads null under RLS and
-		// falls into RestaurantUnavailable below, instead of sitting on a
-		// stale menu until the guest happens to reload.
+		// regenerate_qr_token already closed this tab's session, for Menu
+		// restaurants) — still subscribed to this topic since
+		// can_access_menu_topic only checks restaurant_id, not session
+		// liveness, so this fires even on an already-revoked session.
+		// Re-fetching now reads null under RLS and falls into
+		// RestaurantUnavailable below, instead of sitting on a stale menu
+		// until the guest happens to reload. A no-op refetch for Counter,
+		// whose sessions regenerate_qr_token leaves open.
 		"qr.regenerated": () => utils.guest.menu.invalidate(),
 	});
 
@@ -255,7 +278,9 @@ export default function GuestMenuPage() {
 					{searchOpen ? null : (
 						<>
 							<div className="min-w-0 flex-1">
-								<h1 className="text-2xl">{menu.data.restaurant.name}</h1>
+								<h1 className="text-2xl">
+									{titleCase(menu.data.restaurant.name)}
+								</h1>
 								<PoweredByDineinly className="mt-1" />
 							</div>
 							{/* Dineinly Menu's QR is universal, not per-table (docs/product.md
@@ -432,7 +457,7 @@ export default function GuestMenuPage() {
 								onClick={() => router.push("/guest/orders")}
 								className="-my-3 py-3 font-semibold text-accent text-sm"
 							>
-								My Orders
+								My Orders{myOrdersStatus ? ` · ${myOrdersStatus}` : ""}
 							</button>
 						) : null}
 						{cartCount > 0 ? (

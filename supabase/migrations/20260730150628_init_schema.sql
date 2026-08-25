@@ -51,12 +51,15 @@ CREATE TABLE "bills" (
 	"restaurant_id" uuid NOT NULL,
 	"session_id" uuid NOT NULL,
 	"bill_number" text DEFAULT encode_bill_number(nextval('bill_number_seq'::regclass)) NOT NULL,
+	-- Counter only: the small, per-restaurant, per-day number guests are shown
+	-- and pay against at the counter. Null for every other experience. Assigned
+	-- once by request_bill() via next_daily_token() (see restaurant_daily_tokens
+	-- below and the RLS migration) — never a column default, since it needs two
+	-- arguments (restaurant, day).
+	"daily_token" integer,
 	"status" "bill_status" DEFAULT 'open' NOT NULL,
-	"service_charge_rate" numeric(5, 4),
-	"service_charge_waived" boolean DEFAULT false NOT NULL,
 	"subtotal" numeric(12, 2),
 	"tax_amount" numeric(12, 2),
-	"service_charge_amount" numeric(12, 2),
 	"total" numeric(12, 2),
 	"settled_at" timestamp with time zone,
 	"settled_by" uuid,
@@ -64,12 +67,22 @@ CREATE TABLE "bills" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "bills_session_id_unique" UNIQUE("session_id"),
 	CONSTRAINT "bills_bill_number_key" UNIQUE("bill_number"),
-	CONSTRAINT "bills_service_charge_rate_check" CHECK ("bills"."service_charge_rate" between 0 and 1),
 	CONSTRAINT "bills_subtotal_check" CHECK ("bills"."subtotal" >= 0),
 	CONSTRAINT "bills_tax_amount_check" CHECK ("bills"."tax_amount" >= 0),
-	CONSTRAINT "bills_service_charge_amount_check" CHECK ("bills"."service_charge_amount" >= 0),
 	CONSTRAINT "bills_total_check" CHECK ("bills"."total" >= 0),
 	CONSTRAINT "bills_settled_check" CHECK (("bills"."status" = 'settled' AND "bills"."settled_at" IS NOT NULL AND "bills"."subtotal" IS NOT NULL AND "bills"."tax_amount" IS NOT NULL AND "bills"."total" IS NOT NULL) OR ("bills"."status" <> 'settled' AND "bills"."settled_at" IS NULL))
+);
+--> statement-breakpoint
+-- Backs bills.daily_token: one row per restaurant per calendar day
+-- (Asia/Kolkata), incremented atomically by next_daily_token() (RLS
+-- migration) via INSERT ... ON CONFLICT DO UPDATE. No id/timestamps — the
+-- composite key is the whole row, nothing else is ever read from it besides
+-- the running count.
+CREATE TABLE "restaurant_daily_tokens" (
+	"restaurant_id" uuid NOT NULL,
+	"token_date" date NOT NULL,
+	"last_token" integer DEFAULT 0 NOT NULL,
+	CONSTRAINT "restaurant_daily_tokens_restaurant_id_token_date_pk" PRIMARY KEY("restaurant_id","token_date")
 );
 --> statement-breakpoint
 CREATE TABLE "cart_items" (
@@ -176,16 +189,12 @@ CREATE TABLE "restaurants" (
 	"gst_number" text,
 	"state" text,
 	"pincode" text,
-	"service_charge_rate" numeric(5, 4),
 	"status" "restaurant_status" DEFAULT 'active' NOT NULL,
 	"experience" "restaurant_experience" DEFAULT 'one' NOT NULL,
-	"counter_qr_token" text,
-	"menu_qr_token" text,
+	"qr_token" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "restaurants_service_charge_rate_check" CHECK ("restaurants"."service_charge_rate" between 0 and 1),
-	CONSTRAINT "restaurants_counter_qr_token_unique" UNIQUE("counter_qr_token"),
-	CONSTRAINT "restaurants_menu_qr_token_unique" UNIQUE("menu_qr_token")
+	CONSTRAINT "restaurants_qr_token_unique" UNIQUE("qr_token")
 );
 --> statement-breakpoint
 CREATE TABLE "restaurant_tables" (
@@ -229,6 +238,7 @@ CREATE TABLE "table_sessions" (
 ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_settled_by_fkey" FOREIGN KEY ("restaurant_id","settled_by") REFERENCES "public"."staff"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "restaurant_daily_tokens" ADD CONSTRAINT "restaurant_daily_tokens_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_menu_item_id_fkey" FOREIGN KEY ("restaurant_id","menu_item_id") REFERENCES "public"."menu_items"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

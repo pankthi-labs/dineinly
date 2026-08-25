@@ -916,15 +916,12 @@ for h in HISTORICAL:
             rate = CAT_TAX[oi["item"]["cat"]]
             tax_by_rate[rate] = tax_by_rate.get(rate, 0.0) + line * float(rate)
     tax_amount = sum(tax_by_rate.values())
-    service_charge_rate = 0.05
-    service_charge_amount = round(subtotal * service_charge_rate, 2)
-    total = round(subtotal + tax_amount + service_charge_amount, 2)
+    total = round(subtotal + tax_amount, 2)
     bid = nid("a0000000", bill_ctr)
     bill_ctr += 1
     settler = random.choice(MANAGER_KEYS)
     h["bill"] = dict(id=bid, subtotal=round(subtotal, 2), tax=round(tax_amount, 2),
-                      service_charge=service_charge_amount, total=total,
-                      service_charge_rate=service_charge_rate, settled_by=settler)
+                      total=total, settled_by=settler)
 
 # ---------------------------------------------------------------------------
 # SQL emission
@@ -948,7 +945,7 @@ w("")
 
 # --- restaurant ---
 w("-- 1 restaurant — Arbor Brewing Company (Bengaluru brewpub, 30-table floor) ---")
-w("insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status)")
+w("insert into restaurants (id, name, address, city, gst_number, state, pincode, status)")
 w("values (")
 w(f"\t'{REST_ID}',")
 w("\t'Arbor Brewing Company',")
@@ -957,7 +954,6 @@ w("\t'Bengaluru',")
 w("\t'29ARBOR5678B1Z2',")
 w("\t'Karnataka',")
 w("\t'560038',")
-w("\t0.0500,")
 w("\t'active'")
 w(")")
 w("on conflict (id) do nothing;")
@@ -1158,22 +1154,21 @@ w("-- (every other active session stays 'open' with no bills row at all, same")
 w("-- as the real app never inserting one until Request Bill; amounts derived")
 w("-- on read per docs/core-data-model.md, so left null here), 3 settled on the")
 w("-- historical closed sessions with amounts computed from their order items")
-w("-- using a simple subtotal+tax+service-charge formula — a fixture")
-w("-- convenience, NOT the official tax/service/rounding formula (still TBD,")
-w("-- see AGENTS.md).")
-w("insert into bills (id, restaurant_id, session_id, status, service_charge_rate, subtotal, tax_amount, service_charge_amount, total, settled_at, settled_by) values")
+w("-- using a simple subtotal+tax formula — a fixture convenience, NOT the")
+w("-- official tax/rounding formula (still TBD, see AGENTS.md).")
+w("insert into bills (id, restaurant_id, session_id, status, subtotal, tax_amount, total, settled_at, settled_by) values")
 rows = []
 for b in BILLS:
     rows.append(
         f"\t('{b['id']}', '{REST_ID}', '{b['session_id']}', '{b['status']}', "
-        "0.05, null, null, null, null, null, null)"
+        "null, null, null, null, null)"
     )
 for h in HISTORICAL:
     bl = h["bill"]
     settler_id = staff_by_key[bl["settled_by"]]["id"]
     rows.append(
-        f"\t('{bl['id']}', '{REST_ID}', '{h['id']}', 'settled', {bl['service_charge_rate']}, "
-        f"{bl['subtotal']:.2f}, {bl['tax']:.2f}, {bl['service_charge']:.2f}, {bl['total']:.2f}, "
+        f"\t('{bl['id']}', '{REST_ID}', '{h['id']}', 'settled', "
+        f"{bl['subtotal']:.2f}, {bl['tax']:.2f}, {bl['total']:.2f}, "
         f"{mins_ago(h['closed_min'])}, '{settler_id}')"
     )
 w(",\n".join(rows))

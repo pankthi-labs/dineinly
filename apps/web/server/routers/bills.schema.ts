@@ -26,11 +26,6 @@ export const requestBillInput = z.object({
 	sessionId: sessionIdSchema,
 });
 
-export const waiveServiceChargeInput = z.object({
-	sessionId: sessionIdSchema,
-	waived: z.boolean(),
-});
-
 export const cancelOrderItemInput = z.object({
 	orderItemId: orderItemIdSchema,
 	cancelledQuantity: z.number().int().min(0),

@@ -64,14 +64,6 @@ export default function BillDetailPage() {
 		onError: notifyError,
 	});
 
-	const waiveMutation = trpc.bills.waiveServiceCharge.useMutation({
-		onSuccess: (data) =>
-			invalidateAndNotify(
-				data.waived ? "Service charge waived." : "Service charge restored.",
-			),
-		onError: notifyError,
-	});
-
 	const cancelItemMutation = trpc.bills.cancelOrderItem.useMutation({
 		onSuccess: () => {
 			closeEditor();
@@ -497,24 +489,6 @@ export default function BillDetailPage() {
 						</dl>
 
 						<div className="flex flex-col gap-3">
-							{data.status !== "requested" ? null : (
-								<button
-									type="button"
-									onClick={() =>
-										waiveMutation.mutate({
-											sessionId,
-											waived: !data.serviceChargeWaived,
-										})
-									}
-									disabled={waiveMutation.isPending}
-									className="rounded-md border border-divider px-6 py-3 font-medium text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-								>
-									{data.serviceChargeWaived
-										? "Restore Service Charge"
-										: "Waive Service Charge"}
-								</button>
-							)}
-
 							{data.status === "open" ? (
 								<button
 									type="button"
@@ -581,7 +555,7 @@ export default function BillDetailPage() {
 				    list above. */}
 				<div className="mx-auto hidden max-w-md rounded-xl border border-divider bg-surface p-5 tabular-nums print:block">
 					<header className="text-center">
-						<h1 className="text-3xl">{data.restaurant.name}</h1>
+						<h1 className="text-3xl">{titleCase(data.restaurant.name)}</h1>
 						<p className="mt-2 text-secondary text-sm">
 							{data.restaurant.address}, {data.restaurant.city},{" "}
 							{data.restaurant.state} {data.restaurant.pincode}
@@ -747,9 +721,6 @@ function TaxAndServiceRows({
 	data: {
 		subtotal: number;
 		taxSlabs: { ratePercent: number; cgst: number; sgst: number }[];
-		serviceChargeWaived: boolean;
-		serviceChargeRatePercent: number;
-		serviceCharge: number;
 	};
 }) {
 	return (
@@ -761,17 +732,6 @@ function TaxAndServiceRows({
 					<TotalsRow label={`SGST (${slab.ratePercent}%)`} amount={slab.sgst} />
 				</Fragment>
 			))}
-			{data.serviceChargeWaived ? (
-				<div className="flex items-baseline justify-between text-sm">
-					<dt className="text-secondary">Service Charge (waived)</dt>
-					<dd className="text-muted line-through">{formatBillAmount(0)}</dd>
-				</div>
-			) : data.serviceChargeRatePercent > 0 ? (
-				<TotalsRow
-					label={`Service Charge (${data.serviceChargeRatePercent}%)`}
-					amount={data.serviceCharge}
-				/>
-			) : null}
 		</>
 	);
 }

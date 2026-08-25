@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { billableQuantity, computeBill, ratePercent } from "@/lib/bill-math";
+import { billableQuantity, computeBill } from "@/lib/bill-math";
 import { ICE_OPTIONS, SALT_OPTIONS, SPICE_OPTIONS } from "@/lib/menu-options";
 import { listCartItems, upsertCartItem } from "../cart";
 import { dbError } from "../trpc/errors";
@@ -309,14 +309,12 @@ export const guestRouter = router({
 			const [restaurantResult, billResult, ordersResult] = await Promise.all([
 				ctx.supabase
 					.from("restaurants")
-					.select(
-						"name, address, city, gst_number, state, pincode, service_charge_rate",
-					)
+					.select("name, address, city, gst_number, state, pincode")
 					.eq("id", ctx.guest.restaurant_id)
 					.maybeSingle(),
 				ctx.supabase
 					.from("bills")
-					.select("id, bill_number, status, service_charge_rate")
+					.select("id, bill_number, daily_token, status")
 					.eq("session_id", ctx.guest.table_session_id)
 					.maybeSingle(),
 				ctx.supabase
@@ -357,14 +355,6 @@ export const guestRouter = router({
 
 			const status: "open" | "requested" | "settled" =
 				billResult.data?.status ?? "open";
-			// Pre-request, no bill row has snapshotted a rate yet — fall back to
-			// the restaurant's own current rate, same as the staff Bills tab's
-			// live (unsettled) total.
-			const serviceChargeRate = Number(
-				billResult.data?.service_charge_rate ??
-					restaurantResult.data.service_charge_rate ??
-					0,
-			);
 			const totals = computeBill(
 				(itemsResult.data ?? [])
 					.map((row) => ({
@@ -378,7 +368,6 @@ export const guestRouter = router({
 						taxRate: Number(row.tax_rate),
 					}))
 					.filter((row) => row.quantity > 0),
-				serviceChargeRate,
 			);
 
 			return {
@@ -396,8 +385,8 @@ export const guestRouter = router({
 				tableLabel: ctx.guest.table_label,
 				billId: billResult.data?.id ?? null,
 				billNumber: billResult.data?.bill_number ?? null,
+				dailyToken: billResult.data?.daily_token ?? null,
 				status,
-				serviceChargeRatePercent: ratePercent(serviceChargeRate),
 				...totals,
 			};
 		}),

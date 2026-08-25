@@ -5,8 +5,8 @@ import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
 import { EXPERIENCE_LABELS } from "@/components/restaurant-fields-fieldset";
+import { titleCase } from "@/lib/format";
 import type { AppRouter } from "@/server/routers/_app";
-import { needsBillingDetails } from "@/server/routers/restaurants.schema";
 
 type RestaurantListItem =
 	inferRouterOutputs<AppRouter>["restaurants"]["list"]["items"][number];
@@ -49,7 +49,7 @@ export function RestaurantRow({
 					>
 						{isLive ? "Live" : "Paused"}
 					</span>
-					<h3 className="text-lg text-primary">{restaurant.name}</h3>
+					<h3 className="text-lg text-primary">{titleCase(restaurant.name)}</h3>
 				</div>
 				<ChevronDown
 					className={`icon-md shrink-0 text-muted transition-transform duration-(--duration-base) ease-out ${
@@ -80,16 +80,6 @@ export function RestaurantRow({
 						) : null}
 						{restaurant.pincode ? (
 							<Detail label="Pincode" value={restaurant.pincode} />
-						) : null}
-						{needsBillingDetails(restaurant.experience) ? (
-							<Detail
-								label="Service Charge"
-								value={
-									restaurant.serviceChargePercent === null
-										? "None"
-										: `${restaurant.serviceChargePercent}%`
-								}
-							/>
 						) : null}
 						<Detail
 							label="Owner Name"

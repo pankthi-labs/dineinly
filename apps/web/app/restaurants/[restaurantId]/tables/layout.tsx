@@ -1,12 +1,9 @@
 import type { ReactNode } from "react";
-import {
-	requireFullServiceExperience,
-	requireRestaurantRole,
-} from "@/lib/auth";
+import { requireRestaurantRole, requireSeatedExperience } from "@/lib/auth";
 
 // Manage Tables & QR Codes (docs/product.md § RBAC) is Owner/Manager/
-// Dineinly Admin only. Dineinly Menu exposes no Table Matrix at all — its one
-// QR lives on its own QR Menu page instead (see ../qr/qr-code-section.tsx).
+// Dineinly Admin only. Menu and Counter expose no Table Matrix at all —
+// their one QR lives on the shared QR Menu page instead (see ../qr/page.tsx).
 export default async function TableMatrixLayout({
 	children,
 	params,
@@ -16,6 +13,6 @@ export default async function TableMatrixLayout({
 }) {
 	const { restaurantId } = await params;
 	await requireRestaurantRole(restaurantId, ["owner", "manager"]);
-	await requireFullServiceExperience(restaurantId);
+	await requireSeatedExperience(restaurantId);
 	return children;
 }

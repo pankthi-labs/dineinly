@@ -171,13 +171,28 @@ export const kitchenRouter = router({
 			const ordersById = new Map((orders ?? []).map((o) => [o.id, o]));
 			const sessionIds = [...new Set((orders ?? []).map((o) => o.session_id))];
 
-			const { data: tables, error: tablesError } = await ctx.auth
-				.from("restaurant_tables")
-				.select("session_id, label")
-				.eq("restaurant_id", input.restaurantId)
-				.in("session_id", sessionIds);
+			const [
+				{ data: tables, error: tablesError },
+				{ data: bills, error: billsError },
+			] = await Promise.all([
+				ctx.auth
+					.from("restaurant_tables")
+					.select("session_id, label")
+					.eq("restaurant_id", input.restaurantId)
+					.in("session_id", sessionIds),
+				// Counter has no restaurant_tables row (tableLabelsBySession stays
+				// empty for it), so its guest-facing identifier here is the same
+				// daily_token shown on the guest bill page — an item only ever
+				// reaches this queue post-settle for Counter, so daily_token is
+				// always assigned by the time it would render.
+				ctx.auth
+					.from("bills")
+					.select("session_id, daily_token")
+					.eq("restaurant_id", input.restaurantId)
+					.in("session_id", sessionIds),
+			]);
 
-			assertNoQueueError(tablesError);
+			assertNoQueueError(tablesError ?? billsError);
 
 			const tableLabelsBySession = new Map<string, string[]>();
 			for (const table of tables ?? []) {
@@ -185,6 +200,12 @@ export const kitchenRouter = router({
 				const labels = tableLabelsBySession.get(table.session_id) ?? [];
 				labels.push(table.label);
 				tableLabelsBySession.set(table.session_id, labels);
+			}
+
+			const tokenBySession = new Map<string, number>();
+			for (const bill of bills ?? []) {
+				if (bill.daily_token == null) continue;
+				tokenBySession.set(bill.session_id, bill.daily_token);
 			}
 
 			return {
@@ -206,6 +227,9 @@ export const kitchenRouter = router({
 							tables: order
 								? (tableLabelsBySession.get(order.session_id) ?? [])
 								: [],
+							token: order
+								? (tokenBySession.get(order.session_id) ?? null)
+								: null,
 						};
 					})
 					.filter((item) => item.quantity > 0),

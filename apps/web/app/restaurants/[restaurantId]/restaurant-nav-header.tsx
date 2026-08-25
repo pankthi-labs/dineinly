@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
 import { PoweredByDineinly } from "@/components/brand-logo";
+import { titleCase } from "@/lib/format";
 import {
 	useCanAccessBills,
 	useCanAccessSettings,
 	useCanManageStaff,
 	useIsAdmin,
+	useIsCounter,
 	useIsMenuOnly,
 } from "./viewer-context";
 
@@ -56,18 +58,21 @@ export function RestaurantNavHeader({
 	const canAccessBills = useCanAccessBills();
 	const canAccessSettings = useCanAccessSettings();
 	const isMenuOnly = useIsMenuOnly();
+	const isCounter = useIsCounter();
 	const gatedItems: Partial<Record<NavItem, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
 		// Dineinly Menu is view-only (docs/product.md § Dineinly Experiences)
 		// — no tables, kitchen, floor, or bills, for any role.
 		Kitchen: !isMenuOnly,
-		"Table Matrix": canManageMenuAndTables && !isMenuOnly,
-		// The Menu package's one universal QR (docs/product.md § Dineinly
-		// Experiences) — Table Matrix's full-service counterpart.
-		"QR Menu": canManageMenuAndTables && isMenuOnly,
+		// Counter has zero Restaurant Table rows (docs/product.md § Dineinly
+		// Experiences) — no Table Matrix or Floor either, same as Menu.
+		"Table Matrix": canManageMenuAndTables && !isMenuOnly && !isCounter,
+		// Menu and Counter share one universal QR instead of per-table ones —
+		// Table Matrix's counterpart for both.
+		"QR Menu": canManageMenuAndTables && (isMenuOnly || isCounter),
 		// Floor (Order on behalf of guest, Merge Tables — docs/product.md §
 		// RBAC) is Waiter/Manager/Owner, same reach as Bills.
-		Floor: canAccessBills && !isMenuOnly,
+		Floor: canAccessBills && !isMenuOnly && !isCounter,
 		"Staff Roster": canManageStaff,
 		"Venue Settings": canAccessSettings,
 		Bills: canAccessBills && !isMenuOnly,
@@ -80,7 +85,7 @@ export function RestaurantNavHeader({
 		<header className="border-divider border-b bg-surface">
 			<div className="flex flex-col gap-6 px-4 py-5 md:flex-row md:items-center md:justify-between md:px-16 xl:px-24">
 				<div>
-					<p className="text-2xl text-primary">{restaurantName}</p>
+					<p className="text-2xl text-primary">{titleCase(restaurantName)}</p>
 					<PoweredByDineinly className="mt-1" />
 				</div>
 				<div className="flex min-w-0 items-center gap-6 lg:gap-8">

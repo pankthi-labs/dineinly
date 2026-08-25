@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
-import { requireMenuExperience, requireRestaurantRole } from "@/lib/auth";
+import {
+	requireRestaurantRole,
+	requireUniversalQrExperience,
+} from "@/lib/auth";
 
 // Manage Tables & QR Codes (docs/product.md § RBAC) is Owner/Manager/
-// Dineinly Admin only. QR Menu is Dineinly Menu's Table Matrix counterpart —
-// full-service restaurants already manage their QRs there instead.
+// Dineinly Admin only. QR Menu is Menu and Counter's shared Table Matrix
+// counterpart — Guest/One already manage their per-table QRs there instead.
 export default async function QrMenuLayout({
 	children,
 	params,
@@ -13,6 +16,6 @@ export default async function QrMenuLayout({
 }) {
 	const { restaurantId } = await params;
 	await requireRestaurantRole(restaurantId, ["owner", "manager"]);
-	await requireMenuExperience(restaurantId);
+	await requireUniversalQrExperience(restaurantId);
 	return children;
 }

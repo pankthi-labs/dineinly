@@ -9,9 +9,8 @@
 -- `z.uuid()`, used on guest JWT claims in apps/web/lib/guest-token.ts) —
 -- they're placeholders, not real gen_random_uuid() output.
 --
--- Tax rate (5% / 18%) and service_charge_rate (5%) below are placeholder
--- values for dev fixtures only — they say nothing about what a real
--- restaurant charges.
+-- Tax rate (5% / 18%) below is a placeholder value for dev fixtures only —
+-- it says nothing about what a real restaurant charges.
 --
 -- pin_hash is left null on every staff row — the PIN flow that writes it
 -- lands separately, and a fake hash here would bake in a hashing scheme
@@ -98,7 +97,7 @@ insert into auth.identities (provider_id, user_id, identity_data, provider, crea
 on conflict (provider_id, provider) do nothing;
 
 -- 1 restaurant -----------------------------------------------------------
-insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status, experience)
+insert into restaurants (id, name, address, city, gst_number, state, pincode, status, experience)
 values (
 	'10000000-0000-4000-8000-000000000001',
 	'Dineinly Test Kitchen',
@@ -107,7 +106,6 @@ values (
 	'29ABCDE1234F1Z5',
 	'Karnataka',
 	'560038',
-	0.0500,
 	'active',
 	'one'
 )
@@ -227,11 +225,11 @@ on conflict (id) do nothing;
 -- bill number yet" state never has (bill_number draws unconditionally from
 -- bill_number_seq on any insert).
 insert into bills (
-	id, restaurant_id, session_id, status, service_charge_rate,
-	subtotal, tax_amount, service_charge_amount, total, settled_at, settled_by
+	id, restaurant_id, session_id, status,
+	subtotal, tax_amount, total, settled_at, settled_by
 ) values
 	('a0000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002',
-		'settled', 0.0500, 500.00, 40.60, 25.00, 565.60,
+		'settled', 500.00, 40.60, 540.60,
 		now() - interval '2 days' + interval '1 hour', '20000000-0000-4000-8000-000000000002')
 on conflict (id) do nothing;
 
@@ -249,7 +247,7 @@ on conflict (id) do nothing;
 -- ==========================================================================
 
 -- 1 restaurant — Arbor Brewing Company (Bengaluru brewpub, 30-table floor) ---
-insert into restaurants (id, name, address, city, gst_number, state, pincode, service_charge_rate, status, experience)
+insert into restaurants (id, name, address, city, gst_number, state, pincode, status, experience)
 values (
 	'10000000-0000-4000-8000-000000000002',
 	'Arbor Brewing Company',
@@ -258,7 +256,6 @@ values (
 	'29ARBOR5678B1Z2',
 	'Karnataka',
 	'560038',
-	0.0500,
 	'active',
 	'one'
 )
@@ -979,13 +976,12 @@ on conflict (id) do nothing;
 -- as the real app never inserting one until Request Bill; amounts derived
 -- on read per docs/core-data-model.md, so left null here), 3 settled on the
 -- historical closed sessions with amounts computed from their order items
--- using a simple subtotal+tax+service-charge formula — a fixture
--- convenience, NOT the official tax/service/rounding formula (still TBD,
--- see AGENTS.md).
-insert into bills (id, restaurant_id, session_id, status, service_charge_rate, subtotal, tax_amount, service_charge_amount, total, settled_at, settled_by) values
-	('a0000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000007', 'requested', 0.05, null, null, null, null, null, null),
-	('a0000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000009', 'requested', 0.05, null, null, null, null, null, null),
-	('a0000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000019', 'settled', 0.05, 4750.00, 416.90, 237.50, 5404.40, now() - interval '216 minutes', '20000000-0000-4000-8000-000000000007'),
-	('a0000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-00000000001a', 'settled', 0.05, 9510.00, 1366.00, 475.50, 11351.50, now() - interval '276 minutes', '20000000-0000-4000-8000-000000000007'),
-	('a0000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-00000000001b', 'settled', 0.05, 4610.00, 542.50, 230.50, 5383.00, now() - interval '298 minutes', '20000000-0000-4000-8000-000000000007')
+-- using a simple subtotal+tax formula — a fixture convenience, NOT the
+-- official tax/rounding formula (still TBD, see AGENTS.md).
+insert into bills (id, restaurant_id, session_id, status, subtotal, tax_amount, total, settled_at, settled_by) values
+	('a0000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000007', 'requested', null, null, null, null, null),
+	('a0000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000009', 'requested', null, null, null, null, null),
+	('a0000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000019', 'settled', 4750.00, 416.90, 5166.90, now() - interval '216 minutes', '20000000-0000-4000-8000-000000000007'),
+	('a0000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-00000000001a', 'settled', 9510.00, 1366.00, 10876.00, now() - interval '276 minutes', '20000000-0000-4000-8000-000000000007'),
+	('a0000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-00000000001b', 'settled', 4610.00, 542.50, 5152.50, now() - interval '298 minutes', '20000000-0000-4000-8000-000000000007')
 on conflict (id) do nothing;

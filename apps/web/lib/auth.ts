@@ -184,17 +184,36 @@ export async function requireFullServiceExperience(
 }
 
 /**
- * Redirects to the restaurant home page unless the restaurant's package is
- * Dineinly Menu — the inverse of requireFullServiceExperience above, for the
- * one route (`qr/layout.tsx`) that's Menu-only rather than Menu-excluded:
- * full-service restaurants already have per-table QR via Table Matrix.
+ * Redirects to the restaurant home page unless the restaurant's package has
+ * a single universal QR — Dineinly Menu or Counter — for the one route
+ * (`qr/layout.tsx`) both share instead of Table Matrix's per-table QRs:
+ * Menu has no tables at all, Counter has one QR for every session.
  */
-export async function requireMenuExperience(
+export async function requireUniversalQrExperience(
 	restaurantId: string,
 ): Promise<void> {
 	const experience = await getRestaurantExperience(restaurantId);
 
-	if (experience !== "menu") {
+	if (experience !== "menu" && experience !== "counter") {
+		redirect(`/restaurants/${restaurantId}`);
+	}
+}
+
+/**
+ * Redirects to the restaurant home page unless the restaurant's package
+ * seats guests at physical tables — Guest or One. Dineinly Menu is
+ * view-only and Counter is tableless self-service (one universal QR,
+ * zero Restaurant Table rows — docs/product.md § Dineinly Experiences), so
+ * neither has a Table Matrix or Floor to manage, unlike
+ * requireFullServiceExperience above which only excludes Menu (Counter
+ * still has Kitchen and Bills).
+ */
+export async function requireSeatedExperience(
+	restaurantId: string,
+): Promise<void> {
+	const experience = await getRestaurantExperience(restaurantId);
+
+	if (experience === "menu" || experience === "counter") {
 		redirect(`/restaurants/${restaurantId}`);
 	}
 }

@@ -117,8 +117,16 @@ function GuestCartContent({
 	// just with different depth (docs/product.md § Dineinly Experiences) — so
 	// Confirm Order always lands there.
 	const submitOrder = trpc.guest.submitOrder.useMutation({
-		onSuccess: () => {
+		onSuccess: async () => {
 			utils.guest.cart.list.invalidate();
+			// Counter-experience order confirms draw the bill's token right away
+			// (submit_order(), docs/core-data-model.md § Lifecycle invariants) —
+			// without this, /guest/orders would render on stale pre-order bill
+			// data and never see the status flip that redirects to the token.
+			await Promise.all([
+				utils.guest.orders.list.invalidate(),
+				utils.guest.bill.get.invalidate(),
+			]);
 			router.push("/guest/orders");
 		},
 		onError: (error) => setSubmitError(error.message),

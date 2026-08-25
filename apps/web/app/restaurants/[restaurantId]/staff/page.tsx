@@ -17,6 +17,7 @@ import { RestaurantNavHeader } from "../restaurant-nav-header";
 import {
 	useCanReassignOwner,
 	useIsAdmin,
+	useIsCounter,
 	useIsMenuOnly,
 	useRestaurantRole,
 } from "../viewer-context";
@@ -52,19 +53,23 @@ function isOwnerLevel(
 // Server-enforced too (invite_staff/update_staff, supabase/migrations/
 // 20260816164344_add_staff_roster_rpcs.sql); this only keeps the form from
 // offering a choice the server would reject. Dineinly Menu has no Waiter or
-// Kitchen roles at all — no PIN stations, no floor/kitchen flows to staff
-// (docs/product.md § Dineinly Experiences).
+// Kitchen roles at all — it's view-only, no floor or kitchen flow to staff.
+// Counter has no tables to wait on, so no Waiter either, but it still has a
+// Kitchen Display (docs/product.md § Dineinly Experiences).
 function availableRolesFor(
 	viewerIsAdmin: boolean,
 	viewerRole: StaffRole | null,
 	isMenuOnly: boolean,
+	isCounter: boolean,
 ): StaffRole[] {
 	const roles = isOwnerLevel(viewerIsAdmin, viewerRole)
 		? ALL_ROLES
 		: ALL_ROLES.filter((role) => role !== "owner");
-	return isMenuOnly
-		? roles.filter((role) => role !== "waiter" && role !== "kitchen")
-		: roles;
+	return roles.filter((role) => {
+		if (role === "waiter") return !isMenuOnly && !isCounter;
+		if (role === "kitchen") return !isMenuOnly;
+		return true;
+	});
 }
 
 // The primary owner's role/email are locked — reassign_primary_owner is the
@@ -110,6 +115,7 @@ export default function StaffRosterPage() {
 	const viewerRole = useRestaurantRole();
 	const canReassignOwner = useCanReassignOwner();
 	const isMenuOnly = useIsMenuOnly();
+	const isCounter = useIsCounter();
 
 	const [sheetMode, setSheetMode] = useState<"closed" | "create" | "edit">(
 		"closed",
@@ -221,6 +227,7 @@ export default function StaffRosterPage() {
 		viewerIsAdmin,
 		viewerRole,
 		isMenuOnly,
+		isCounter,
 	);
 
 	const staffList = listQuery.data ?? [];
@@ -356,7 +363,7 @@ export default function StaffRosterPage() {
 									viewerRole,
 								)}
 								canReassignOwner={canReassignOwner}
-								canResetPin={viewerIsAdmin && !isMenuOnly}
+								canResetPin={viewerIsAdmin && !isMenuOnly && !isCounter}
 								onEdit={() => openEditSheet(staff)}
 								onRemove={() =>
 									setRemoveTarget({
@@ -386,6 +393,7 @@ export default function StaffRosterPage() {
 				</div>
 
 				{!isMenuOnly &&
+				!isCounter &&
 				(viewerIsAdmin ||
 					viewerRole === "owner" ||
 					viewerRole === "manager") ? (

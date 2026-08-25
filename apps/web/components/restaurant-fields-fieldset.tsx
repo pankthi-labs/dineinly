@@ -175,23 +175,6 @@ export function RestaurantFieldsFieldset({
 								placeholder="15-character GSTIN"
 							/>
 						</Field>
-						<Field
-							label="Service charge (optional)"
-							error={errors.serviceChargePercent}
-						>
-							<input
-								value={values.serviceChargePercent ?? ""}
-								onChange={(e) =>
-									setField(
-										"serviceChargePercent",
-										e.target.value === "" ? null : Number(e.target.value),
-									)
-								}
-								onBlur={() => validateField("serviceChargePercent")}
-								placeholder="e.g. 5"
-								inputMode="decimal"
-							/>
-						</Field>
 					</>
 				) : null}
 			</FieldGroup>
