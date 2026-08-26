@@ -69,7 +69,7 @@ Permissions are defined precisely in RBAC below; this is persona context only.
 
 ## MVP Scope
 
-**In:** QR menu, live ordering, shared table session, kitchen workspace, waiter ordering, bill generation & settlement, restaurant management, onboarding & staff setup.
+**In:** QR menu, live ordering, shared session, kitchen workspace, waiter ordering, bill generation & settlement, restaurant management, onboarding & staff setup.
 
 **Non-Goals** (do not build until prioritized): Payments, Loyalty, Delivery, Reservations, Payroll, Accounting, Hardware integrations, Menu images/photography, Inventory management, Customer accounts, Offline mode, Multi-branch support, Allergen data.
 
@@ -99,24 +99,26 @@ Spice, Salt, Ice are the only guest-selectable option groups in the MVP. At item
 
 ---
 
-## Shared Table Session
+## Shared Session
+
+The Session is a guest's one continuous, QR-scanned presence at the restaurant — for Full-Service, a dining visit at a table; for Counter, the whole stay their single token covers, however many times they order and pay along the way. One Session, one guest-facing identity, for as long as they're there — see "A bill paid, then another order" below for exactly what that means per bill.
 
 - Restaurant → restaurant tables → QR codes. A QR code is access-only, never business state.
-- A restaurant table has zero or one active session. An active session may span multiple restaurant tables (via merge).
-- One active session = exactly one shared cart, one bill, one or more participants, one or more orders.
-- Scanning a QR resolves to its restaurant table, then joins the table's active session or creates one.
+- A restaurant table has zero or one active session. An active session may span multiple restaurant tables (via merge). Counter has no tables at all — every guest shares one restaurant-level QR instead, and each scan starts its own session.
+- One active session = exactly one shared cart, one or more bills, one or more participants, one or more orders.
+- Scanning a QR resolves to its restaurant table, then joins the table's active session or creates one (Counter: always creates a new one, since the one QR serves many concurrent guests).
 - Guests are anonymous — no name collected, no per-guest attribution.
-- **Cart:** any participant edits freely before confirming (concurrent edits are last-write-wins). Confirming sends the cart to the kitchen as an order (one round) and clears the cart. A session accumulates orders across the meal; the bill aggregates all of them.
-- **Merge:** Waiter/Manager/Owner merges restaurant tables into one session/cart/bill. Not reversible within the session. **MVP only merges a free (session-less) table into an existing session** — two already-active sessions are never merged.
-- **Close:** requires no orders in progress and the bill settled. Any Waiter/Manager/Owner may close — no override needed. Closing finalizes and settles the bill, archives the session, and frees the tables.
+- **Cart:** any participant edits freely before confirming (concurrent edits are last-write-wins). Confirming sends the cart to the kitchen as an order (one round) and clears the cart. A session accumulates orders across the meal; each bill round aggregates the orders placed against it.
+- **Merge:** Waiter/Manager/Owner merges restaurant tables into one session/cart/bill. Not reversible within the session. **MVP only merges a free (session-less) table into an existing session** — two already-active sessions are never merged. Full-Service only — Counter has no tables to merge.
+- **Close:** requires no orders in progress and every bill the session has drawn settled. Any Waiter/Manager/Owner may close — no override needed. Closing archives the session and frees the tables. Full-Service only, since an occupied table needs bussing before the next party is seated — a physical step no automated signal can confirm. Counter's tableless sessions close automatically instead: idle-swept once every bill is settled and every item served/picked up, no guest or staff action needed (see "A bill paid, then another order" below); staff/Dineinly Admin can still force-terminate one manually at any time (e.g. at closing, for a token nobody came back to claim).
 - **Force-terminate:** Waiter/Manager/Owner may force-close an abandoned session (walkout), freeing the tables. Any open or requested bill is voided (deleted) rather than settled — the session's history then shows no bill at all, same as one that was never requested. An already-settled bill is untouched.
-- **MVP limitation:** one bill per session — no split bills.
+- **Bill cardinality:** One/Guest — exactly one bill per session, ever, no split bills. Counter — one bill at a time, but a session can draw more than one over its life (see below).
 
 ---
 
 ## Order Lifecycle
 
-**Item states:** `Placed` (auto, system event) → `Preparing` (Kitchen) → `Ready` (Kitchen) → `Served` (Waiter). `Cancelled` is terminal and reachable only from `Placed`; never after `Preparing`/`Ready`. Kitchen never cancels, only advances status. Dineinly Counter has no Waiter station, so Kitchen also sets `Served` there — self-service pickup, not a delivered plate — and `Placed` → `Preparing` additionally requires the session's Bill to be `settled` **and** the guest to have sent that item to the kitchen (see `core-data-model.md` § Lifecycle invariants).
+**Item states:** `Placed` (auto, system event) → `Preparing` (Kitchen) → `Ready` (Kitchen) → `Served` (Waiter). `Cancelled` is terminal and reachable only from `Placed`; never after `Preparing`/`Ready`. Kitchen never cancels, only advances status. Dineinly Counter has no Waiter station, so Kitchen also sets `Served` there — self-service pickup, not a delivered plate — and `Placed` → `Preparing` additionally requires that item's own bill (not necessarily the whole session's, if it's ordered a second round — see "A bill paid, then another order" below) to be `settled` **and** the guest to have sent that item to the kitchen (see `core-data-model.md` § Lifecycle invariants).
 
 **Cart vs. Order:** pre-confirm is the cart (any participant edits it). Post-confirm it's an order in `Placed`; only Waiter/Manager/Owner may cancel or modify it, and only while still `Placed`.
 
@@ -174,7 +176,7 @@ Three states, own lifecycle (`core-data-model.md`), always moving forward:
 
 ### Bills tab
 
-Restaurant-scoped page (`app/restaurants/[restaurantId]/bills`), reachable by any active staff member — same not-yet-role-gated reach as Table Matrix/Menu Desk (`Tbd.md` "Feature-level staff permissions"); the RBAC table above states the target per-role split. One row per table session — a session gets a row the moment it opens, before anyone has ever pressed Request Bill (shown as Open with no bill number yet).
+Restaurant-scoped page (`app/restaurants/[restaurantId]/bills`), reachable by any active staff member — same not-yet-role-gated reach as Table Matrix/Menu Desk (`Tbd.md` "Feature-level staff permissions"); the RBAC table above states the target per-role split. One row per session — a session gets a row the moment it opens, before anyone has ever pressed Request Bill (shown as Open with no bill number yet). The row always reflects the session's *current* round; if a Counter session has drawn more than one bill over its life, the detail view also lists the earlier, already-settled rounds (bill number/token, total, settled time) underneath, so staff and Dineinly Admin can see the full visit, not just what's owed right now.
 
 - **View Bill** — list view mirrors Menu Desk/Table Matrix/Restaurant Directory: status, bill number, table, live or frozen total. Filters: Today by default, an exact-date picker as the sole override (every currently active session always shows regardless of the filter), status pills, and search by bill number or table. Opens into a line-item editor — deliberately not a printed-bill look, that's reserved for the guest screen — with a correction action per row.
 - **Generate / Request Bill** — staff-side equivalent of the guest's own Request Bill; same effect (`open` → `requested`), for tables that never self-request (e.g. no phone use that visit).
@@ -182,15 +184,17 @@ Restaurant-scoped page (`app/restaurants/[restaurantId]/bills`), reachable by an
 - **Waive an order item** — excludes some or all of a line's quantity from bill math without touching its status or quantity, for exceptional cases a cancel doesn't cover: a quality complaint on an already-served dish, or a short-served quantity (e.g. 3 ordered, only 2 came out). Staff set the waived quantity per line (0 up to the ordered quantity, minus whatever's already cancelled); any non-cancelled item is eligible regardless of prep stage. Adjustable any time before settle, unavailable after.
 - **Print / Download Bill** — Print is the browser's own print of a dedicated print-only receipt block (same layout and merged line items as the guest bill screen, hidden on screen and shown only in print/PDF); Download renders the same content server-side as a PDF, consistent regardless of the staff member's browser (same reasoning as Table Matrix's QR PDFs).
 - **Mark Bill Settled** — freezes subtotal/tax/total onto the `Bill` row. Only available once the bill is `requested` — the status ladder is always `open` → `requested` → `settled`, never a direct `open` → `settled` skip.
-- **Close Session** — only once the bill is settled and every order item in the session is `served` or `cancelled` (nothing left `placed`/`preparing`/`ready`). Frees every table in the session (a merged session can span more than one), hard-deletes any unfired cart items, marks the session `closed`.
+- **Close Session** (Full-Service) — only once every bill the session has drawn is settled and every order item across all of them is `served` or `cancelled` (nothing left `placed`/`preparing`/`ready`). Frees every table in the session (a merged session can span more than one), hard-deletes any unfired cart items, marks the session `closed`. Counter has no equivalent button — see "A bill paid, then another order" below.
 
 **Boundaries — what Bills can and can't edit:** the tab only ever touches `Order Item.status` (cancel, pre-prep only), `Order Item.waivedQuantity` and `Order Item.cancelledQuantity` (partial-quantity corrections; a fully cancelled quantity also sets `status`), and the `Bill` row itself (status, frozen totals at settle). It never edits menu prices, tax rates, or the ordered quantity itself, and never adds/removes anything from an order — a wrong quantity or wrong dish is a partial or full cancel, and a quality complaint or short-served item is a waiver; neither is ever a direct price edit, same boundary the guest ordering flow already draws around a placed order.
 
 ### A bill paid, then another order
 
-A session's bill is settled but the session hasn't been closed yet, and someone adds another order before staff closes it — the risk is a new order landing after the bill's total is already frozen, silently diverging from what the guest actually paid.
+The risk in both experiences is the same shape: a new order landing after a bill's total is already frozen, silently diverging from what the guest actually paid. The fix is opposite, because what "another order" means to the guest is opposite too.
 
-Dineinly blocks this outright rather than opening a second session on the same table: once a session's bill is `settled`, Confirm Order fails for that session with a clear error, for guest and staff alike. The fix is the same either way — staff hits Close Session; the *next* QR scan on that table then opens a brand-new session (per "Scanning a QR resolves to its restaurant table, then joins the table's active session or creates one" above — a closed session is never "active", so a fresh scan can only create a new one). The settled bill stays exactly as printed in the Bills tab history; the new order lands on a new session with its own new bill. One active session still means one bill (MVP: no split bills) — this never reopens a settled one.
+**Full-Service (One/Guest):** paying is how the visit ends — like a paper receipt handed back at the end of a meal, there's no expectation of ordering more against it. Once a session's one bill is `settled`, Confirm Order fails for that session with a clear error, for guest and staff alike, and stays that way permanently — a settled bill never reopens. Getting more food means a genuinely new visit: staff hits Close Session, freeing the table; the *next* QR scan on that table then opens a brand-new session (a closed session is never "active", so a fresh scan can only create a new one). The settled bill stays exactly as printed in the Bills tab history; the new order lands on the new session with its own new bill.
+
+**Counter:** paying doesn't end anything — like a paper token a guest holds onto and returns to the counter with, the whole point is that one continuous presence covers ordering, paying, and coming back for more, any number of times. Confirm Order never blocks a Counter session on a settled bill: the guest taps "Order More" (a plain link back to the menu — no rescan, no new token, same session), and their next confirm draws a **fresh bill** for the new round instead of reopening the frozen one. The settled round stays exactly as printed in the Bills tab's Previous Rounds history; the kitchen gate, guest-facing status ladder, and Send to Kitchen all key off *that round's own bill*, so an earlier settled round can never wave a later, still-unpaid one through. The session itself only ever ends via the idle auto-close described in Shared Session above (or a manual staff force-terminate) — never by the guest paying.
 
 ---
 

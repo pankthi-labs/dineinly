@@ -2,13 +2,9 @@
 
 Deferred items from Counter guest-experience discussion. Do not guess these — flag and ask before building.
 
-## Critical: Order More orphans unreleased items
+## Resolved: Order More orphaned unreleased items
 
-`apps/web/app/guest/reorder/route.ts` mints a brand-new tableless session when the guest taps "Order More" after settling. Any order_item still un-released (`released_at IS NULL`) in the old, now-abandoned session has no guest-facing path back to it — only staff can release it manually from Bills.
-
-Rejected fix: auto-release everything pending before minting the new session — user does not want food silently sent to the kitchen without an explicit guest tap.
-
-Needs a real decision: e.g. block "Order More" until all pending items are released ("Send remaining N items first"), or some other guest-visible resolution. Revisit before shipping Order More broadly.
+Was: tapping "Order More" after settling minted a brand-new tableless session, orphaning any unreleased items in the old one. Fixed by the Counter continuity re-architecture (`core-data-model.md` § Lifecycle invariants) — a Counter session now persists across the whole visit; "Order More" is a plain link back to `/guest/menu` on the *same* session, and ordering again just draws the next round's bill instead of starting a new session. Nothing is ever orphaned because there's no longer a session boundary between rounds.
 
 ## Partial release of a single order line
 

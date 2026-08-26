@@ -9,11 +9,12 @@ import {
 	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
+import { bills } from "./bill.js";
 import { actorType } from "./enums.js";
 import { id } from "./helpers.js";
 import { restaurants } from "./restaurant.js";
+import { sessions } from "./session.js";
 import { staff } from "./staff.js";
-import { tableSessions } from "./table-session.js";
 
 // One confirmed round, sent to the kitchen. Attribution is explicit:
 // `placedByType` says who, `placedByStaffId` is set only when that's staff
@@ -31,6 +32,16 @@ export const orders = pgTable(
 		// Plain column — the real constraint is the composite FK below, so
 		// session_id can never name a session from another restaurant.
 		sessionId: uuid("session_id").notNull(),
+		// Which of the session's bills this round is billed against. Null until
+		// a bill exists yet to attach to (One/Guest: no bill drawn until Request
+		// Bill; backfilled onto every order in the session the moment one is —
+		// see request_bill()). Never null by the time it matters for Counter,
+		// whose bill is drawn atomically with the order itself (submit_order).
+		// A session can carry more than one bill over its life (Counter: guest
+		// settles, then orders again — see docs/core-data-model.md § Lifecycle
+		// invariants), so this is what scopes a bill's total to only its own
+		// round's orders instead of the whole session's history.
+		billId: uuid("bill_id"),
 		placedAt: timestamp("placed_at", { withTimezone: true, mode: "string" })
 			.defaultNow()
 			.notNull(),
@@ -45,13 +56,22 @@ export const orders = pgTable(
 			table.restaurantId,
 			table.sessionId,
 		),
+		index("orders_restaurant_id_bill_id_idx").on(
+			table.restaurantId,
+			table.billId,
+		),
 		// Composite-FK target for order_items (see order-item.ts).
 		unique("orders_restaurant_id_id_key").on(table.restaurantId, table.id),
 		foreignKey({
 			columns: [table.restaurantId, table.sessionId],
-			foreignColumns: [tableSessions.restaurantId, tableSessions.id],
+			foreignColumns: [sessions.restaurantId, sessions.id],
 			name: "orders_restaurant_id_session_id_fkey",
 		}),
+		foreignKey({
+			columns: [table.restaurantId, table.billId],
+			foreignColumns: [bills.restaurantId, bills.id],
+			name: "orders_restaurant_id_bill_id_fkey",
+		}).onDelete("set null"),
 		foreignKey({
 			columns: [table.restaurantId, table.placedByStaffId],
 			foreignColumns: [staff.restaurantId, staff.id],

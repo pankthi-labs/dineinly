@@ -93,18 +93,21 @@ async function assertBillNotSettled(
 ): Promise<void> {
 	const orderResult = await auth
 		.from("orders")
-		.select("session_id")
+		.select("bill_id")
 		.eq("id", orderId)
 		.maybeSingle();
 	if (orderResult.error) throw dbError(errorMessage, orderResult.error);
 	if (!orderResult.data) {
 		throw new TRPCError({ code: "NOT_FOUND", message: "Order not found." });
 	}
+	// No bill drawn yet for this order's round (One/Guest, pre-Request Bill)
+	// — nothing frozen, so nothing to block.
+	if (!orderResult.data.bill_id) return;
 
 	const billResult = await auth
 		.from("bills")
 		.select("status")
-		.eq("session_id", orderResult.data.session_id)
+		.eq("id", orderResult.data.bill_id)
 		.maybeSingle();
 	if (billResult.error) throw dbError(errorMessage, billResult.error);
 	if (billResult.data?.status === "settled") {
@@ -116,7 +119,7 @@ async function assertBillNotSettled(
 }
 
 // list/get/downloadPdf (read) stay open to any active staff member —
-// staff_all_table_sessions/staff_all_bills/staff_all_cart_items RLS
+// staff_all_sessions/staff_all_bills/staff_all_cart_items RLS
 // (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 5)
 // scope every query below to the caller's own restaurant. Every write is
 // Waiter/Manager/Owner only (Request/Settle/Close/Force-Terminate/correct —
@@ -136,7 +139,7 @@ export const billsRouter = router({
 		const range = dateRangeFor(input.date);
 
 		const closedQuery = ctx.auth
-			.from("table_sessions")
+			.from("sessions")
 			.select("id, restaurant_id, status, opened_at, closed_at")
 			.eq("restaurant_id", input.restaurantId)
 			.eq("status", "closed")
@@ -149,7 +152,7 @@ export const billsRouter = router({
 		const activeQuery = input.date
 			? Promise.resolve({ data: [], error: null })
 			: ctx.auth
-					.from("table_sessions")
+					.from("sessions")
 					.select("id, restaurant_id, status, opened_at, closed_at")
 					.eq("restaurant_id", input.restaurantId)
 					.eq("status", "active");
@@ -175,10 +178,15 @@ export const billsRouter = router({
 			ctx.auth
 				.from("bills")
 				.select(
-					"id, session_id, bill_number, daily_token, status, total, settled_at",
+					"id, session_id, bill_number, daily_token, status, total, settled_at, created_at",
 				)
 				.eq("restaurant_id", input.restaurantId)
-				.in("session_id", sessionIds),
+				.in("session_id", sessionIds)
+				// Ascending, so building the Map below overwrites earlier rows with
+				// later ones — a session can carry more than one bill (Counter:
+				// settle, then order again), and this row is what's actionable
+				// right now, so it's always the latest.
+				.order("created_at", { ascending: true }),
 			ctx.auth
 				.from("restaurant_tables")
 				.select("session_id, label")
@@ -186,7 +194,7 @@ export const billsRouter = router({
 				.in("session_id", sessionIds),
 			ctx.auth
 				.from("orders")
-				.select("id, session_id")
+				.select("id, session_id, bill_id")
 				.eq("restaurant_id", input.restaurantId)
 				.in("session_id", sessionIds),
 		]);
@@ -206,12 +214,30 @@ export const billsRouter = router({
 			tableLabelsBySession.set(table.session_id, labels);
 		}
 
+		// Two maps, not one: a session with no bill row yet has every order
+		// keyed only by session (nothing to attach to); once a bill exists,
+		// its own round's orders are keyed by bill_id instead, so an earlier,
+		// already-settled round's orders (Counter) never bleed into this one's
+		// live total.
 		const orders = ordersResult.data ?? [];
 		const orderIdsBySession = new Map<string, string[]>();
+		const orderIdsByBill = new Map<string, string[]>();
 		for (const order of orders) {
 			const ids = orderIdsBySession.get(order.session_id) ?? [];
 			ids.push(order.id);
 			orderIdsBySession.set(order.session_id, ids);
+			if (order.bill_id) {
+				const billIds = orderIdsByBill.get(order.bill_id) ?? [];
+				billIds.push(order.id);
+				orderIdsByBill.set(order.bill_id, billIds);
+			}
+		}
+
+		function liveOrderIdsForSession(sessionId: string): string[] {
+			const bill = billsBySession.get(sessionId);
+			return bill
+				? (orderIdsByBill.get(bill.id) ?? [])
+				: (orderIdsBySession.get(sessionId) ?? []);
 		}
 
 		// Only unsettled sessions need a live total — a settled bill's total
@@ -219,7 +245,7 @@ export const billsRouter = router({
 		// wasted work.
 		const liveOrderIds = sessions
 			.filter((s) => billsBySession.get(s.id)?.status !== "settled")
-			.flatMap((s) => orderIdsBySession.get(s.id) ?? []);
+			.flatMap((s) => liveOrderIdsForSession(s.id));
 
 		const itemsResult =
 			liveOrderIds.length === 0
@@ -265,7 +291,7 @@ export const billsRouter = router({
 			if (status === "settled") {
 				total = Number(bill?.total ?? 0);
 			} else {
-				const items = (orderIdsBySession.get(session.id) ?? []).flatMap(
+				const items = liveOrderIdsForSession(session.id).flatMap(
 					(orderId) => itemsByOrder.get(orderId) ?? [],
 				);
 				total = liveTotal(items);
@@ -299,7 +325,7 @@ export const billsRouter = router({
 	// "Generate / Request Bill" action below.
 	get: authedProcedure.input(getBillInput).query(async ({ ctx, input }) => {
 		const sessionResult = await ctx.auth
-			.from("table_sessions")
+			.from("sessions")
 			.select("id, restaurant_id, status, opened_at, closed_at")
 			.eq("id", input.sessionId)
 			.maybeSingle();
@@ -314,34 +340,38 @@ export const billsRouter = router({
 		}
 		const session = sessionResult.data;
 
-		const [restaurantResult, billResult, tablesResult, ordersResult] =
+		const [restaurantResult, billsResult, tablesResult, ordersResult] =
 			await Promise.all([
 				ctx.auth
 					.from("restaurants")
 					.select("name, address, city, gst_number, state, pincode")
 					.eq("id", session.restaurant_id)
 					.maybeSingle(),
+				// Every bill the session has ever drawn, oldest first — a session
+				// can carry more than one (Counter: settle, then order again). The
+				// last row is this bill's current round; every earlier one is
+				// already-settled history (priorBills below).
 				ctx.auth
 					.from("bills")
 					.select(
 						"id, bill_number, daily_token, status, subtotal, tax_amount, total, settled_at",
 					)
 					.eq("session_id", session.id)
-					.maybeSingle(),
+					.order("created_at", { ascending: true }),
 				ctx.auth
 					.from("restaurant_tables")
 					.select("label")
 					.eq("session_id", session.id),
 				ctx.auth
 					.from("orders")
-					.select("id")
+					.select("id, bill_id")
 					.eq("restaurant_id", session.restaurant_id)
 					.eq("session_id", session.id),
 			]);
 
 		for (const result of [
 			restaurantResult,
-			billResult,
+			billsResult,
 			tablesResult,
 			ordersResult,
 		]) {
@@ -354,7 +384,21 @@ export const billsRouter = router({
 			);
 		}
 
-		const orderIds = (ordersResult.data ?? []).map((o) => o.id);
+		const bills = billsResult.data ?? [];
+		const bill = bills.at(-1) ?? null;
+		const priorBills = bill ? bills.slice(0, -1) : [];
+
+		const orders = ordersResult.data ?? [];
+		const orderIds = orders.map((o) => o.id);
+		// This round's orders only, for the displayed lines/total — an earlier,
+		// already-settled round's orders (Counter) must never bleed into it.
+		// A session with no bill yet has every order still unattached, so all
+		// of them belong to this (virtual "open") round by definition.
+		const billOrderIds = bill
+			? orders.filter((o) => o.bill_id === bill.id).map((o) => o.id)
+			: orderIds;
+		const billOrderIdSet = new Set(billOrderIds);
+
 		const itemsResult =
 			orderIds.length === 0
 				? { data: [], error: null }
@@ -371,10 +415,13 @@ export const billsRouter = router({
 			throw dbError("Unable to load the bill.", itemsResult.error);
 
 		const allItems = itemsResult.data ?? [];
-		const bill = billResult.data;
+		// Displayed lines/items are scoped to this round only — priorBills
+		// above is where an earlier round's own items are represented (as a
+		// frozen total, not a line breakdown).
+		const items = allItems.filter((item) => billOrderIdSet.has(item.order_id));
 		const status: "open" | "requested" | "settled" = bill?.status ?? "open";
 
-		const billableItems: BillableItem[] = allItems
+		const billableItems: BillableItem[] = items
 			.filter((item) => item.status !== "cancelled")
 			.map((item) => ({
 				name: item.item_name,
@@ -403,6 +450,9 @@ export const billsRouter = router({
 					}
 				: computed;
 
+		// Session-wide, not scoped to this round: Close Session (close_session())
+		// requires every order item across every round terminal, not just this
+		// bill's own — this warning has to agree with that gate.
 		const hasItemsInProgress = allItems.some((item) =>
 			["placed", "preparing", "ready"].includes(item.status),
 		);
@@ -428,7 +478,17 @@ export const billsRouter = router({
 			status,
 			settledAt: bill?.settled_at ?? null,
 			hasItemsInProgress,
-			items: allItems.map((item) => ({
+			// Earlier, already-settled rounds of this same session (Counter
+			// only, in practice) — admin/staff visibility into the full visit,
+			// not just the round currently open.
+			priorBills: priorBills.map((b) => ({
+				billId: b.id,
+				billNumber: b.bill_number,
+				dailyToken: b.daily_token,
+				total: Number(b.total ?? 0),
+				settledAt: b.settled_at,
+			})),
+			items: items.map((item) => ({
 				id: item.id,
 				name: item.item_name,
 				unitPrice: Number(item.unit_price),
@@ -455,18 +515,20 @@ export const billsRouter = router({
 
 	// Generate / Request Bill. Staff-facing equivalent of the guest's own
 	// Request Bill (guest.bill.request -> request_bill()); guests carry
-	// restaurant_id/table_session_id as JWT claims that request_bill() reads
+	// restaurant_id/session_id as JWT claims that request_bill() reads
 	// directly, but a staff session has no such claims (they can act on any
-	// session in their restaurant), so this mirrors that function's logic
-	// with an explicit sessionId instead of calling it. Two round trips, not
-	// one transaction: a single-staff, low-stakes action, same trade-off as
-	// tables.ts's regenerateQr (architecture.md § Table QR Generation
-	// "single-admin, low-stakes action with no data corruption possible").
+	// session in their restaurant), so this delegates to staff_request_bill()
+	// (supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql),
+	// which takes them as explicit arguments instead — same bill-resolution
+	// logic (reuse/settled-cap/daily_token draw) as request_bill(), so a
+	// staff-initiated request on a Counter session gets a correctly-drawn
+	// daily_token instead of a bare row, same as submitOrder's
+	// staff_submit_order delegation in floor.ts.
 	request: authedProcedure
 		.input(requestBillInput)
 		.mutation(async ({ ctx, input }) => {
 			const sessionResult = await ctx.auth
-				.from("table_sessions")
+				.from("sessions")
 				.select("restaurant_id")
 				.eq("id", input.sessionId)
 				.eq("status", "active")
@@ -484,42 +546,18 @@ export const billsRouter = router({
 			const restaurantId = sessionResult.data.restaurant_id;
 			await requireFullServiceRole(ctx, restaurantId, BILLS_WRITE_ROLES);
 
-			const existing = await ctx.auth
-				.from("bills")
-				.select("id, status")
-				.eq("session_id", input.sessionId)
-				.maybeSingle();
-			if (existing.error)
-				throw dbError("Unable to open the bill.", existing.error);
-
-			// Already settled: frozen, nothing to do — same idempotent no-op
-			// request_bill() applies once a bill reaches that state.
-			if (existing.data?.status === "settled") {
-				return { billId: existing.data.id };
+			const { data, error } = await ctx.auth.rpc("staff_request_bill", {
+				p_restaurant_id: restaurantId,
+				p_session_id: input.sessionId,
+			});
+			if (error) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: error.message,
+					cause: error,
+				});
 			}
-
-			if (existing.data) {
-				const { data, error } = await ctx.auth
-					.from("bills")
-					.update({ status: "requested" })
-					.eq("id", existing.data.id)
-					.select("id")
-					.single();
-				if (error) throw dbError("Unable to open the bill.", error);
-				return { billId: data.id };
-			}
-
-			const { data, error } = await ctx.auth
-				.from("bills")
-				.insert({
-					restaurant_id: restaurantId,
-					session_id: input.sessionId,
-					status: "requested",
-				})
-				.select("id")
-				.single();
-			if (error) throw dbError("Unable to open the bill.", error);
-			return { billId: data.id };
+			return { billId: data as string };
 		}),
 
 	// Correct eligible order items, in whole or in part: cancel a mis-added
@@ -579,6 +617,7 @@ export const billsRouter = router({
 				.update({
 					cancelled_quantity: input.cancelledQuantity,
 					...(fullyCancelled ? { status: "cancelled" as const } : {}),
+					updated_at: new Date().toISOString(),
 				})
 				.eq("id", input.orderItemId)
 				.eq("status", "placed")
@@ -639,11 +678,13 @@ export const billsRouter = router({
 								cancelled_quantity: itemResult.data.quantity,
 								waived_quantity: 0,
 								status: "cancelled" as const,
+								updated_at: new Date().toISOString(),
 							}
 						: {
 								quantity: input.quantity,
 								cancelled_quantity: 0,
 								waived_quantity: 0,
+								updated_at: new Date().toISOString(),
 							},
 				)
 				.eq("id", input.orderItemId)
@@ -711,7 +752,10 @@ export const billsRouter = router({
 
 			const { data, error } = await ctx.auth
 				.from("order_items")
-				.update({ waived_quantity: input.waivedQuantity })
+				.update({
+					waived_quantity: input.waivedQuantity,
+					updated_at: new Date().toISOString(),
+				})
 				.eq("id", input.orderItemId)
 				.neq("status", "cancelled")
 				.select("id")
@@ -739,7 +783,7 @@ export const billsRouter = router({
 		.input(settleBillInput)
 		.mutation(async ({ ctx, input }) => {
 			const sessionResult = await ctx.auth
-				.from("table_sessions")
+				.from("sessions")
 				.select("restaurant_id")
 				.eq("id", input.sessionId)
 				.maybeSingle();
@@ -754,23 +798,22 @@ export const billsRouter = router({
 			const restaurantId = sessionResult.data.restaurant_id;
 			await requireFullServiceRole(ctx, restaurantId, BILLS_WRITE_ROLES);
 
-			const [billResult, ordersResult, userResult] = await Promise.all([
+			// Only the session's current round: `.limit(1)` on the latest row,
+			// same reasoning as bills.request above — a session can carry more
+			// than one bill (Counter), and settling only ever means settling the
+			// one that's still open.
+			const [billResult, userResult] = await Promise.all([
 				ctx.auth
 					.from("bills")
 					.select("id, status")
 					.eq("session_id", input.sessionId)
+					.order("created_at", { ascending: false })
+					.limit(1)
 					.maybeSingle(),
-				ctx.auth
-					.from("orders")
-					.select("id")
-					.eq("restaurant_id", restaurantId)
-					.eq("session_id", input.sessionId),
 				ctx.auth.auth.getUser(),
 			]);
 			if (billResult.error)
 				throw dbError("Unable to settle the bill.", billResult.error);
-			if (ordersResult.error)
-				throw dbError("Unable to settle the bill.", ordersResult.error);
 			if (billResult.data?.status === "settled") {
 				return { billId: billResult.data.id };
 			}
@@ -780,6 +823,16 @@ export const billsRouter = router({
 					message: "Request the bill before settling it.",
 				});
 			}
+
+			// This round's orders only — an earlier, already-settled round's
+			// items must never be re-summed into this bill's total.
+			const ordersResult = await ctx.auth
+				.from("orders")
+				.select("id")
+				.eq("restaurant_id", restaurantId)
+				.eq("bill_id", billResult.data.id);
+			if (ordersResult.error)
+				throw dbError("Unable to settle the bill.", ordersResult.error);
 
 			// settled_by: the caller's own Staff row for this restaurant, if they
 			// have one — Dineinly Admin settling on a restaurant's behalf has no
@@ -860,7 +913,7 @@ export const billsRouter = router({
 
 	// Close Session: delegates to close_session() (supabase/migrations/
 	// 20260730150634_add_auth_fk_and_rls_policies.sql § 14) — three tables
-	// (table_sessions, restaurant_tables, cart_items) in one transaction, so
+	// (sessions, restaurant_tables, cart_items) in one transaction, so
 	// this can't be a plain ctx.auth.update() the way settle/waive are.
 	closeSession: authedProcedure
 		.input(closeSessionInput)
@@ -908,7 +961,7 @@ export const billsRouter = router({
 		.input(downloadBillPdfInput)
 		.query(async ({ ctx, input }) => {
 			const sessionResult = await ctx.auth
-				.from("table_sessions")
+				.from("sessions")
 				.select("restaurant_id")
 				.eq("id", input.sessionId)
 				.maybeSingle();
@@ -922,34 +975,26 @@ export const billsRouter = router({
 				});
 			}
 
-			const [restaurantResult, billResult, tablesResult, ordersResult] =
-				await Promise.all([
-					ctx.auth
-						.from("restaurants")
-						.select("name, address, city, gst_number, state, pincode")
-						.eq("id", sessionResult.data.restaurant_id)
-						.maybeSingle(),
-					ctx.auth
-						.from("bills")
-						.select("bill_number, status, subtotal, tax_amount, total")
-						.eq("session_id", input.sessionId)
-						.maybeSingle(),
-					ctx.auth
-						.from("restaurant_tables")
-						.select("label")
-						.eq("session_id", input.sessionId),
-					ctx.auth
-						.from("orders")
-						.select("id")
-						.eq("restaurant_id", sessionResult.data.restaurant_id)
-						.eq("session_id", input.sessionId),
-				]);
-			for (const result of [
-				restaurantResult,
-				billResult,
-				tablesResult,
-				ordersResult,
-			]) {
+			const [restaurantResult, billResult, tablesResult] = await Promise.all([
+				ctx.auth
+					.from("restaurants")
+					.select("name, address, city, gst_number, state, pincode")
+					.eq("id", sessionResult.data.restaurant_id)
+					.maybeSingle(),
+				// Latest round only — same reasoning as bills.get/settle above.
+				ctx.auth
+					.from("bills")
+					.select("id, bill_number, status, subtotal, tax_amount, total")
+					.eq("session_id", input.sessionId)
+					.order("created_at", { ascending: false })
+					.limit(1)
+					.maybeSingle(),
+				ctx.auth
+					.from("restaurant_tables")
+					.select("label")
+					.eq("session_id", input.sessionId),
+			]);
+			for (const result of [restaurantResult, billResult, tablesResult]) {
 				if (result.error)
 					throw dbError("Unable to build the bill.", result.error);
 			}
@@ -959,6 +1004,17 @@ export const billsRouter = router({
 					new Error("Missing restaurant"),
 				);
 			}
+
+			const bill = billResult.data;
+			// This round's orders only — a session with no bill yet (nothing to
+			// scope by) falls back to every order it has, same as bills.get.
+			const ordersResult = await ctx.auth
+				.from("orders")
+				.select("id")
+				.eq("restaurant_id", sessionResult.data.restaurant_id)
+				.eq(bill ? "bill_id" : "session_id", bill ? bill.id : input.sessionId);
+			if (ordersResult.error)
+				throw dbError("Unable to build the bill.", ordersResult.error);
 
 			const orderIds = (ordersResult.data ?? []).map((o) => o.id);
 			const itemsResult =
@@ -975,7 +1031,6 @@ export const billsRouter = router({
 			if (itemsResult.error)
 				throw dbError("Unable to build the bill.", itemsResult.error);
 
-			const bill = billResult.data;
 			const computed = computeBill(
 				(itemsResult.data ?? [])
 					.map((row) => ({

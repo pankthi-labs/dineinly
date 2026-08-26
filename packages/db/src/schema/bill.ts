@@ -14,14 +14,18 @@ import {
 import { billStatus } from "./enums.js";
 import { createdAt, id, updatedAt } from "./helpers.js";
 import { restaurants } from "./restaurant.js";
+import { sessions } from "./session.js";
 import { staff } from "./staff.js";
-import { tableSessions } from "./table-session.js";
 
-// Financial record for the session. Own table: own lifecycle
-// (open -> requested -> settled) distinct from the session's. Amounts are
-// derived on read for presentation (open/requested) and frozen only at
-// settle. No tax_rate snapshot here — tax is snapshotted per line on
-// order_items; the bill's tax breakdown is derived by grouping those by rate.
+// Financial record for one settle round of a session. A session can carry
+// more than one bill over its life — Counter lets a guest settle, then order
+// again, drawing a fresh bill for the new round (docs/core-data-model.md §
+// Lifecycle invariants); One/Guest still only ever draw one, since ordering
+// there stays hard-blocked once settled. Own lifecycle (open -> requested ->
+// settled), distinct from the session's own. Amounts are derived on read for
+// presentation (open/requested) and frozen only at settle. No tax_rate
+// snapshot here — tax is snapshotted per line on order_items; the bill's tax
+// breakdown is derived by grouping those by rate.
 export const bills = pgTable(
 	"bills",
 	{
@@ -29,10 +33,10 @@ export const bills = pgTable(
 		restaurantId: uuid("restaurant_id")
 			.notNull()
 			.references(() => restaurants.id, { onDelete: "cascade" }),
-		// Plain column, still unique (one bill per session) — the real
-		// constraint is the composite FK below, so session_id can never name
-		// a session from another restaurant.
-		sessionId: uuid("session_id").notNull().unique(),
+		// Plain column — the real constraint is the composite FK below, so
+		// session_id can never name a session from another restaurant. Not
+		// unique: a session can carry more than one bill (see header comment).
+		sessionId: uuid("session_id").notNull(),
 		// Human-facing bill identifier — an 8-character code (A-Z minus I/O,
 		// digits 2-9: 32 chars, ~1.1 trillion values), assigned once at first
 		// request_bill() (never on the id/uuid, which stays internal) via the
@@ -59,18 +63,22 @@ export const bills = pgTable(
 		updatedAt: updatedAt(),
 	},
 	(table) => [
-		// Kept single-column, unlike the other tenant tables: nothing else
-		// here is leftmost-prefixed by restaurant_id (session_id's unique
-		// constraint is its own index, and the composite FK below gets none)
-		// other than the bill_number uniqueness below — so this stays its own
-		// tenant index.
 		index("bills_restaurant_id_idx").on(table.restaurantId),
+		// Backs orders.billId's composite FK (see order.ts) — leftmost-prefixed
+		// by restaurant_id, same tenant-index reasoning as every other
+		// session-scoped table.
+		index("bills_restaurant_id_session_id_idx").on(
+			table.restaurantId,
+			table.sessionId,
+		),
+		// Composite-FK target for orders.billId (see order.ts).
+		unique("bills_restaurant_id_id_key").on(table.restaurantId, table.id),
 		// Globally unique: bill_number_seq is one counter shared by every
 		// restaurant, so uniqueness never needs restaurant_id in the constraint.
 		unique("bills_bill_number_key").on(table.billNumber),
 		foreignKey({
 			columns: [table.restaurantId, table.sessionId],
-			foreignColumns: [tableSessions.restaurantId, tableSessions.id],
+			foreignColumns: [sessions.restaurantId, sessions.id],
 			name: "bills_restaurant_id_session_id_fkey",
 		}),
 		foreignKey({

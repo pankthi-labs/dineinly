@@ -4,10 +4,13 @@ import { sessionStatus } from "./enums.js";
 import { id } from "./helpers.js";
 import { restaurants } from "./restaurant.js";
 
-// One dining visit. Groups the shared cart, all orders, and the bill for
-// that visit. `opened_at` doubles as created-at — no separate column needed.
-export const tableSessions = pgTable(
-	"table_sessions",
+// One dining visit. Groups the shared cart, every order, and every bill for
+// that visit — Full-Service has exactly one table pointing at it (see
+// restaurant-table.ts); Counter/Menu have none, since they share one
+// restaurant-level QR instead of a physical table. `opened_at` doubles as
+// created-at — no separate column needed.
+export const sessions = pgTable(
+	"sessions",
 	{
 		id: id(),
 		restaurantId: uuid("restaurant_id")
@@ -24,12 +27,9 @@ export const tableSessions = pgTable(
 		// order.ts, bill.ts, restaurant-table.ts). Its unique index is
 		// leftmost-prefixed by restaurant_id, so it doubles as the tenant
 		// index — no single-column restaurant_id index needed.
-		unique("table_sessions_restaurant_id_id_key").on(
-			table.restaurantId,
-			table.id,
-		),
+		unique("sessions_restaurant_id_id_key").on(table.restaurantId, table.id),
 		check(
-			"table_sessions_closed_at_check",
+			"sessions_closed_at_check",
 			sql`(${table.status} = 'active' AND ${table.closedAt} IS NULL) OR (${table.status} = 'closed' AND ${table.closedAt} IS NOT NULL)`,
 		),
 	],

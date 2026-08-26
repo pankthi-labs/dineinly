@@ -37,6 +37,6 @@ export function useGuestRealtime() {
 	return {
 		client,
 		restaurantId: auth.data?.restaurantId ?? null,
-		tableSessionId: auth.data?.tableSessionId ?? null,
+		sessionId: auth.data?.sessionId ?? null,
 	};
 }

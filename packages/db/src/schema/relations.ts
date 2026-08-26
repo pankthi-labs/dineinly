@@ -8,14 +8,14 @@ import { orders } from "./order.js";
 import { orderItems } from "./order-item.js";
 import { restaurants } from "./restaurant.js";
 import { restaurantTables } from "./restaurant-table.js";
+import { sessions } from "./session.js";
 import { staff } from "./staff.js";
 import { stationDevices } from "./station-device.js";
 import { stationPairingCodes } from "./station-pairing-code.js";
-import { tableSessions } from "./table-session.js";
 
 export const restaurantsRelations = relations(restaurants, ({ many }) => ({
 	staff: many(staff),
-	tableSessions: many(tableSessions),
+	sessions: many(sessions),
 	restaurantTables: many(restaurantTables),
 	menuCategories: many(menuCategories),
 	menuItems: many(menuItems),
@@ -38,22 +38,16 @@ export const staffRelations = relations(staff, ({ one, many }) => ({
 	billsSettled: many(bills),
 }));
 
-export const tableSessionsRelations = relations(
-	tableSessions,
-	({ one, many }) => ({
-		restaurant: one(restaurants, {
-			fields: [tableSessions.restaurantId],
-			references: [restaurants.id],
-		}),
-		restaurantTables: many(restaurantTables),
-		cartItems: many(cartItems),
-		orders: many(orders),
-		bill: one(bills, {
-			fields: [tableSessions.id],
-			references: [bills.sessionId],
-		}),
+export const sessionsRelations = relations(sessions, ({ one, many }) => ({
+	restaurant: one(restaurants, {
+		fields: [sessions.restaurantId],
+		references: [restaurants.id],
 	}),
-);
+	restaurantTables: many(restaurantTables),
+	cartItems: many(cartItems),
+	orders: many(orders),
+	bills: many(bills),
+}));
 
 export const restaurantTablesRelations = relations(
 	restaurantTables,
@@ -62,9 +56,9 @@ export const restaurantTablesRelations = relations(
 			fields: [restaurantTables.restaurantId],
 			references: [restaurants.id],
 		}),
-		session: one(tableSessions, {
+		session: one(sessions, {
 			fields: [restaurantTables.sessionId],
-			references: [tableSessions.id],
+			references: [sessions.id],
 		}),
 	}),
 );
@@ -103,9 +97,9 @@ export const cartItemsRelations = relations(cartItems, ({ one }) => ({
 		fields: [cartItems.restaurantId],
 		references: [restaurants.id],
 	}),
-	session: one(tableSessions, {
+	session: one(sessions, {
 		fields: [cartItems.sessionId],
-		references: [tableSessions.id],
+		references: [sessions.id],
 	}),
 	menuItem: one(menuItems, {
 		fields: [cartItems.menuItemId],
@@ -122,9 +116,13 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
 		fields: [orders.restaurantId],
 		references: [restaurants.id],
 	}),
-	session: one(tableSessions, {
+	session: one(sessions, {
 		fields: [orders.sessionId],
-		references: [tableSessions.id],
+		references: [sessions.id],
+	}),
+	bill: one(bills, {
+		fields: [orders.billId],
+		references: [bills.id],
 	}),
 	placedByStaff: one(staff, {
 		fields: [orders.placedByStaffId],
@@ -148,15 +146,16 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 	}),
 }));
 
-export const billsRelations = relations(bills, ({ one }) => ({
+export const billsRelations = relations(bills, ({ one, many }) => ({
 	restaurant: one(restaurants, {
 		fields: [bills.restaurantId],
 		references: [restaurants.id],
 	}),
-	session: one(tableSessions, {
+	session: one(sessions, {
 		fields: [bills.sessionId],
-		references: [tableSessions.id],
+		references: [sessions.id],
 	}),
+	orders: many(orders),
 	settledByStaff: one(staff, {
 		fields: [bills.settledBy],
 		references: [staff.id],

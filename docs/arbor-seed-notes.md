@@ -79,7 +79,7 @@ Free)` / `(Eggless)` etc.).
 | Single-seated | T1–T19, T24, T25 | 21 tables, 1 session each |
 | Merged | T20, T21, T22, T23 | 1 shared session — T21–23 (free) were merged into T20's existing session, per the MVP "merge only absorbs a free table" rule (`docs/product.md`) |
 
-25 physical tables occupied → 22 distinct active `table_sessions` (merge
+25 physical tables occupied → 22 distinct active `sessions` (merge
 collapses 4 tables into 1). Plus **3 historical closed sessions**, already
 settled, not tied to any current table (turned over earlier today) — for
 exercising the settled-bill / closed-session read paths.

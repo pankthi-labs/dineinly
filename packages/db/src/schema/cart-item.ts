@@ -11,8 +11,8 @@ import { actorType, ice, salt, spice } from "./enums.js";
 import { createdAt, id } from "./helpers.js";
 import { menuItems } from "./menu-item.js";
 import { restaurants } from "./restaurant.js";
+import { sessions } from "./session.js";
 import { staff } from "./staff.js";
-import { tableSessions } from "./table-session.js";
 
 // Live shared cart, pre-confirm. Rows, not a JSON blob — row-level writes so
 // two guests adding different items never clobber each other. Concurrent
@@ -54,7 +54,7 @@ export const cartItems = pgTable(
 		),
 		foreignKey({
 			columns: [table.restaurantId, table.sessionId],
-			foreignColumns: [tableSessions.restaurantId, tableSessions.id],
+			foreignColumns: [sessions.restaurantId, sessions.id],
 			name: "cart_items_restaurant_id_session_id_fkey",
 		}).onDelete("cascade"),
 		foreignKey({

@@ -3,7 +3,7 @@ import type { Context } from "./trpc/context";
 import { dbError } from "./trpc/errors";
 
 // Shared by guest.ts and floor.ts: both read/write the same shared,
-// session-scoped cart (docs/product.md § Shared Table Session), differing
+// session-scoped cart (docs/product.md § Shared Session), differing
 // only in which client carries the caller's identity (ctx.supabase for a
 // guest's own JWT, ctx.auth for staff) and, for writes, who gets attributed.
 type CartClient = Context["auth"] | Context["supabase"];

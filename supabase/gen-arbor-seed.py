@@ -1061,7 +1061,7 @@ w("")
 w(f"-- {len(SESSIONS)} active table sessions — 21 single-table + 1 four-table merge")
 w("-- (T20/T21/T22/T23 sharing one session: T21-23 were free tables merged into")
 w("-- T20's session, per the MVP 'merge only absorbs a free table' rule).")
-w("insert into table_sessions (id, restaurant_id, status, opened_at, closed_at) values")
+w("insert into sessions (id, restaurant_id, status, opened_at, closed_at) values")
 rows = [f"\t('{s['id']}', '{REST_ID}', 'active', {mins_ago(s['opened_min'])}, null)" for s in SESSIONS]
 w(",\n".join(rows))
 w("on conflict (id) do nothing;")
@@ -1069,7 +1069,7 @@ w("")
 
 w("-- 3 historical closed sessions (already turned over and settled earlier")
 w("-- today) — exercises the settled-bill / closed-session read paths.")
-w("insert into table_sessions (id, restaurant_id, status, opened_at, closed_at) values")
+w("insert into sessions (id, restaurant_id, status, opened_at, closed_at) values")
 rows = [f"\t('{h['id']}', '{REST_ID}', 'closed', {mins_ago(h['opened_min'])}, {mins_ago(h['closed_min'])})"
         for h in HISTORICAL]
 w(",\n".join(rows))

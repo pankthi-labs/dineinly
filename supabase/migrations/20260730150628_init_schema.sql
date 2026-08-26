@@ -49,6 +49,9 @@ $$;--> statement-breakpoint
 CREATE TABLE "bills" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"restaurant_id" uuid NOT NULL,
+	-- Not unique: a session can carry more than one bill over its life
+	-- (Counter: guest settles, then orders again, drawing a fresh bill for the
+	-- new round — see the sessions table and submit_order() below).
 	"session_id" uuid NOT NULL,
 	"bill_number" text DEFAULT encode_bill_number(nextval('bill_number_seq'::regclass)) NOT NULL,
 	-- Counter only: the small, per-restaurant, per-day number guests are shown
@@ -65,7 +68,7 @@ CREATE TABLE "bills" (
 	"settled_by" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "bills_session_id_unique" UNIQUE("session_id"),
+	CONSTRAINT "bills_restaurant_id_id_key" UNIQUE("restaurant_id","id"),
 	CONSTRAINT "bills_bill_number_key" UNIQUE("bill_number"),
 	CONSTRAINT "bills_subtotal_check" CHECK ("bills"."subtotal" >= 0),
 	CONSTRAINT "bills_tax_amount_check" CHECK ("bills"."tax_amount" >= 0),
@@ -145,6 +148,10 @@ CREATE TABLE "orders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"restaurant_id" uuid NOT NULL,
 	"session_id" uuid NOT NULL,
+	-- Which of the session's bills this round is billed against. Null until a
+	-- bill exists to attach to; backfilled once one is (see request_bill() and
+	-- submit_order() below).
+	"bill_id" uuid,
 	"placed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"placed_by_type" "actor_type" NOT NULL,
 	"placed_by_staff_id" uuid,
@@ -174,6 +181,7 @@ CREATE TABLE "order_items" (
 	"released_at" timestamp with time zone,
 	"menu_item_id" uuid,
 	"added_by_staff_id" uuid,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "order_items_quantity_check" CHECK ("order_items"."quantity" > 0 AND "order_items"."quantity" <= 99),
 	CONSTRAINT "order_items_unit_price_check" CHECK ("order_items"."unit_price" >= 0),
 	CONSTRAINT "order_items_tax_rate_check" CHECK ("order_items"."tax_rate" between 0 and 1),
@@ -226,22 +234,22 @@ CREATE TABLE "staff" (
 	CONSTRAINT "staff_primary_owner_requires_owner_role_check" CHECK (not "staff"."is_primary_owner" or "staff"."role" = 'owner')
 );
 --> statement-breakpoint
-CREATE TABLE "table_sessions" (
+CREATE TABLE "sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"restaurant_id" uuid NOT NULL,
 	"status" "session_status" DEFAULT 'active' NOT NULL,
 	"opened_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"closed_at" timestamp with time zone,
-	CONSTRAINT "table_sessions_restaurant_id_id_key" UNIQUE("restaurant_id","id"),
-	CONSTRAINT "table_sessions_closed_at_check" CHECK (("table_sessions"."status" = 'active' AND "table_sessions"."closed_at" IS NULL) OR ("table_sessions"."status" = 'closed' AND "table_sessions"."closed_at" IS NOT NULL))
+	CONSTRAINT "sessions_restaurant_id_id_key" UNIQUE("restaurant_id","id"),
+	CONSTRAINT "sessions_closed_at_check" CHECK (("sessions"."status" = 'active' AND "sessions"."closed_at" IS NULL) OR ("sessions"."status" = 'closed' AND "sessions"."closed_at" IS NOT NULL))
 );
 --> statement-breakpoint
 ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."sessions"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bills" ADD CONSTRAINT "bills_restaurant_id_settled_by_fkey" FOREIGN KEY ("restaurant_id","settled_by") REFERENCES "public"."staff"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "restaurant_daily_tokens" ADD CONSTRAINT "restaurant_daily_tokens_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."sessions"("restaurant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_menu_item_id_fkey" FOREIGN KEY ("restaurant_id","menu_item_id") REFERENCES "public"."menu_items"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_restaurant_id_added_by_staff_id_fkey" FOREIGN KEY ("restaurant_id","added_by_staff_id") REFERENCES "public"."staff"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "menu_categories" ADD CONSTRAINT "menu_categories_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -249,21 +257,24 @@ ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_restaurant_id_restaurants_id
 ALTER TABLE "menu_items" ADD CONSTRAINT "menu_items_restaurant_id_category_id_fkey" FOREIGN KEY ("restaurant_id","category_id") REFERENCES "public"."menu_categories"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "menu_labels" ADD CONSTRAINT "menu_labels_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."sessions"("restaurant_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_bill_id_fkey" FOREIGN KEY ("restaurant_id","bill_id") REFERENCES "public"."bills"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_restaurant_id_placed_by_staff_id_fkey" FOREIGN KEY ("restaurant_id","placed_by_staff_id") REFERENCES "public"."staff"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_order_id_fkey" FOREIGN KEY ("restaurant_id","order_id") REFERENCES "public"."orders"("restaurant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_menu_item_id_fkey" FOREIGN KEY ("restaurant_id","menu_item_id") REFERENCES "public"."menu_items"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_restaurant_id_added_by_staff_id_fkey" FOREIGN KEY ("restaurant_id","added_by_staff_id") REFERENCES "public"."staff"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "restaurant_tables" ADD CONSTRAINT "restaurant_tables_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "restaurant_tables" ADD CONSTRAINT "restaurant_tables_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."table_sessions"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "restaurant_tables" ADD CONSTRAINT "restaurant_tables_restaurant_id_session_id_fkey" FOREIGN KEY ("restaurant_id","session_id") REFERENCES "public"."sessions"("restaurant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "staff" ADD CONSTRAINT "staff_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "table_sessions" ADD CONSTRAINT "table_sessions_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_restaurant_id_restaurants_id_fk" FOREIGN KEY ("restaurant_id") REFERENCES "public"."restaurants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "bills_restaurant_id_idx" ON "bills" USING btree ("restaurant_id");--> statement-breakpoint
+CREATE INDEX "bills_restaurant_id_session_id_idx" ON "bills" USING btree ("restaurant_id","session_id");--> statement-breakpoint
 CREATE INDEX "cart_items_restaurant_id_session_id_idx" ON "cart_items" USING btree ("restaurant_id","session_id");--> statement-breakpoint
 CREATE INDEX "cart_items_restaurant_id_menu_item_id_idx" ON "cart_items" USING btree ("restaurant_id","menu_item_id");--> statement-breakpoint
 CREATE INDEX "menu_items_restaurant_id_category_id_idx" ON "menu_items" USING btree ("restaurant_id","category_id");--> statement-breakpoint
 CREATE INDEX "orders_restaurant_id_session_id_idx" ON "orders" USING btree ("restaurant_id","session_id");--> statement-breakpoint
+CREATE INDEX "orders_restaurant_id_bill_id_idx" ON "orders" USING btree ("restaurant_id","bill_id");--> statement-breakpoint
 CREATE INDEX "order_items_order_id_idx" ON "order_items" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "order_items_restaurant_id_order_id_idx" ON "order_items" USING btree ("restaurant_id","order_id");--> statement-breakpoint
 CREATE INDEX "order_items_restaurant_id_status_idx" ON "order_items" USING btree ("restaurant_id","status");--> statement-breakpoint

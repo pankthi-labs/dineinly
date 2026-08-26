@@ -43,22 +43,18 @@ export default function GuestBillPage() {
 		},
 	});
 
-	const { client, tableSessionId } = useGuestRealtime();
-	useBroadcastChannel(
-		client,
-		tableSessionId ? `session:${tableSessionId}` : null,
-		{
-			"bill.status": () => utils.guest.bill.get.invalidate(),
-			"order.new": () => {
-				utils.guest.bill.get.invalidate();
-				utils.guest.orders.list.invalidate();
-			},
-			"order_item.status": () => {
-				utils.guest.bill.get.invalidate();
-				utils.guest.orders.list.invalidate();
-			},
+	const { client, sessionId } = useGuestRealtime();
+	useBroadcastChannel(client, sessionId ? `session:${sessionId}` : null, {
+		"bill.status": () => utils.guest.bill.get.invalidate(),
+		"order.new": () => {
+			utils.guest.bill.get.invalidate();
+			utils.guest.orders.list.invalidate();
 		},
-	);
+		"order_item.status": () => {
+			utils.guest.bill.get.invalidate();
+			utils.guest.orders.list.invalidate();
+		},
+	});
 
 	// Guest/Menu experiences never have a bill (docs/product.md § Dineinly
 	// Experiences) — guest.bill.get throws FORBIDDEN for them, server-side.
@@ -237,16 +233,17 @@ export default function GuestBillPage() {
 
 				{showOrderStatus ? (
 					<a
-						href="/guest/reorder"
+						href="/guest/menu"
 						className="mx-auto mt-6 block max-w-md rounded-md border border-divider px-6 py-4 text-center font-medium text-primary text-sm no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
 					>
 						Order More
 					</a>
 				) : null}
 
-				{/* Counter, pre-settle: submit_order() only rejects an already-settled
-				bill, so more orders still append to this same session/bill — this
-				just gives the guest a way back to the menu to place one. */}
+				{/* Counter: submit_order() no longer blocks ordering after settle
+				(a new round just draws a fresh bill on this same session) — both
+				this and "Order More" above are plain navigation back to the menu,
+				never a special resume/reorder flow. */}
 				{isCounter && data.status === "requested" ? (
 					<button
 						type="button"

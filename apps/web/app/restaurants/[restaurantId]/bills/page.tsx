@@ -45,7 +45,7 @@ export default function BillsPage() {
 	const utils = trpc.useUtils();
 	const supabase = createClient();
 	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
-		"table_session.change": () => utils.bills.list.invalidate(),
+		"session.change": () => utils.bills.list.invalidate(),
 		"bill.status": () => utils.bills.list.invalidate(),
 		// A live (open/requested) row's total is computed from order_items on
 		// every list read (bills.ts) — a new order or an item's status/waive

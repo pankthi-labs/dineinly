@@ -6,7 +6,7 @@ import { mintGuestToken, verifyGuestToken } from "@/lib/guest-token";
 // RFC4122-valid, so use proper v4-shaped ids here to match production.
 const claims = {
 	restaurant_id: "9c858f5b-0d64-4d8a-9a1e-9f3c1a2b3c4d",
-	table_session_id: "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+	session_id: "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
 	table_label: "12",
 	app_role: "guest" as const,
 };
@@ -47,7 +47,7 @@ describe("guest-token", () => {
 	it("round-trips a null table_label (counter-experience session)", async () => {
 		const token = await mintGuestToken({
 			restaurant_id: crypto.randomUUID(),
-			table_session_id: crypto.randomUUID(),
+			session_id: crypto.randomUUID(),
 			table_label: null,
 			app_role: "guest",
 		});

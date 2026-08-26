@@ -39,7 +39,7 @@ function floorRoleErrorMessage(allowedRoles: readonly StaffRole[]): string {
 // Order on behalf of guest (docs/product.md § RBAC "Add to Cart"/"Submit
 // Order": Waiter/Manager/Owner). The cart itself is the same shared,
 // session-scoped table guest.ts's cart procedures read and write — "any
-// participant edits freely" (docs/product.md § Shared Table Session) means
+// participant edits freely" (docs/product.md § Shared Session) means
 // a staff-added line and a guest-added line coexist in the same list, only
 // distinguished by addedByType/addedByStaffId (cart-item.ts). Reads/writes
 // go through ctx.auth directly (staff_all_cart_items RLS, § 5 of the RLS
@@ -182,7 +182,7 @@ export const floorRouter = router({
 				);
 
 				const sessionResult = await ctx.auth
-					.from("table_sessions")
+					.from("sessions")
 					.select("id")
 					.eq("id", input.sessionId)
 					.eq("restaurant_id", input.restaurantId)

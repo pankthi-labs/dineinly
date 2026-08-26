@@ -92,7 +92,7 @@ export type Database = {
 						foreignKeyName: "bills_restaurant_id_session_id_fkey";
 						columns: ["restaurant_id", "session_id"];
 						isOneToOne: false;
-						referencedRelation: "table_sessions";
+						referencedRelation: "sessions";
 						referencedColumns: ["restaurant_id", "id"];
 					},
 					{
@@ -170,7 +170,7 @@ export type Database = {
 						foreignKeyName: "cart_items_restaurant_id_session_id_fkey";
 						columns: ["restaurant_id", "session_id"];
 						isOneToOne: false;
-						referencedRelation: "table_sessions";
+						referencedRelation: "sessions";
 						referencedColumns: ["restaurant_id", "id"];
 					},
 				];
@@ -331,6 +331,7 @@ export type Database = {
 					status: Database["public"]["Enums"]["order_item_status"];
 					tax_rate: number;
 					unit_price: number;
+					updated_at: string;
 					waived_quantity: number;
 				};
 				Insert: {
@@ -352,6 +353,7 @@ export type Database = {
 					status?: Database["public"]["Enums"]["order_item_status"];
 					tax_rate: number;
 					unit_price: number;
+					updated_at?: string;
 					waived_quantity?: number;
 				};
 				Update: {
@@ -373,6 +375,7 @@ export type Database = {
 					status?: Database["public"]["Enums"]["order_item_status"];
 					tax_rate?: number;
 					unit_price?: number;
+					updated_at?: string;
 					waived_quantity?: number;
 				};
 				Relationships: [
@@ -408,6 +411,7 @@ export type Database = {
 			};
 			orders: {
 				Row: {
+					bill_id: string | null;
 					id: string;
 					idempotency_key: string;
 					placed_at: string;
@@ -417,6 +421,7 @@ export type Database = {
 					session_id: string;
 				};
 				Insert: {
+					bill_id?: string | null;
 					id?: string;
 					idempotency_key: string;
 					placed_at?: string;
@@ -426,6 +431,7 @@ export type Database = {
 					session_id: string;
 				};
 				Update: {
+					bill_id?: string | null;
 					id?: string;
 					idempotency_key?: string;
 					placed_at?: string;
@@ -435,6 +441,13 @@ export type Database = {
 					session_id?: string;
 				};
 				Relationships: [
+					{
+						foreignKeyName: "orders_restaurant_id_bill_id_fkey";
+						columns: ["restaurant_id", "bill_id"];
+						isOneToOne: false;
+						referencedRelation: "bills";
+						referencedColumns: ["restaurant_id", "id"];
+					},
 					{
 						foreignKeyName: "orders_restaurant_id_placed_by_staff_id_fkey";
 						columns: ["restaurant_id", "placed_by_staff_id"];
@@ -453,7 +466,7 @@ export type Database = {
 						foreignKeyName: "orders_restaurant_id_session_id_fkey";
 						columns: ["restaurant_id", "session_id"];
 						isOneToOne: false;
-						referencedRelation: "table_sessions";
+						referencedRelation: "sessions";
 						referencedColumns: ["restaurant_id", "id"];
 					},
 				];
@@ -521,7 +534,7 @@ export type Database = {
 						foreignKeyName: "restaurant_tables_restaurant_id_session_id_fkey";
 						columns: ["restaurant_id", "session_id"];
 						isOneToOne: false;
-						referencedRelation: "table_sessions";
+						referencedRelation: "sessions";
 						referencedColumns: ["restaurant_id", "id"];
 					},
 				];
@@ -570,6 +583,38 @@ export type Database = {
 					updated_at?: string;
 				};
 				Relationships: [];
+			};
+			sessions: {
+				Row: {
+					closed_at: string | null;
+					id: string;
+					opened_at: string;
+					restaurant_id: string;
+					status: Database["public"]["Enums"]["session_status"];
+				};
+				Insert: {
+					closed_at?: string | null;
+					id?: string;
+					opened_at?: string;
+					restaurant_id: string;
+					status?: Database["public"]["Enums"]["session_status"];
+				};
+				Update: {
+					closed_at?: string | null;
+					id?: string;
+					opened_at?: string;
+					restaurant_id?: string;
+					status?: Database["public"]["Enums"]["session_status"];
+				};
+				Relationships: [
+					{
+						foreignKeyName: "sessions_restaurant_id_restaurants_id_fk";
+						columns: ["restaurant_id"];
+						isOneToOne: false;
+						referencedRelation: "restaurants";
+						referencedColumns: ["id"];
+					},
+				];
 			};
 			staff: {
 				Row: {
@@ -707,38 +752,6 @@ export type Database = {
 					},
 				];
 			};
-			table_sessions: {
-				Row: {
-					closed_at: string | null;
-					id: string;
-					opened_at: string;
-					restaurant_id: string;
-					status: Database["public"]["Enums"]["session_status"];
-				};
-				Insert: {
-					closed_at?: string | null;
-					id?: string;
-					opened_at?: string;
-					restaurant_id: string;
-					status?: Database["public"]["Enums"]["session_status"];
-				};
-				Update: {
-					closed_at?: string | null;
-					id?: string;
-					opened_at?: string;
-					restaurant_id?: string;
-					status?: Database["public"]["Enums"]["session_status"];
-				};
-				Relationships: [
-					{
-						foreignKeyName: "table_sessions_restaurant_id_restaurants_id_fk";
-						columns: ["restaurant_id"];
-						isOneToOne: false;
-						referencedRelation: "restaurants";
-						referencedColumns: ["id"];
-					},
-				];
-			};
 		};
 		Views: {
 			[_ in never]: never;
@@ -816,6 +829,10 @@ export type Database = {
 					staff_id: string;
 					user_id: string;
 				}[];
+			};
+			close_idle_counter_sessions: {
+				Args: { p_idle_minutes?: number };
+				Returns: undefined;
 			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
@@ -986,8 +1003,8 @@ export type Database = {
 				Returns: {
 					experience: Database["public"]["Enums"]["restaurant_experience"];
 					restaurant_id: string;
+					session_id: string;
 					table_label: string;
-					table_session_id: string;
 				}[];
 			};
 			resolve_staff_by_pin: {
@@ -1019,6 +1036,10 @@ export type Database = {
 			set_staff_pin: {
 				Args: { p_pin: string; p_restaurant_id: string };
 				Returns: undefined;
+			};
+			staff_request_bill: {
+				Args: { p_restaurant_id: string; p_session_id: string };
+				Returns: string;
 			};
 			staff_role_for_restaurant: {
 				Args: { p_restaurant_id: string };

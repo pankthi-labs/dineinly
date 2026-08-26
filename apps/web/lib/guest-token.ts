@@ -40,13 +40,13 @@ export const GUEST_TOKEN_MENU_TTL_SECONDS = 4 * 60 * 60;
 
 export const guestClaimsSchema = z.object({
 	restaurant_id: z.uuid(),
-	table_session_id: z.uuid(),
+	session_id: z.uuid(),
 	// null for counter-experience sessions (docs/core-data-model.md §
 	// Experience Gating) — those are tableless, so there's nothing to label.
 	// Display-only — the scanned table's label at mint time. Not re-checked
-	// by RLS (restaurant_id/table_session_id are the only claims policies
-	// scope on), so a merge after minting can leave this stale until the
-	// guest's next scan; acceptable since it's UI copy, not an access grant.
+	// by RLS (restaurant_id/session_id are the only claims policies scope
+	// on), so a merge after minting can leave this stale until the guest's
+	// next scan; acceptable since it's UI copy, not an access grant.
 	table_label: z.string().nullable(),
 	app_role: z.literal("guest"),
 });

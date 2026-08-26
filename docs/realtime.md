@@ -14,7 +14,7 @@ Rejected: **Postgres Changes** (simplest, but the RLS-per-row cost and raw-colum
 
 | Topic | Audience | Carries | Authorization (RLS on `realtime.messages`) |
 |---|---|---|---|
-| `session:{id}` | Guests + staff on that session | Cart items, order-item status, bill status | JWT `table_session_id` matches topic id AND session `status = active` AND tenant match |
+| `session:{id}` | Guests + staff on that session | Cart items, order-item status, bill status | JWT `session_id` matches topic id AND session `status = active` AND tenant match |
 | `restaurant:{id}` | Staff only | Kitchen queue (new orders), floor / table-session state | Staff JWT with matching `restaurant_id`; guest JWTs lack the staff claim and cannot join |
 | `menu:{restaurant_id}` | Guests + staff | Item availability (86'd)/hide changes, category reorder/hide changes | Any valid token scoped to that `restaurant_id` — menu is already public to guests, nothing sensitive |
 
@@ -22,7 +22,7 @@ Guest-facing order status (`Preparing` → `Partially Served` → `Served`, per 
 
 Revocation is live-state, not expiry-based, consistent with Guest Sessions: closing a session immediately fails the `session:{id}` RLS check, denying the channel regardless of token validity.
 
-**Counter-experience sessions reuse both topics unchanged.** A tableless Table Session (`core-data-model.md` § Experience Gating) still has an id, so `session:{id}` works exactly as it does for dine-in — no new topic. The payment-gate signal Kitchen Display needs (has this session's Bill been settled yet?) is already carried by the existing Bill broadcast on `restaurant:{id}`; the ready-notification the guest sees is the same Order Item status broadcast on `session:{id}` every experience already gets, just labeled differently client-side (`core-data-model.md` § Lifecycle invariants).
+**Counter-experience sessions reuse both topics unchanged.** A tableless Session (`core-data-model.md` § Experience Gating) still has an id, so `session:{id}` works exactly as it does for dine-in — no new topic, and it stays the same topic across every bill round the session ever draws (settle, order again — Session outlives any one Bill for Counter). The payment-gate signal Kitchen Display needs (has *this item's own* bill been settled yet, not just the session's?) is already carried by the existing Bill broadcast on `restaurant:{id}`; the ready-notification the guest sees is the same Order Item status broadcast on `session:{id}` every experience already gets, just labeled differently client-side (`core-data-model.md` § Lifecycle invariants).
 
 ## Publish Side — Triggers
 
@@ -32,7 +32,7 @@ Revocation is live-state, not expiry-based, consistent with Guest Sessions: clos
 | Order | INSERT | `session:{session_id}` + `restaurant:{restaurant_id}` | New round. Guest topic: order id only, invalidate-driven same as Cart Item (**no `idempotency_key`/`placed_by_staff_id`**). Staff topic: full row |
 | Order Item | UPDATE of `status` or `released_at` | `session:{session_id}` + `restaurant:{restaurant_id}` | Guest topic: item name/status only. Staff topic: full row. `released_at` (Counter's guest-side kitchen release) isn't a `status` change but does move the item between Kitchen Display queue columns, so it fires the same broadcast |
 | Bill | INSERT / UPDATE of `status` | `session:{session_id}` + `restaurant:{restaurant_id}` | Both topics fire on insert and on a status-changing update (the update trigger's `WHEN old.status IS DISTINCT FROM new.status` guards only against no-op re-fires, not against insert). Guest/session topic: `requested` / `settled`. Staff topic: full row — the Bills tab watches every session in the restaurant at once, not just one, so it subscribes here rather than to a `session:{id}` per visible row |
-| Table Session | INSERT / UPDATE of `status` | `restaurant:{restaurant_id}` | Floor view: session open/close, table free/busy |
+| Session | INSERT / UPDATE of `status` | `restaurant:{restaurant_id}` | Floor view: session open/close, table free/busy |
 | Menu Item | UPDATE of `availability`, `status` | `menu:{restaurant_id}` | Item id + new availability + new status |
 | Menu Category | UPDATE of `sort`, `status` | `menu:{restaurant_id}` | Category id only — client invalidates and refetches |
 

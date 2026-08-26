@@ -70,22 +70,18 @@ export default function GuestOrdersPage() {
 		},
 	});
 
-	const { client, tableSessionId } = useGuestRealtime();
-	useBroadcastChannel(
-		client,
-		tableSessionId ? `session:${tableSessionId}` : null,
-		{
-			"order.new": () => {
-				utils.guest.orders.list.invalidate();
-				utils.guest.bill.get.invalidate();
-			},
-			"order_item.status": () => {
-				utils.guest.orders.list.invalidate();
-				utils.guest.bill.get.invalidate();
-			},
-			"bill.status": () => utils.guest.bill.get.invalidate(),
+	const { client, sessionId } = useGuestRealtime();
+	useBroadcastChannel(client, sessionId ? `session:${sessionId}` : null, {
+		"order.new": () => {
+			utils.guest.orders.list.invalidate();
+			utils.guest.bill.get.invalidate();
 		},
-	);
+		"order_item.status": () => {
+			utils.guest.orders.list.invalidate();
+			utils.guest.bill.get.invalidate();
+		},
+		"bill.status": () => utils.guest.bill.get.invalidate(),
+	});
 
 	if (
 		menu.isLoading ||

@@ -55,7 +55,7 @@ export async function GET(
 	const token = await mintGuestToken(
 		{
 			restaurant_id: data.restaurant_id,
-			table_session_id: data.table_session_id,
+			session_id: data.session_id,
 			table_label: data.table_label,
 			app_role: "guest",
 		},

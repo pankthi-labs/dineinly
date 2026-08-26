@@ -16,7 +16,7 @@ import { RestaurantNavHeader } from "../restaurant-nav-header";
 
 type Table = inferRouterOutputs<AppRouter>["tables"]["list"][number];
 
-// Floor (docs/product.md § Shared Table Session): Order on behalf of guest
+// Floor (docs/product.md § Shared Session): Order on behalf of guest
 // and Merge Tables, the two Waiter-reachable table actions Table Matrix
 // doesn't offer (that page is Owner/Manager config — QR/create/hide, gated
 // by tables/layout.tsx). Only occupied tables get an action here; a free
@@ -69,8 +69,7 @@ export default function FloorPage() {
 
 	const supabase = createClient();
 	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
-		"table_session.change": () =>
-			utils.tables.list.invalidate({ restaurantId }),
+		"session.change": () => utils.tables.list.invalidate({ restaurantId }),
 	});
 
 	const mergeMutation = trpc.tables.merge.useMutation({

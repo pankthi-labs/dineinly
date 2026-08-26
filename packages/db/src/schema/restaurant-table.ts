@@ -2,7 +2,7 @@ import { foreignKey, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { restaurantTableStatus } from "./enums.js";
 import { id } from "./helpers.js";
 import { restaurants } from "./restaurant.js";
-import { tableSessions } from "./table-session.js";
+import { sessions } from "./session.js";
 
 // Physical floor plan — a table guests sit at. QR is 1:1 static, folded as a
 // column. `sessionId` is the table's current active session — null means the
@@ -37,7 +37,7 @@ export const restaurantTables = pgTable(
 		),
 		foreignKey({
 			columns: [table.restaurantId, table.sessionId],
-			foreignColumns: [tableSessions.restaurantId, tableSessions.id],
+			foreignColumns: [sessions.restaurantId, sessions.id],
 			name: "restaurant_tables_restaurant_id_session_id_fkey",
 		}).onDelete("set null"),
 	],

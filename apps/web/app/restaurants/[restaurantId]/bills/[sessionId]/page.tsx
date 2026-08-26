@@ -10,7 +10,12 @@ import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { billableQuantity } from "@/lib/bill-math";
 import { downloadPdf } from "@/lib/download-pdf";
-import { formatBillAmount, formatBillLocation, titleCase } from "@/lib/format";
+import {
+	formatBillAmount,
+	formatBillLocation,
+	formatTime,
+	titleCase,
+} from "@/lib/format";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
@@ -549,6 +554,31 @@ export default function BillDetailPage() {
 								</span>
 							</div>
 						</dl>
+
+						{data.priorBills.length > 0 ? (
+							<dl className="flex flex-col gap-3 rounded-xl border border-divider bg-surface p-5 print:hidden">
+								<p className="text-caps text-secondary">Previous rounds</p>
+								{data.priorBills.map((prior) => (
+									<div key={prior.billId} className="flex flex-col gap-0.5">
+										<div className="flex items-baseline justify-between gap-4 tabular-nums">
+											<span className="text-primary text-sm">
+												{prior.dailyToken != null
+													? `Token ${prior.dailyToken}`
+													: `Bill #${prior.billNumber}`}
+											</span>
+											<span className="text-secondary text-sm">
+												{formatBillAmount(prior.total)}
+											</span>
+										</div>
+										{prior.settledAt ? (
+											<span className="text-muted text-xs">
+												Settled {formatTime(prior.settledAt)}
+											</span>
+										) : null}
+									</div>
+								))}
+							</dl>
+						) : null}
 
 						<div className="flex flex-col gap-3">
 							{data.status === "open" ? (

@@ -70,36 +70,46 @@ async function assertCounterBillsSettled(
 	];
 	if (orderIds.length === 0) return;
 
+	// Each item's own order.bill_id, never "does this session have a settled
+	// bill" — a session can carry more than one bill over its life (Counter:
+	// settle, then order again), so an earlier round being settled must never
+	// wave a later, still-unpaid round's items through.
 	const ordersResult = await ctx.auth
 		.from("orders")
-		.select("session_id")
+		.select("bill_id")
 		.eq("restaurant_id", restaurantId)
 		.in("id", orderIds);
 	if (ordersResult.error) {
 		throw dbError("Unable to update the order.", ordersResult.error);
 	}
-	const sessionIds = [
-		...new Set((ordersResult.data ?? []).map((row) => row.session_id)),
+	const orders = ordersResult.data ?? [];
+	const billIds = [
+		...new Set(
+			orders.map((row) => row.bill_id).filter((id): id is string => id != null),
+		),
 	];
-	if (sessionIds.length === 0) return;
+	// An order with no bill yet can't possibly be settled — same unpaid
+	// outcome as a bill that exists but hasn't settled.
+	if (billIds.length < orders.length) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message:
+				"This order hasn't been paid yet — settle the bill before the kitchen can start.",
+		});
+	}
 
 	const billsResult = await ctx.auth
 		.from("bills")
-		.select("session_id, status")
+		.select("id, status")
 		.eq("restaurant_id", restaurantId)
-		.in("session_id", sessionIds);
+		.in("id", billIds);
 	if (billsResult.error) {
 		throw dbError("Unable to update the order.", billsResult.error);
 	}
-	const settledSessionIds = new Set(
-		(billsResult.data ?? [])
-			.filter((bill) => bill.status === "settled")
-			.map((bill) => bill.session_id),
+	const hasUnsettledBill = (billsResult.data ?? []).some(
+		(bill) => bill.status !== "settled",
 	);
-	const hasUnpaidSession = sessionIds.some(
-		(sessionId) => !settledSessionIds.has(sessionId),
-	);
-	if (hasUnpaidSession) {
+	if (hasUnsettledBill) {
 		throw new TRPCError({
 			code: "BAD_REQUEST",
 			message:
@@ -120,7 +130,7 @@ async function updateOrderItemsStatus(
 ): Promise<{ updatedIds: string[] }> {
 	const { data, error } = await ctx.auth
 		.from("order_items")
-		.update(changes)
+		.update({ ...changes, updated_at: new Date().toISOString() })
 		.eq("restaurant_id", restaurantId)
 		.eq("status", from)
 		.in("id", orderItemIds)
@@ -170,7 +180,7 @@ export const kitchenRouter = router({
 			const orderIds = [...new Set(items.map((item) => item.order_id))];
 			const { data: orders, error: ordersError } = await ctx.auth
 				.from("orders")
-				.select("id, session_id, placed_at")
+				.select("id, session_id, bill_id, placed_at")
 				.eq("restaurant_id", input.restaurantId)
 				.in("id", orderIds);
 
@@ -178,6 +188,18 @@ export const kitchenRouter = router({
 
 			const ordersById = new Map((orders ?? []).map((o) => [o.id, o]));
 			const sessionIds = [...new Set((orders ?? []).map((o) => o.session_id))];
+			// A session can carry more than one bill over its life (Counter:
+			// settle, then order again) — every lookup below has to go through
+			// each item's own order.bill_id, never "whichever bill this session
+			// currently has," or a settled earlier round could wrongly clear an
+			// unpaid later one (or show its stale token).
+			const billIds = [
+				...new Set(
+					(orders ?? [])
+						.map((o) => o.bill_id)
+						.filter((id): id is string => id != null),
+				),
+			];
 
 			const [
 				{ data: tables, error: tablesError },
@@ -194,11 +216,13 @@ export const kitchenRouter = router({
 				// unpaid Counter orders can be filtered out below — the item's own
 				// `preparing`/`ready` status can't tell an unsettled bill apart from
 				// a settled one, since both permit those states.
-				ctx.auth
-					.from("bills")
-					.select("session_id, daily_token, status")
-					.eq("restaurant_id", input.restaurantId)
-					.in("session_id", sessionIds),
+				billIds.length === 0
+					? Promise.resolve({ data: [], error: null })
+					: ctx.auth
+							.from("bills")
+							.select("id, daily_token, status")
+							.eq("restaurant_id", input.restaurantId)
+							.in("id", billIds),
 			]);
 
 			assertNoQueueError(tablesError ?? billsError);
@@ -211,14 +235,7 @@ export const kitchenRouter = router({
 				tableLabelsBySession.set(table.session_id, labels);
 			}
 
-			const tokenBySession = new Map<string, number>();
-			const billStatusBySession = new Map<string, string>();
-			for (const bill of bills ?? []) {
-				if (bill.daily_token != null) {
-					tokenBySession.set(bill.session_id, bill.daily_token);
-				}
-				billStatusBySession.set(bill.session_id, bill.status);
-			}
+			const billsById = new Map((bills ?? []).map((b) => [b.id, b]));
 			const isCounter = restaurantResult.data.experience === "counter";
 
 			return {
@@ -229,6 +246,9 @@ export const kitchenRouter = router({
 				items: items
 					.map((item) => {
 						const order = ordersById.get(item.order_id);
+						const bill = order?.bill_id
+							? billsById.get(order.bill_id)
+							: undefined;
 						return {
 							id: item.id,
 							dish: item.item_name,
@@ -240,10 +260,8 @@ export const kitchenRouter = router({
 							tables: order
 								? (tableLabelsBySession.get(order.session_id) ?? [])
 								: [],
-							token: order
-								? (tokenBySession.get(order.session_id) ?? null)
-								: null,
-							sessionId: order?.session_id ?? null,
+							token: bill?.daily_token ?? null,
+							billSettled: bill?.status === "settled",
 							releasedAt: item.released_at,
 						};
 					})
@@ -260,14 +278,10 @@ export const kitchenRouter = router({
 							!(
 								isCounter &&
 								item.status === "placed" &&
-								(billStatusBySession.get(item.sessionId ?? "") !== "settled" ||
-									item.releasedAt == null)
+								(!item.billSettled || item.releasedAt == null)
 							),
 					)
-					.map(
-						({ sessionId: _sessionId, releasedAt: _releasedAt, ...item }) =>
-							item,
-					),
+					.map(({ billSettled: _billSettled, ...item }) => item),
 			};
 		}),
 

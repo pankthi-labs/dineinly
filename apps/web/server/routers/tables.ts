@@ -190,7 +190,7 @@ export const tablesRouter = router({
 			};
 		}),
 
-	// Merge Tables (docs/product.md § Shared Table Session): folds a free
+	// Merge Tables (docs/product.md § Shared Session): folds a free
 	// table into an already-active session. Delegates to
 	// merge_table_into_session() (§ 14 of the RLS migration) — Waiter/
 	// Manager/Owner reach, wider than every other write in this router

@@ -78,13 +78,12 @@ export default function TableMatrixPage() {
 	});
 	const listQuery = trpc.tables.list.useQuery({ restaurantId });
 
-	// Staff realtime, same as Kitchen Display: table_session.change fires on
+	// Staff realtime, same as Kitchen Display: session.change fires on
 	// every session open/close so occupied/free status updates live instead
 	// of only on this page's own mutations or a manual reload.
 	const supabase = createClient();
 	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
-		"table_session.change": () =>
-			utils.tables.list.invalidate({ restaurantId }),
+		"session.change": () => utils.tables.list.invalidate({ restaurantId }),
 	});
 
 	function invalidateAndNotify(message: string) {

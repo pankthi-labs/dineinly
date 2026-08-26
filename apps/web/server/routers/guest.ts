@@ -55,7 +55,7 @@ export const guestRouter = router({
 	realtimeAuth: guestProcedure.query(({ ctx }) => ({
 		token: ctx.guestToken,
 		restaurantId: ctx.guest.restaurant_id,
-		tableSessionId: ctx.guest.table_session_id,
+		sessionId: ctx.guest.session_id,
 	})),
 
 	menu: guestProcedure.query(async ({ ctx }) => {
@@ -111,7 +111,7 @@ export const guestRouter = router({
 			listCartItems(
 				ctx.supabase,
 				ctx.guest.restaurant_id,
-				ctx.guest.table_session_id,
+				ctx.guest.session_id,
 			),
 		),
 
@@ -132,7 +132,7 @@ export const guestRouter = router({
 
 				await upsertCartItem(ctx.supabase, {
 					restaurantId: ctx.guest.restaurant_id,
-					sessionId: ctx.guest.table_session_id,
+					sessionId: ctx.guest.session_id,
 					menuItemId: input.menuItemId,
 					quantity: input.quantity,
 					spice: input.spice,
@@ -158,12 +158,12 @@ export const guestRouter = router({
 								.from("cart_items")
 								.delete()
 								.eq("id", input.cartItemId)
-								.eq("session_id", ctx.guest.table_session_id)
+								.eq("session_id", ctx.guest.session_id)
 						: await ctx.supabase
 								.from("cart_items")
 								.update({ quantity: input.quantity })
 								.eq("id", input.cartItemId)
-								.eq("session_id", ctx.guest.table_session_id);
+								.eq("session_id", ctx.guest.session_id);
 
 				if (error) {
 					throw dbError("Unable to update the cart.", error);
@@ -177,7 +177,7 @@ export const guestRouter = router({
 					.from("cart_items")
 					.delete()
 					.eq("id", input.cartItemId)
-					.eq("session_id", ctx.guest.table_session_id);
+					.eq("session_id", ctx.guest.session_id);
 
 				if (error) {
 					throw dbError("Unable to update the cart.", error);
@@ -227,7 +227,7 @@ export const guestRouter = router({
 				.from("orders")
 				.select("id, placed_at")
 				.eq("restaurant_id", ctx.guest.restaurant_id)
-				.eq("session_id", ctx.guest.table_session_id)
+				.eq("session_id", ctx.guest.session_id)
 				.order("placed_at", { ascending: true });
 
 			if (ordersResult.error) {
@@ -336,25 +336,25 @@ export const guestRouter = router({
 		get: guestProcedure.query(async ({ ctx }) => {
 			requireBillEnabled(ctx.experience);
 
-			const [restaurantResult, billResult, ordersResult] = await Promise.all([
+			const [restaurantResult, billResult] = await Promise.all([
 				ctx.supabase
 					.from("restaurants")
 					.select("name, address, city, gst_number, state, pincode")
 					.eq("id", ctx.guest.restaurant_id)
 					.maybeSingle(),
+				// Latest round only — a session can carry more than one bill over
+				// its life (Counter: settle, then order again, docs/core-data-model.md
+				// § Lifecycle invariants); this is always the current, actionable one.
 				ctx.supabase
 					.from("bills")
 					.select("id, bill_number, daily_token, status")
-					.eq("session_id", ctx.guest.table_session_id)
+					.eq("session_id", ctx.guest.session_id)
+					.order("created_at", { ascending: false })
+					.limit(1)
 					.maybeSingle(),
-				ctx.supabase
-					.from("orders")
-					.select("id")
-					.eq("restaurant_id", ctx.guest.restaurant_id)
-					.eq("session_id", ctx.guest.table_session_id),
 			]);
 
-			for (const result of [restaurantResult, billResult, ordersResult]) {
+			for (const result of [restaurantResult, billResult]) {
 				if (result.error) {
 					throw dbError("Unable to load the bill.", result.error);
 				}
@@ -364,6 +364,22 @@ export const guestRouter = router({
 					"Unable to load the bill.",
 					new Error("Missing restaurant"),
 				);
+			}
+
+			// This round's orders only — a session with no bill yet (nothing to
+			// scope by) falls back to every order it has (there's no prior round
+			// to accidentally re-sum in that case).
+			const bill = billResult.data;
+			const ordersResult = await ctx.supabase
+				.from("orders")
+				.select("id")
+				.eq("restaurant_id", ctx.guest.restaurant_id)
+				.eq(
+					bill ? "bill_id" : "session_id",
+					bill ? bill.id : ctx.guest.session_id,
+				);
+			if (ordersResult.error) {
+				throw dbError("Unable to load the bill.", ordersResult.error);
 			}
 
 			const orderIds = (ordersResult.data ?? []).map((order) => order.id);
@@ -383,8 +399,7 @@ export const guestRouter = router({
 				throw dbError("Unable to load the bill.", itemsResult.error);
 			}
 
-			const status: "open" | "requested" | "settled" =
-				billResult.data?.status ?? "open";
+			const status: "open" | "requested" | "settled" = bill?.status ?? "open";
 			const totals = computeBill(
 				(itemsResult.data ?? [])
 					.map((row) => ({
@@ -413,9 +428,9 @@ export const guestRouter = router({
 					pincode: restaurantResult.data.pincode as string,
 				},
 				tableLabel: ctx.guest.table_label,
-				billId: billResult.data?.id ?? null,
-				billNumber: billResult.data?.bill_number ?? null,
-				dailyToken: billResult.data?.daily_token ?? null,
+				billId: bill?.id ?? null,
+				billNumber: bill?.bill_number ?? null,
+				dailyToken: bill?.daily_token ?? null,
 				status,
 				...totals,
 			};
@@ -426,7 +441,7 @@ export const guestRouter = router({
 		// Bill row to `requested` (creating it if needed); `get` above never
 		// does, so a guest merely checking their running total doesn't
 		// silently signal staff they're ready to pay. request_bill() reads
-		// restaurant_id/table_session_id off this guest's own JWT claims, so
+		// restaurant_id/session_id off this guest's own JWT claims, so
 		// no input is needed.
 		request: guestProcedure.mutation(async ({ ctx }) => {
 			requireBillEnabled(ctx.experience);

@@ -26,7 +26,7 @@ ALTER TABLE "staff" ADD CONSTRAINT "staff_user_id_fkey"
 alter table "restaurants" enable row level security;
 alter table "staff" enable row level security;
 alter table "restaurant_tables" enable row level security;
-alter table "table_sessions" enable row level security;
+alter table "sessions" enable row level security;
 alter table "menu_categories" enable row level security;
 alter table "menu_items" enable row level security;
 alter table "menu_labels" enable row level security;
@@ -57,11 +57,11 @@ alter table "restaurant_daily_tokens" enable row level security;
 --     claim, which `jwt_is_guest_for_restaurant`/`jwt_is_guest_for_session`
 --     below check to scope every policy to guests only and never
 --     accidentally match a future staff session.
---   - `restaurant_id` / `table_session_id` claims scope every policy to
---     exactly the one active table session the guest scanned into.
+--   - `restaurant_id` / `session_id` claims scope every policy to
+--     exactly the one active session the guest scanned into.
 --   - Revocation is live-state, not expiry (architecture.md § Guest
 --     Sessions): a token stays cryptographically valid for its full TTL,
---     so every policy re-checks `table_sessions.status = 'active'` on each
+--     so every policy re-checks `sessions.status = 'active'` on each
 --     query rather than trusting the token was valid when minted — that's
 --     what makes closing a session deny access immediately. Every policy
 --     below uses the same three helper functions for this reason — none
@@ -101,7 +101,7 @@ stable
 set search_path = ''
 as $$
 	select public.jwt_is_guest_for_restaurant(p_restaurant_id)
-		and p_session_id = ((auth.jwt() ->> 'table_session_id')::uuid);
+		and p_session_id = ((auth.jwt() ->> 'session_id')::uuid);
 $$;
 
 revoke execute on function public.jwt_is_guest_for_session(uuid, uuid) from public;
@@ -118,7 +118,7 @@ set search_path = ''
 as $$
 	select exists (
 		select 1
-		from public.table_sessions ts
+		from public.sessions ts
 		where ts.id = p_session_id
 			and ts.restaurant_id = p_restaurant_id
 			and ts.status = 'active'
@@ -137,7 +137,7 @@ create policy "guest_select_own_restaurant" on public.restaurants
 	using (
 		public.jwt_is_guest_for_restaurant(id)
 		and public.is_active_guest_session(
-			(auth.jwt() ->> 'table_session_id')::uuid, id
+			(auth.jwt() ->> 'session_id')::uuid, id
 		)
 	);
 
@@ -153,7 +153,7 @@ create policy "guest_select_active_menu_categories" on public.menu_categories
 		public.jwt_is_guest_for_restaurant(restaurant_id)
 		and status = 'active'
 		and public.is_active_guest_session(
-			(auth.jwt() ->> 'table_session_id')::uuid, restaurant_id
+			(auth.jwt() ->> 'session_id')::uuid, restaurant_id
 		)
 	);
 
@@ -166,14 +166,14 @@ create policy "guest_select_active_menu_items" on public.menu_items
 		public.jwt_is_guest_for_restaurant(restaurant_id)
 		and status = 'active'
 		and public.is_active_guest_session(
-			(auth.jwt() ->> 'table_session_id')::uuid, restaurant_id
+			(auth.jwt() ->> 'session_id')::uuid, restaurant_id
 		)
 	);
 
--- table_sessions: the guest's own session only, while active.
-grant select on public.table_sessions to authenticated;
+-- sessions: the guest's own session only, while active.
+grant select on public.sessions to authenticated;
 
-create policy "guest_select_own_active_session" on public.table_sessions
+create policy "guest_select_own_active_session" on public.sessions
 	for select
 	to authenticated
 	using (
@@ -327,7 +327,7 @@ grant execute on function public.is_dineinly_admin() to authenticated;
 grant select, insert, update, delete on public.restaurants to authenticated;
 grant select, insert, update, delete on public.staff to authenticated;
 grant select, insert, update, delete on public.restaurant_tables to authenticated;
-grant select, insert, update, delete on public.table_sessions to authenticated;
+grant select, insert, update, delete on public.sessions to authenticated;
 grant select, insert, update, delete on public.menu_categories to authenticated;
 grant select, insert, update, delete on public.menu_items to authenticated;
 grant select, insert, update, delete on public.menu_labels to authenticated;
@@ -351,7 +351,7 @@ create policy "admin_all_restaurant_tables" on public.restaurant_tables
 	using (public.is_dineinly_admin())
 	with check (public.is_dineinly_admin());
 
-create policy "admin_all_table_sessions" on public.table_sessions
+create policy "admin_all_sessions" on public.sessions
 	for all to authenticated
 	using (public.is_dineinly_admin())
 	with check (public.is_dineinly_admin());
@@ -483,9 +483,9 @@ create policy "staff_select_own_restaurant" on public.restaurants
 -- service charge/close session all read or write these three tables for
 -- sessions across the restaurant, not just the caller's own — unlike the
 -- guest policies above, which are scoped to one session by JWT claim. No
--- staff policy existed on any of the three before this — table_sessions,
+-- staff policy existed on any of the three before this — sessions,
 -- bills, and cart_items previously had no reach for a non-admin session.
-create policy "staff_all_table_sessions" on public.table_sessions
+create policy "staff_all_sessions" on public.sessions
 	for all
 	to authenticated
 	using (public.is_active_staff_for_restaurant(restaurant_id))
@@ -733,9 +733,9 @@ grant execute on function public.ensure_qr_token(uuid) to authenticated;
 -- guard: neither Menu nor Counter has a table row to protect, so a new
 -- token is always minted on request.
 --
--- Only Menu also closes every active table_session on this restaurant:
+-- Only Menu also closes every active session on this restaurant:
 -- every guest_select_own_restaurant/menu_categories/menu_items policy
--- re-checks table_sessions.status = 'active' on each query (this file's § 2
+-- re-checks sessions.status = 'active' on each query (this file's § 2
 -- "Revocation is live-state, not expiry"), so that's what makes a guest
 -- already on the old QR lose access immediately rather than riding out
 -- their token's TTL. Safe to close in bulk for Menu: it has no ordering (no
@@ -773,7 +773,7 @@ begin
 	end if;
 
 	if v_experience = 'menu' then
-		update public.table_sessions
+		update public.sessions
 		set status = 'closed', closed_at = now()
 		where restaurant_id = p_restaurant_id and status = 'active';
 	end if;
@@ -1026,7 +1026,7 @@ grant execute on function public.set_menu_item_availability(uuid, uuid, public.a
 -- Called from apps/web/app/qr/[qrToken]/route.ts before any guest JWT
 -- exists, so the caller is Postgres role `anon` (same "no session yet"
 -- situation as resolve_staff_signin above) — reading restaurant_tables by
--- qr_token, and writing table_sessions/restaurant_tables to join-or-create
+-- qr_token, and writing sessions/restaurant_tables to join-or-create
 -- the active session, both need elevated privilege no unauthenticated role
 -- has, hence SECURITY DEFINER.
 --
@@ -1051,7 +1051,7 @@ grant execute on function public.set_menu_item_availability(uuid, uuid, public.a
 create or replace function public.resolve_qr_token(p_qr_token text)
 returns table (
 	restaurant_id uuid,
-	table_session_id uuid,
+	session_id uuid,
 	table_label text,
 	experience public.restaurant_experience
 )
@@ -1077,12 +1077,12 @@ begin
 	if v_table_id is not null then
 		if v_session_id is not null then
 			select ts.status into v_session_status
-			from public.table_sessions ts
+			from public.sessions ts
 			where ts.id = v_session_id;
 		end if;
 
 		if v_session_id is null or v_session_status <> 'active' then
-			insert into public.table_sessions (restaurant_id)
+			insert into public.sessions (restaurant_id)
 			values (v_restaurant_id)
 			returning id into v_session_id;
 
@@ -1103,7 +1103,7 @@ begin
 	-- (docs/core-data-model.md § Experience Gating). Unlike the table branch
 	-- above, this never joins an existing session: one universal QR serves
 	-- many concurrent guests, so every scan starts its own fresh, tableless
-	-- session. table_sessions already has no table_id column, so no schema
+	-- session. sessions already has no table_id column, so no schema
 	-- change is needed for this second entry path. Which behavior the guest
 	-- gets (view-only Menu vs order-taking Counter) comes from the live
 	-- `experience` value read here, not from a hardcoded branch — the same
@@ -1116,7 +1116,7 @@ begin
 		raise exception 'Invalid QR code';
 	end if;
 
-	insert into public.table_sessions (restaurant_id)
+	insert into public.sessions (restaurant_id)
 	values (v_restaurant_id)
 	returning id into v_session_id;
 
@@ -1166,44 +1166,43 @@ declare
 	v_session_id uuid;
 	v_order_id uuid;
 	v_experience public.restaurant_experience;
-	v_bill_exists boolean;
+	v_bill_id uuid;
 	v_daily_token integer;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
-	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
+	v_session_id := (auth.jwt() ->> 'session_id')::uuid;
 
 	if not public.jwt_is_guest_for_session(v_restaurant_id, v_session_id) then
 		raise exception 'Guest session required';
 	end if;
 
 	if not public.is_active_guest_session(v_session_id, v_restaurant_id) then
-		raise exception 'Table session is not active';
+		raise exception 'Session is not active';
 	end if;
 
-	-- A settled bill's amounts are frozen (core-data-model.md); a new order
-	-- placed after settle would silently drift the paid total. Staff must
-	-- Close Session (which requires a settled bill and nothing in progress)
-	-- before the table's next QR scan opens a fresh session for more orders
-	-- — this session never reopens for ordering once its bill is settled.
-	--
-	-- Locks the bill row (if one exists yet) before checking its status, so
-	-- a concurrent Mark Bill Settled can't commit between this check and the
-	-- bill upsert below: without the lock, this SELECT could read
-	-- 'requested', the settle could commit, and the upsert further down
-	-- would then see the now-settled row and silently keep it settled --
-	-- attaching this order's items to a bill whose total was frozen before
-	-- they existed, instead of raising here. Existence is also captured here
-	-- (not re-derived below) so the counter block knows whether it's about to
-	-- insert a fresh row or update one that already has its daily_token.
-	select exists (
-		select 1 from public.bills where session_id = v_session_id for update
-	) into v_bill_exists;
+	select experience into v_experience
+	from public.restaurants
+	where id = v_restaurant_id;
 
-	if exists (
-		select 1 from public.bills
-		where session_id = v_session_id and status = 'settled'
-	) then
-		raise exception 'This bill has already been settled — ask staff for a new table session';
+	-- One/Guest: a settled bill's amounts are frozen (core-data-model.md); a
+	-- new order placed after settle would silently drift the paid total, and
+	-- unlike Counter there's no next round to start — staff must Close
+	-- Session (which requires every bill settled and nothing in progress)
+	-- before the table's next QR scan opens a fresh session for more orders.
+	-- Counter has no such block: settling just ends the current round, and
+	-- this same guest token keeps ordering into a new one (see the bill
+	-- resolution below) — that continuity is the whole point of Counter's
+	-- session model (docs/core-data-model.md § Lifecycle invariants). Locked
+	-- so a concurrent Mark Bill Settled can't commit between this check and
+	-- the bill-resolution step below.
+	if v_experience <> 'counter' then
+		if exists (
+			select 1 from public.bills
+			where session_id = v_session_id and status = 'settled'
+			for update
+		) then
+			raise exception 'This bill has already been settled — ask staff for a new session';
+		end if;
 	end if;
 
 	-- Idempotent retry: a prior call with this key already succeeded.
@@ -1215,16 +1214,12 @@ begin
 		return v_order_id;
 	end if;
 
-	select experience into v_experience
-	from public.restaurants
-	where id = v_restaurant_id;
-
 	-- Serialize concurrent Confirm Order taps on the same shared session
 	-- (docs/product.md: "any participant edits freely"). Without this lock,
 	-- two guests confirming near-simultaneously with different idempotency
 	-- keys would each see the same non-empty cart and each copy it into a
 	-- full duplicate order before either DELETE below runs.
-	perform 1 from public.table_sessions where id = v_session_id for update;
+	perform 1 from public.sessions where id = v_session_id for update;
 
 	if not exists (
 		select 1 from public.cart_items
@@ -1248,8 +1243,47 @@ begin
 		raise exception 'One or more items in your cart are no longer available';
 	end if;
 
-	insert into public.orders (restaurant_id, session_id, placed_by_type, idempotency_key)
-	values (v_restaurant_id, v_session_id, 'guest', p_idempotency_key)
+	-- Which bill (if any) this round attaches to (orders.bill_id,
+	-- docs/core-data-model.md § Lifecycle invariants). Counter always
+	-- resolves one here, reusing the session's latest bill while it's still
+	-- unsettled or drawing a fresh round the moment it settles — that's what
+	-- lets the guest keep ordering after paying instead of needing a new QR
+	-- scan. `for update` on the reuse lookup means a bill a concurrent Mark
+	-- Bill Settled just froze is re-evaluated post-lock and excluded, so a
+	-- racing order safely starts a new round instead of attaching to a total
+	-- that's already been frozen. One/Guest only ever draw a bill via Request
+	-- Bill (request_bill()), so this stays whatever that function has already
+	-- created (null before the first request) — every order placed before
+	-- then is backfilled onto it there.
+	if v_experience = 'counter' then
+		select id into v_bill_id
+		from public.bills
+		where session_id = v_session_id and status <> 'settled'
+		order by created_at desc
+		limit 1
+		for update;
+
+		if v_bill_id is null then
+			v_daily_token := public.next_daily_token(
+				v_restaurant_id,
+				(now() at time zone 'Asia/Kolkata')::date
+			);
+
+			insert into public.bills (restaurant_id, session_id, status, daily_token)
+			values (v_restaurant_id, v_session_id, 'requested', v_daily_token)
+			returning id into v_bill_id;
+		else
+			update public.bills set status = 'requested' where id = v_bill_id;
+		end if;
+	else
+		select id into v_bill_id
+		from public.bills
+		where session_id = v_session_id
+		limit 1;
+	end if;
+
+	insert into public.orders (restaurant_id, session_id, bill_id, placed_by_type, idempotency_key)
+	values (v_restaurant_id, v_session_id, v_bill_id, 'guest', p_idempotency_key)
 	on conflict (idempotency_key) do nothing
 	returning id into v_order_id;
 
@@ -1278,39 +1312,6 @@ begin
 	join public.menu_categories mc
 		on mc.restaurant_id = mi.restaurant_id and mc.id = mi.category_id
 	where ci.restaurant_id = v_restaurant_id and ci.session_id = v_session_id;
-
-	-- Counter-experience addition (docs/core-data-model.md § Lifecycle
-	-- invariants): confirming the cart also draws the session's bill token
-	-- immediately, so the guest sees it without a separate Request Bill tap.
-	-- Staff's Mark Bill Settled mutation runs in its own transaction, so a
-	-- settle can commit between the settled-bill check earlier in this
-	-- function and this upsert. The on-conflict branch below must not
-	-- unconditionally reset status, or it collides with bills_settled_check
-	-- on an already-settled row (same race request_bill() guards against on
-	-- every poll).
-	--
-	-- daily_token is drawn here too, not left to request_bill(): this insert
-	-- is what actually creates the bill row for Counter (v_bill_exists false
-	-- on a session's first confirm), so request_bill()'s own insert branch
-	-- never runs for Counter — the row is already there by the time a guest
-	-- could tap Request Bill.
-	if v_experience = 'counter' then
-		if not v_bill_exists then
-			v_daily_token := public.next_daily_token(
-				v_restaurant_id,
-				(now() at time zone 'Asia/Kolkata')::date
-			);
-		end if;
-
-		insert into public.bills (restaurant_id, session_id, status, daily_token)
-		values (v_restaurant_id, v_session_id, 'requested', v_daily_token)
-		on conflict (session_id) do update
-		set
-			status = case
-				when public.bills.status = 'settled' then public.bills.status
-				else 'requested'
-			end;
-	end if;
 
 	delete from public.cart_items
 	where restaurant_id = v_restaurant_id and session_id = v_session_id;
@@ -1347,6 +1348,8 @@ declare
 	v_placed_by_type public.actor_type;
 	v_order_id uuid;
 	v_experience public.restaurant_experience;
+	v_bill_id uuid;
+	v_daily_token integer;
 begin
 	select experience into v_experience from public.restaurants where id = p_restaurant_id;
 
@@ -1387,19 +1390,24 @@ begin
 	end if;
 
 	if not exists (
-		select 1 from public.table_sessions
+		select 1 from public.sessions
 		where id = p_session_id and restaurant_id = p_restaurant_id and status = 'active'
 	) then
-		raise exception 'Table session is not active';
+		raise exception 'Session is not active';
 	end if;
 
-	-- Same rule as submit_order(): a settled bill's amounts are frozen, so a
-	-- new order after that point would silently drift the paid total.
-	if exists (
-		select 1 from public.bills
-		where session_id = p_session_id and status = 'settled'
-	) then
-		raise exception 'This bill has already been settled — close the session before ordering again';
+	-- Same rule as submit_order(): One/Guest freeze a settled bill's amounts,
+	-- so a new order after that point would silently drift the paid total.
+	-- Counter has no such block — see submit_order()'s bill-resolution
+	-- comment below.
+	if v_experience <> 'counter' then
+		if exists (
+			select 1 from public.bills
+			where session_id = p_session_id and status = 'settled'
+			for update
+		) then
+			raise exception 'This bill has already been settled — close the session before ordering again';
+		end if;
 	end if;
 
 	select id into v_order_id
@@ -1410,7 +1418,7 @@ begin
 		return v_order_id;
 	end if;
 
-	perform 1 from public.table_sessions where id = p_session_id for update;
+	perform 1 from public.sessions where id = p_session_id for update;
 
 	if not exists (
 		select 1 from public.cart_items
@@ -1431,8 +1439,39 @@ begin
 		raise exception 'One or more items in this cart are no longer available';
 	end if;
 
-	insert into public.orders (restaurant_id, session_id, placed_by_type, placed_by_staff_id, idempotency_key)
-	values (p_restaurant_id, p_session_id, v_placed_by_type, v_staff_id, p_idempotency_key)
+	-- Same bill-resolution as submit_order() — see its comment for the full
+	-- reasoning. Mirrored here rather than shared, since the two functions
+	-- already don't share a body (tenancy comes from JWT claims there,
+	-- explicit arguments here).
+	if v_experience = 'counter' then
+		select id into v_bill_id
+		from public.bills
+		where session_id = p_session_id and status <> 'settled'
+		order by created_at desc
+		limit 1
+		for update;
+
+		if v_bill_id is null then
+			v_daily_token := public.next_daily_token(
+				p_restaurant_id,
+				(now() at time zone 'Asia/Kolkata')::date
+			);
+
+			insert into public.bills (restaurant_id, session_id, status, daily_token)
+			values (p_restaurant_id, p_session_id, 'requested', v_daily_token)
+			returning id into v_bill_id;
+		else
+			update public.bills set status = 'requested' where id = v_bill_id;
+		end if;
+	else
+		select id into v_bill_id
+		from public.bills
+		where session_id = p_session_id
+		limit 1;
+	end if;
+
+	insert into public.orders (restaurant_id, session_id, bill_id, placed_by_type, placed_by_staff_id, idempotency_key)
+	values (p_restaurant_id, p_session_id, v_bill_id, v_placed_by_type, v_staff_id, p_idempotency_key)
 	on conflict (idempotency_key) do nothing
 	returning id into v_order_id;
 
@@ -1645,19 +1684,29 @@ declare
 	v_daily_token integer;
 begin
 	v_restaurant_id := (auth.jwt() ->> 'restaurant_id')::uuid;
-	v_session_id := (auth.jwt() ->> 'table_session_id')::uuid;
+	v_session_id := (auth.jwt() ->> 'session_id')::uuid;
 
 	if not public.jwt_is_guest_for_session(v_restaurant_id, v_session_id) then
 		raise exception 'Guest session required';
 	end if;
 
 	if not public.is_active_guest_session(v_session_id, v_restaurant_id) then
-		raise exception 'Table session is not active';
+		raise exception 'Session is not active';
 	end if;
 
+	-- Serializes concurrent Request Bill taps/polls on the same session — see
+	-- submit_order()'s cart-copy lock for the same reasoning. Without it, two
+	-- concurrent calls that both find no reusable bill below could each
+	-- insert one, now that bills.session_id is no longer unique (a session
+	-- can carry more than one bill over its life — see the sessions table).
+	perform 1 from public.sessions where id = v_session_id for update;
+
+	-- Only ever matches the session's current, unsettled round — a prior,
+	-- already-settled bill (Counter: an earlier paid round) is frozen and
+	-- must never be touched by a later poll.
 	update public.bills
-	set status = case when status = 'settled' then status else 'requested' end
-	where session_id = v_session_id
+	set status = 'requested'
+	where session_id = v_session_id and status <> 'settled'
 	returning id into v_bill_id;
 
 	if v_bill_id is null then
@@ -1665,24 +1714,45 @@ begin
 		from public.restaurants
 		where id = v_restaurant_id;
 
-		if v_experience = 'counter' then
-			v_daily_token := public.next_daily_token(
-				v_restaurant_id,
-				(now() at time zone 'Asia/Kolkata')::date
-			);
+		-- One/Guest cap at exactly one bill, ever (core-data-model.md § Bill
+		-- cardinality). The update above only excludes an already-settled
+		-- bill from being re-touched, it doesn't stop a second one being
+		-- minted for an experience that must never have two — the session
+		-- stays active until staff explicitly Close Session, so a guest
+		-- replaying this call after their one bill is already settled must
+		-- keep getting that same settled bill back, never a fresh,
+		-- permanently-unsettleable second row Close Session would then
+		-- block on forever.
+		if v_experience <> 'counter' then
+			select id into v_bill_id
+			from public.bills
+			where session_id = v_session_id and status = 'settled'
+			limit 1;
 		end if;
 
-		insert into public.bills
-			(restaurant_id, session_id, status, daily_token)
-		values
-			(v_restaurant_id, v_session_id, 'requested', v_daily_token)
-		on conflict (session_id) do update
-		set
-			status = case
-				when public.bills.status = 'settled' then public.bills.status
-				else 'requested'
-			end
-		returning id into v_bill_id;
+		if v_bill_id is null then
+			if v_experience = 'counter' then
+				v_daily_token := public.next_daily_token(
+					v_restaurant_id,
+					(now() at time zone 'Asia/Kolkata')::date
+				);
+			end if;
+
+			insert into public.bills
+				(restaurant_id, session_id, status, daily_token)
+			values
+				(v_restaurant_id, v_session_id, 'requested', v_daily_token)
+			returning id into v_bill_id;
+
+			-- One/Guest: this is the session's first-ever bill (Counter's is
+			-- already drawn, and orders.bill_id already set, by submit_order() —
+			-- this branch is dead for Counter in normal use). Every order placed
+			-- before this point has bill_id still null; they all belong to this
+			-- now-created bill, since One/Guest only ever draw one.
+			update public.orders
+			set bill_id = v_bill_id
+			where session_id = v_session_id and bill_id is null;
+		end if;
 	end if;
 
 	return v_bill_id;
@@ -1691,6 +1761,107 @@ $$;
 
 revoke execute on function public.request_bill() from public;
 grant execute on function public.request_bill() to authenticated;
+
+-- Generate / Request Bill, staff side (docs/product.md § Bills tab) —
+-- staff-side equivalent of the guest's own request_bill() above, same
+-- resolution logic, for sessions that never self-request. Guests carry
+-- restaurant_id/session_id as JWT claims request_bill() reads directly; a
+-- staff session has no such claims (staff can act on any session in their
+-- restaurant), so this takes them as explicit arguments instead —
+-- SECURITY DEFINER for the same reason as staff_submit_order: bills grants
+-- staff any-active-staff read reach only for a plain insert/update, this
+-- needs the elevated write plus the role/experience checks below.
+create or replace function public.staff_request_bill(
+	p_restaurant_id uuid,
+	p_session_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_staff_id uuid;
+	v_bill_id uuid;
+	v_experience public.restaurant_experience;
+	v_daily_token integer;
+begin
+	select experience into v_experience
+	from public.restaurants
+	where id = p_restaurant_id;
+
+	if v_experience = 'menu' then
+		raise exception 'This feature isn''t available on the Dineinly Menu package';
+	end if;
+
+	-- Request Bill (docs/product.md § RBAC) is Waiter/Manager/Owner —
+	-- Kitchen has no reach here, same split as Mark Bill Settled and
+	-- Close Session.
+	if not public.is_dineinly_admin() then
+		select id into v_staff_id
+		from public.staff
+		where restaurant_id = p_restaurant_id
+			and user_id = auth.uid()
+			and status = 'active'
+			and role in ('waiter', 'manager', 'owner');
+
+		if v_staff_id is null then
+			raise exception 'Only an active Waiter, Manager, or Owner may request a bill';
+		end if;
+	end if;
+
+	if not exists (
+		select 1 from public.sessions
+		where id = p_session_id and restaurant_id = p_restaurant_id and status = 'active'
+	) then
+		raise exception 'Session not found or already closed';
+	end if;
+
+	-- Serializes concurrent Request Bill calls on the same session — see
+	-- request_bill()'s own lock for the same reasoning.
+	perform 1 from public.sessions where id = p_session_id for update;
+
+	update public.bills
+	set status = 'requested'
+	where session_id = p_session_id and status <> 'settled'
+	returning id into v_bill_id;
+
+	if v_bill_id is null then
+		-- One/Guest cap at exactly one bill, ever — same guard as
+		-- request_bill() above, same reasoning.
+		if v_experience <> 'counter' then
+			select id into v_bill_id
+			from public.bills
+			where session_id = p_session_id and status = 'settled'
+			limit 1;
+		end if;
+
+		if v_bill_id is null then
+			if v_experience = 'counter' then
+				v_daily_token := public.next_daily_token(
+					p_restaurant_id,
+					(now() at time zone 'Asia/Kolkata')::date
+				);
+			end if;
+
+			insert into public.bills
+				(restaurant_id, session_id, status, daily_token)
+			values
+				(p_restaurant_id, p_session_id, 'requested', v_daily_token)
+			returning id into v_bill_id;
+
+			update public.orders
+			set bill_id = v_bill_id
+			where session_id = p_session_id and bill_id is null;
+		end if;
+	end if;
+
+	return v_bill_id;
+end;
+$$;
+
+revoke execute on function public.staff_request_bill(uuid, uuid) from public;
+grant execute on function public.staff_request_bill(uuid, uuid) to authenticated;
 
 -- Counter only: the guest sends each paid item to the kitchen at their own
 -- pace rather than every item firing at once on settle (docs/product.md §
@@ -1728,16 +1899,22 @@ begin
 		raise exception 'Order item not found';
 	end if;
 
-	select status into v_bill_status
-	from public.bills
-	where session_id = v_session_id;
+	-- This item's own bill, not "the session's bill" — a Counter session can
+	-- carry more than one bill over its life (settle, order again), so the
+	-- gate has to be the round this specific item was ordered and paid in
+	-- (orders.bill_id), never a different round's status.
+	select b.status into v_bill_status
+	from public.orders o
+	join public.bills b on b.id = o.bill_id
+	where o.restaurant_id = v_restaurant_id
+		and o.id = (select order_id from public.order_items where id = p_order_item_id);
 
 	if v_bill_status is distinct from 'settled' then
 		raise exception 'Pay the bill before sending items to the kitchen';
 	end if;
 
 	update public.order_items
-	set released_at = now()
+	set released_at = now(), updated_at = now()
 	where id = p_order_item_id and released_at is null;
 end;
 $$;
@@ -1944,10 +2121,10 @@ for each row
 when (old.status is distinct from new.status)
 execute function public.broadcast_bill_status();
 
--- table_sessions: open/close -> restaurant:{id} (Floor view; staff only —
+-- sessions: open/close -> restaurant:{id} (Floor view; staff only —
 -- no guest topic, a guest never needs to know about session metadata beyond
 -- what the cart/order/bill broadcasts above already tell them).
-create or replace function public.broadcast_table_session_change()
+create or replace function public.broadcast_session_change()
 returns trigger
 language plpgsql
 security definer
@@ -1956,15 +2133,15 @@ as $$
 begin
 	perform realtime.broadcast_changes(
 		'restaurant:' || new.restaurant_id,
-		'table_session.change', tg_op, tg_table_name, tg_table_schema, new, old
+		'session.change', tg_op, tg_table_name, tg_table_schema, new, old
 	);
 	return new;
 end;
 $$;
 
-create trigger broadcast_table_session_change
-after insert or update of status on public.table_sessions
-for each row execute function public.broadcast_table_session_change();
+create trigger broadcast_session_change
+after insert or update of status on public.sessions
+for each row execute function public.broadcast_session_change();
 
 -- menu_items: a new dish, or an availability (86'd) / status (hide/show)
 -- change -> menu:{restaurant_id} (guests + staff both read this topic). The
@@ -2091,7 +2268,7 @@ set search_path = ''
 as $$
 	select exists (
 		select 1
-		from public.table_sessions ts
+		from public.sessions ts
 		where ts.id = p_session_id
 			and ts.status = 'active'
 			and (
@@ -2170,7 +2347,7 @@ create policy "menu_topic_select" on realtime.messages
 -- 14. Staff floor operations: close_session, force_terminate_session,
 --     merge_table_into_session
 -- ============================================================================
--- Close Session (docs/product.md § Shared Table Session, docs/
+-- Close Session (docs/product.md § Shared Session, docs/
 -- core-data-model.md lifecycle invariants): frees every table pointing at
 -- the session (plural — a merged session can span more than one
 -- restaurant_tables row), hard-deletes any unfired cart_items, and marks
@@ -2179,8 +2356,8 @@ create policy "menu_topic_select" on realtime.messages
 -- "occupied" with nothing left to close, or a session "closed" with a
 -- table still pointing at it.
 --
--- SECURITY DEFINER: table_sessions/bills/cart_items all grant any active
--- staff write reach (staff_all_table_sessions/staff_all_bills/
+-- SECURITY DEFINER: sessions/bills/cart_items all grant any active
+-- staff write reach (staff_all_sessions/staff_all_bills/
 -- staff_all_cart_items, § 5), but staff_write_restaurant_tables (§ 5) is
 -- Owner/Manager only — narrower than the Waiter/Manager/Owner this
 -- function's own role check (below) allows. Under SECURITY INVOKER, a
@@ -2198,11 +2375,10 @@ set search_path = ''
 as $$
 declare
 	v_restaurant_id uuid;
-	v_bill_status public.bill_status;
 	v_updated int;
 begin
 	select restaurant_id into v_restaurant_id
-	from public.table_sessions
+	from public.sessions
 	where id = p_session_id and status = 'active';
 
 	if v_restaurant_id is null then
@@ -2211,7 +2387,7 @@ begin
 
 	-- Close Session (docs/product.md § RBAC) is Waiter/Manager/Owner —
 	-- Kitchen has no reach here, same split as Mark Bill Settled and
-	-- Force-Terminate Session. staff_all_table_sessions/staff_all_bills/
+	-- Force-Terminate Session. staff_all_sessions/staff_all_bills/
 	-- staff_all_cart_items (§ 5) stay any-active-staff for read reach
 	-- (Bills tab list/get); this is the write-side role gate.
 	if not (
@@ -2221,11 +2397,16 @@ begin
 		raise exception 'Only an active Waiter, Manager, or Owner may close a session';
 	end if;
 
-	select status into v_bill_status
-	from public.bills
-	where session_id = p_session_id;
-
-	if v_bill_status is distinct from 'settled' then
+	-- A session can carry more than one bill over its life (Counter: settle,
+	-- then order again) — every one of them must be settled, not just the
+	-- latest, and there must be at least one (an empty session with no bill
+	-- at all has nothing settled to close out).
+	if not exists (select 1 from public.bills where session_id = p_session_id)
+		or exists (
+			select 1 from public.bills
+			where session_id = p_session_id and status <> 'settled'
+		)
+	then
 		raise exception 'Bill must be settled before closing the session';
 	end if;
 
@@ -2245,7 +2426,7 @@ begin
 	set session_id = null
 	where session_id = p_session_id;
 
-	update public.table_sessions
+	update public.sessions
 	set status = 'closed', closed_at = now()
 	where id = p_session_id;
 
@@ -2262,7 +2443,7 @@ $$;
 revoke execute on function public.close_session(uuid) from public;
 grant execute on function public.close_session(uuid) to authenticated;
 
--- Force-Terminate Session (docs/product.md § Shared Table Session, RBAC:
+-- Force-Terminate Session (docs/product.md § Shared Session, RBAC:
 -- Waiter/Manager/Owner) — an abandoned session (walkout), closed as an
 -- override of Close Session's normal gates: no bill-settled requirement, no
 -- check for order items still in progress. It exists precisely because a
@@ -2290,7 +2471,7 @@ declare
 	v_updated int;
 begin
 	select restaurant_id into v_restaurant_id
-	from public.table_sessions
+	from public.sessions
 	where id = p_session_id and status = 'active';
 
 	if v_restaurant_id is null then
@@ -2313,7 +2494,7 @@ begin
 	set session_id = null
 	where session_id = p_session_id;
 
-	update public.table_sessions
+	update public.sessions
 	set status = 'closed', closed_at = now()
 	where id = p_session_id;
 
@@ -2327,7 +2508,7 @@ $$;
 revoke execute on function public.force_terminate_session(uuid) from public;
 grant execute on function public.force_terminate_session(uuid) to authenticated;
 
--- Merge Tables (docs/product.md § Shared Table Session): folds a free
+-- Merge Tables (docs/product.md § Shared Session): folds a free
 -- (session-less) table into an already-active session. MVP only supports
 -- this direction — merging two already-active sessions together is out of
 -- scope, same limitation the product doc states. Waiter/Manager/Owner, same
@@ -2347,11 +2528,11 @@ declare
 	v_updated int;
 begin
 	select restaurant_id into v_restaurant_id
-	from public.table_sessions
+	from public.sessions
 	where id = p_session_id and status = 'active';
 
 	if v_restaurant_id is null then
-		raise exception 'Table session not found or already closed';
+		raise exception 'Session not found or already closed';
 	end if;
 
 	if not (
@@ -2381,3 +2562,81 @@ $$;
 
 revoke execute on function public.merge_table_into_session(uuid, uuid) from public;
 grant execute on function public.merge_table_into_session(uuid, uuid) to authenticated;
+
+-- ============================================================================
+-- 15. Counter idle auto-close: close_idle_counter_sessions
+-- ============================================================================
+-- Counter has no physical table to reclaim and no guest-facing "I'm done"
+-- action (docs/core-data-model.md § Lifecycle invariants) — a session just
+-- stops being touched once the guest has paid and collected every item.
+-- Swept periodically by pg_cron rather than closed inline by any one guest
+-- action, since "done" here is the absence of further activity, not a single
+-- event to hook. One/Guest are untouched: their sessions still only ever
+-- close via the explicit staff action (close_session) — a physical table
+-- needs bussing before the next party can be seated, which no idle timer can
+-- confirm.
+--
+-- Eligible: every bill for the session is settled (and at least one exists —
+-- a session with none has nothing finished to sweep), every order item is
+-- `served` or `cancelled`, and the idle clock — the later of the last bill's
+-- settled_at or the last order_item's updated_at — has run past
+-- p_idle_minutes. No restaurant_tables cleanup: Counter sessions never have
+-- a table pointing at them (docs/core-data-model.md § Experience Gating).
+--
+-- SECURITY DEFINER, but deliberately never granted to `authenticated` —
+-- unlike every guest/staff RPC in this file, this is a maintenance sweep
+-- with no caller-supplied tenancy to check, so the only intended caller is
+-- the pg_cron job below (which runs as the scheduling role, bypassing the
+-- public revoke same as any superuser-owned function).
+create or replace function public.close_idle_counter_sessions(
+	p_idle_minutes integer default 30
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+	update public.sessions s
+	set status = 'closed', closed_at = now()
+	where s.status = 'active'
+		and exists (
+			select 1 from public.restaurants r
+			where r.id = s.restaurant_id and r.experience = 'counter'
+		)
+		and exists (select 1 from public.bills b where b.session_id = s.id)
+		and not exists (
+			select 1 from public.bills b
+			where b.session_id = s.id and b.status <> 'settled'
+		)
+		and not exists (
+			select 1
+			from public.order_items oi
+			join public.orders o on o.id = oi.order_id
+			where o.session_id = s.id
+				and oi.status not in ('served', 'cancelled')
+		)
+		and greatest(
+			(select max(b.settled_at) from public.bills b where b.session_id = s.id),
+			coalesce(
+				(
+					select max(oi.updated_at)
+					from public.order_items oi
+					join public.orders o on o.id = oi.order_id
+					where o.session_id = s.id
+				),
+				'-infinity'::timestamptz
+			)
+		) < now() - make_interval(mins => p_idle_minutes);
+end;
+$$;
+
+revoke execute on function public.close_idle_counter_sessions(integer) from public;
+
+create extension if not exists pg_cron with schema extensions;
+
+select cron.schedule(
+	'close-idle-counter-sessions',
+	'*/5 * * * *',
+	$$ select public.close_idle_counter_sessions(30); $$
+);

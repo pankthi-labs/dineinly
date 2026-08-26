@@ -41,3 +41,12 @@ export function formatBillAmount(amount: number): string {
 export function formatBillLocation(tableLabel: string): string {
 	return tableLabel ? `Table ${tableLabel}` : "Counter";
 }
+
+/** Server-local wall-clock time, e.g. "2:45 PM" — no per-restaurant timezone
+ * setting exists (core-data-model.md), so every timestamp displays as-is. */
+export function formatTime(isoString: string): string {
+	return new Intl.DateTimeFormat("en-IN", {
+		hour: "numeric",
+		minute: "2-digit",
+	}).format(new Date(isoString));
+}

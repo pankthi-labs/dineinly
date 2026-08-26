@@ -11,7 +11,7 @@ import {
 	uuid,
 } from "drizzle-orm/pg-core";
 import { diet, ice, orderItemStatus, salt, spice } from "./enums.js";
-import { id } from "./helpers.js";
+import { id, updatedAt } from "./helpers.js";
 import { menuItems } from "./menu-item.js";
 import { orders } from "./order.js";
 import { restaurants } from "./restaurant.js";
@@ -75,6 +75,12 @@ export const orderItems = pgTable(
 		// Plain column — the real constraint is the composite FK below, so
 		// menu_item_id can never name an item from another restaurant.
 		menuItemId: uuid("menu_item_id"),
+		// Bumped by every write path that changes this row (kitchen status
+		// advance, Bills tab corrections, guest release) — the idle-sweep that
+		// auto-closes a finished Counter session (close_idle_counter_sessions())
+		// reads this as "how long has this item sat in its current state" since
+		// there's no per-transition timestamp for every status.
+		updatedAt: updatedAt(),
 		// Snapshot of cart_items.addedByStaffId at order time — null when the
 		// line was guest-added. cart_items rows are deleted once an order is
 		// placed (submit_order/staff_submit_order), so without this copy the
