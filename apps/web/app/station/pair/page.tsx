@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
@@ -12,12 +13,12 @@ import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
 import { pairingCodePattern } from "@/server/routers/station.schema";
 
-// Unauthenticated, device-facing (docs/architecture.md § Station Account
-// Provisioning, step 2: "no password is ever typed on the device"). Lives
-// outside the four route trees in AGENTS.md on purpose — this
-// authenticates a device, not a viewer, so it's neither /sign-in nor
-// under app/restaurants/[restaurantId], whose layout would redirect an
-// unpaired device before it ever reaches this form.
+// Gated by layout.tsx (any signed-in session — see there for why). Lives
+// outside the four route trees in AGENTS.md on purpose — this authenticates
+// a *device*, not a restaurant-scoped viewer, so it's neither /sign-in nor
+// under app/restaurants/[restaurantId]. No password is ever typed here
+// either way (docs/architecture.md § Station Account Provisioning) — the
+// 8-digit pairing code is the only credential this form itself handles.
 export default function StationPairPage() {
 	const router = useRouter();
 	const supabase = createClient();
@@ -75,7 +76,17 @@ export default function StationPairPage() {
 		<main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-16">
 			<BrandLogo height={40} priority />
 
-			<div className="w-full max-w-sm rounded-xl border border-divider bg-surface p-6">
+			<div className="relative w-full max-w-sm rounded-xl border border-divider bg-surface p-6">
+				<button
+					type="button"
+					onClick={() => router.back()}
+					disabled={redeemMutation.isPending}
+					aria-label="Close"
+					className="icon-tap-target absolute top-4 right-4 rounded-full text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary disabled:cursor-not-allowed disabled:text-muted"
+				>
+					<X className="icon-md" strokeWidth={1.5} aria-hidden="true" />
+				</button>
+
 				<div className="mb-6 text-center">
 					<h1 className="text-lg text-primary">Pair this device</h1>
 					<p className="mt-1 text-secondary text-sm">
@@ -104,7 +115,7 @@ export default function StationPairPage() {
 						aria-busy={redeemMutation.isPending}
 						className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-accent font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted"
 					>
-						{redeemMutation.isPending ? "Pairing…" : "Pair Device"}
+						{redeemMutation.isPending ? "Pairing…" : "Pair This Device"}
 					</button>
 				</form>
 			</div>

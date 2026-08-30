@@ -1,6 +1,12 @@
 "use client";
 
-import { ArrowLeftFromLine, LogOut, MoreVertical, User } from "lucide-react";
+import {
+	ArrowLeftFromLine,
+	LogOut,
+	MoreVertical,
+	Tablet,
+	User,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -15,7 +21,12 @@ const menuItemClass =
 /**
  * One "More" dropdown for every header utility action — Restaurants
  * Directory (Dineinly Admin viewing a restaurant only), Profile (every
- * page), Log out (always) — instead of a row of separate icon buttons.
+ * page), Pair This Device (every Full-Service staff role except the station
+ * identity itself), Log out (every caller except a station device) —
+ * instead of a row of separate icon buttons. A station device has no Log
+ * out here: it would tear down the whole device's session, not just step
+ * one person away from it — Floor's own "Switch User" (next to "Acting as
+ * …") is the paired-device equivalent, clearing only the PIN session.
  * Keeps the header's own space for the restaurant/brand name and the full
  * nav bar; extensible for whatever gets added here next (Notifications,
  * Settings, ...) without widening the header further.
@@ -24,6 +35,7 @@ export function AdminHeaderActions({
 	directoryHref,
 	restaurantId,
 	isMenuOnly = false,
+	canPairDevice = false,
 }: {
 	directoryHref?: string;
 	/** Present only for a restaurant-tree viewer who has a Staff row (not
@@ -39,6 +51,10 @@ export function AdminHeaderActions({
 	 * section. Defaults false for the Dineinly Admin caller, which never
 	 * passes restaurantId anyway. */
 	isMenuOnly?: boolean;
+	/** Shortcut to /station/pair — every staff role at a Full-Service
+	 * restaurant except the station identity itself (see viewer-context.tsx's
+	 * useCanPairDevice). Defaults false for Dineinly Admin. */
+	canPairDevice?: boolean;
 }) {
 	const router = useRouter();
 	const [isOpen, setIsOpen] = useState(false);
@@ -149,14 +165,34 @@ export function AdminHeaderActions({
 						<User className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
 						Profile
 					</button>
-					<button
-						type="button"
-						className={menuItemClass}
-						onClick={handleLogOut}
-					>
-						<LogOut className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
-						Log out
-					</button>
+					{canPairDevice ? (
+						<Link
+							href="/station/pair"
+							className={menuItemClass}
+							onClick={() => close(false)}
+						>
+							<Tablet
+								className="icon-sm"
+								strokeWidth={1.5}
+								aria-hidden="true"
+							/>
+							Pair This Device
+						</Link>
+					) : null}
+					{isStation ? null : (
+						<button
+							type="button"
+							className={menuItemClass}
+							onClick={handleLogOut}
+						>
+							<LogOut
+								className="icon-sm"
+								strokeWidth={1.5}
+								aria-hidden="true"
+							/>
+							Log out
+						</button>
+					)}
 				</div>
 			) : null}
 

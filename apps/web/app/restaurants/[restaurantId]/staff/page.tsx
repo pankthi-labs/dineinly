@@ -139,6 +139,21 @@ export default function StaffRosterPage() {
 		id: restaurantId,
 	});
 	const listQuery = trpc.staff.list.useQuery({ restaurantId });
+	// staff.status on the station's own row never changes once created —
+	// revoking every device leaves it "active" forever, which would make the
+	// roster's status badge claim a live floor tablet that no longer exists.
+	// Same query StationPanel already runs below (react-query dedupes it),
+	// same visibility as that panel — only who could ever pair/revoke a
+	// device needs to know whether one currently is.
+	const canSeeDevices =
+		!isMenuOnly &&
+		!isCounter &&
+		(viewerIsAdmin || viewerRole === "owner" || viewerRole === "manager");
+	const devicesQuery = trpc.station.listDevices.useQuery(
+		{ restaurantId },
+		{ enabled: canSeeDevices },
+	);
+	const hasPairedDevice = (devicesQuery.data ?? []).some((d) => !d.revokedAt);
 
 	function invalidateAndNotify(message: string) {
 		utils.staff.list.invalidate({ restaurantId });
@@ -352,6 +367,7 @@ export default function StaffRosterPage() {
 							<StaffRow
 								key={staff.id}
 								staff={staff}
+								hasPairedDevice={hasPairedDevice}
 								canManageThisRow={canManageRow(
 									staff,
 									viewerIsAdmin,

@@ -9,6 +9,7 @@ import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { useDismissableOverlay } from "@/components/use-dismissable-overlay";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
+import { STATION_DEVICE_ID_COOKIE } from "@/lib/station-session";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
 import type { AppRouter } from "@/server/routers/_app";
@@ -38,10 +39,23 @@ export default function FloorPage() {
 	const [pinError, setPinError] = useState<string | null>(null);
 	const [isVerifyingPin, setIsVerifyingPin] = useState(false);
 
+	// A revoked device is fully logged out, not bounced to /station/pair —
+	// re-pairing is a deliberate Owner/Manager-issued code, never something
+	// the revoked session itself should invite. Clears both station cookies
+	// (the httpOnly PIN session via the same endpoint Switch User uses, and
+	// the device-identity cookie directly) before signing out of the shared
+	// Supabase session, so nothing about this pairing survives the redirect.
 	useEffect(() => {
-		if (statusQuery.data?.deviceRevoked) {
-			router.replace("/station/pair");
+		if (!statusQuery.data?.deviceRevoked) return;
+		async function logOutRevokedDevice() {
+			document.cookie = `${STATION_DEVICE_ID_COOKIE}=; path=/; max-age=0`;
+			try {
+				await fetch("/station/pin", { method: "DELETE" });
+			} catch {}
+			await createClient().auth.signOut();
+			router.replace("/sign-in");
 		}
+		logOutRevokedDevice();
 	}, [statusQuery.data?.deviceRevoked, router]);
 
 	async function handlePinSubmit(event: FormEvent<HTMLFormElement>) {
@@ -55,7 +69,20 @@ export default function FloorPage() {
 		});
 		setIsVerifyingPin(false);
 		if (!response.ok) {
-			setPinError("PIN not recognized.");
+			// "Already unlocked on another device" needs to reach the person
+			// as-is — it's not a wrong-PIN case, so collapsing it to the
+			// generic message would send them looking for a typo that isn't
+			// there. A malformed/unreadable response body still falls back to
+			// the generic message.
+			const body: unknown = await response.json().catch(() => null);
+			const message =
+				body &&
+				typeof body === "object" &&
+				"error" in body &&
+				typeof body.error === "string"
+					? body.error
+					: "PIN not recognized.";
+			setPinError(message);
 			return;
 		}
 		setPin("");

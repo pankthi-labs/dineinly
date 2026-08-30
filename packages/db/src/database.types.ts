@@ -674,6 +674,8 @@ export type Database = {
 			};
 			station_devices: {
 				Row: {
+					active_staff_id: string | null;
+					active_staff_since: string | null;
 					created_at: string;
 					id: string;
 					restaurant_id: string;
@@ -681,6 +683,8 @@ export type Database = {
 					station_type: Database["public"]["Enums"]["station_type"];
 				};
 				Insert: {
+					active_staff_id?: string | null;
+					active_staff_since?: string | null;
 					created_at?: string;
 					id?: string;
 					restaurant_id: string;
@@ -688,6 +692,8 @@ export type Database = {
 					station_type: Database["public"]["Enums"]["station_type"];
 				};
 				Update: {
+					active_staff_id?: string | null;
+					active_staff_since?: string | null;
 					created_at?: string;
 					id?: string;
 					restaurant_id?: string;
@@ -695,6 +701,13 @@ export type Database = {
 					station_type?: Database["public"]["Enums"]["station_type"];
 				};
 				Relationships: [
+					{
+						foreignKeyName: "station_devices_active_staff_id_staff_id_fk";
+						columns: ["active_staff_id"];
+						isOneToOne: false;
+						referencedRelation: "staff";
+						referencedColumns: ["id"];
+					},
 					{
 						foreignKeyName: "station_devices_restaurant_id_restaurants_id_fk";
 						columns: ["restaurant_id"];
@@ -830,6 +843,10 @@ export type Database = {
 					user_id: string;
 				}[];
 			};
+			clear_station_active_staff: {
+				Args: { p_device_id: string };
+				Returns: undefined;
+			};
 			close_idle_counter_sessions: {
 				Args: { p_idle_minutes?: number };
 				Returns: undefined;
@@ -917,6 +934,7 @@ export type Database = {
 			list_station_devices: {
 				Args: { p_restaurant_id: string };
 				Returns: {
+					active_staff_name: string;
 					created_at: string;
 					id: string;
 					revoked_at: string;
@@ -1008,7 +1026,7 @@ export type Database = {
 				}[];
 			};
 			resolve_staff_by_pin: {
-				Args: { p_pin: string; p_restaurant_id: string };
+				Args: { p_device_id: string; p_pin: string; p_restaurant_id: string };
 				Returns: {
 					name: string;
 					staff_id: string;

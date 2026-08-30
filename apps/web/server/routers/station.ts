@@ -6,7 +6,7 @@ import {
 } from "@/lib/station-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dbError } from "../trpc/errors";
-import { authedProcedure, publicProcedure, router } from "../trpc/init";
+import { authedProcedure, router } from "../trpc/init";
 import { requireFullServiceRole } from "../trpc/rbac";
 import {
 	generatePairingCodeInput,
@@ -44,13 +44,14 @@ export const stationRouter = router({
 			return { code: data[0].code, expiresAt: data[0].expires_at };
 		}),
 
-	// Called by an unauthenticated device from /station/pair. Burns the
-	// code, lazily provisions the station's auth.users + Staff row on this
-	// restaurant's first-ever pairing (idempotent on the synthetic email),
-	// then mints a magic-link token the *client* exchanges itself via
-	// supabase.auth.verifyOtp() — this server never touches a station
-	// password.
-	redeemPairingCode: publicProcedure
+	// Called from /station/pair, gated by that route's own layout.tsx to any
+	// signed-in session — authedProcedure here is the same real boundary, not
+	// just the page-level one. Burns the code, lazily provisions the
+	// station's auth.users + Staff row on this restaurant's first-ever
+	// pairing (idempotent on the synthetic email), then mints a magic-link
+	// token the *client* exchanges itself via supabase.auth.verifyOtp() —
+	// this server never touches a station password.
+	redeemPairingCode: authedProcedure
 		.input(redeemPairingCodeInput)
 		.mutation(async ({ ctx, input }) => {
 			const { data: redeemed, error: redeemError } = await ctx.supabase.rpc(
@@ -175,6 +176,7 @@ export const stationRouter = router({
 				stationType: row.station_type,
 				createdAt: row.created_at,
 				revokedAt: row.revoked_at,
+				activeStaffName: row.active_staff_name,
 			}));
 		}),
 

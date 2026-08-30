@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowRight, Check, CheckCircle2, Clock, Home } from "lucide-react";
+import {
+	ArrowRight,
+	Check,
+	CheckCircle2,
+	Clock,
+	Home,
+	Utensils,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -14,7 +21,13 @@ import {
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
-import { useIsAdmin, useIsCounter, useRestaurantRole } from "../viewer-context";
+import {
+	useCanAccessBills,
+	useIsAdmin,
+	useIsCounter,
+	useIsMenuOnly,
+	useRestaurantRole,
+} from "../viewer-context";
 import { AvailabilityPanel } from "./availability-panel";
 
 const CLOCK_TICK_MS = 30_000;
@@ -63,6 +76,14 @@ export default function KitchenDisplayPage() {
 	const canServe =
 		isAdmin ||
 		(isCounter ? restaurantRole !== "waiter" : restaurantRole !== "kitchen");
+	// Floor (docs/product.md § RBAC) is Waiter/Manager/Owner/Admin, same reach
+	// as Bills, gated the same way restaurant-nav-header.tsx gates its own
+	// Floor link — and Kitchen's own header is the one screen in the app
+	// with no nav bar to fall back on, so without this link whoever can
+	// reach Floor has no way back from here except the browser's Back
+	// button.
+	const isMenuOnly = useIsMenuOnly();
+	const canAccessFloor = useCanAccessBills() && !isMenuOnly && !isCounter;
 	const [availabilityMode, setAvailabilityMode] = useState<
 		"unavailable" | "available" | null
 	>(null);
@@ -202,6 +223,20 @@ export default function KitchenDisplayPage() {
 					>
 						Mark Available
 					</button>
+					{canAccessFloor ? (
+						<Link
+							href={`/restaurants/${restaurantId}/floor`}
+							aria-label="Floor"
+							title="Floor"
+							className="icon-tap-target shrink-0 rounded-md text-secondary no-underline transition-colors duration-(--duration-base) ease-out hover:text-primary"
+						>
+							<Utensils
+								className="icon-md"
+								strokeWidth={1.5}
+								aria-hidden="true"
+							/>
+						</Link>
+					) : null}
 					<Link
 						href={`/restaurants/${restaurantId}`}
 						aria-label="Restaurant home"

@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import type { Database } from "@workspace/db";
 import { isDineinlyAdmin, type StaffRole } from "@/lib/auth";
+import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import type { Context } from "./context";
 import { dbError } from "./errors";
 
@@ -37,6 +38,63 @@ export async function requireStaffRole(
 			code: "FORBIDDEN",
 			message: "You don't have permission to do this.",
 		});
+	}
+
+	// A named Waiter's own OTP session is excluded even where 'waiter' is
+	// allowed above — Kitchen/Floor/Bills mutations are a paired station's
+	// job, or Manager/Owner's (docs/architecture.md § Station Account
+	// Provisioning). The station device's own Staff row also resolves role
+	// 'waiter', so email suffix is the only way to tell them apart.
+	if (role === "waiter") {
+		const { data: staffRow } = await ctx.auth
+			.from("staff")
+			.select("email")
+			.eq("restaurant_id", restaurantId)
+			.eq("user_id", user?.id ?? "")
+			.eq("status", "active")
+			.maybeSingle();
+
+		if (!staffRow?.email.endsWith(STATION_EMAIL_SUFFIX)) {
+			throw new TRPCError({
+				code: "FORBIDDEN",
+				message: "You don't have permission to do this.",
+			});
+		}
+
+		// A station device's PIN cookie is what turns the shared identity into
+		// a specific, attributable person — a freshly paired (or since-expired)
+		// device with no PIN entered may not act at all, same posture as
+		// requireOwnStaffId (floor.ts) already enforces for cart/order writes.
+		if (
+			!ctx.stationSession ||
+			ctx.stationSession.restaurantId !== restaurantId
+		) {
+			throw new TRPCError({
+				code: "PRECONDITION_FAILED",
+				message: "Enter your PIN to continue.",
+			});
+		}
+
+		// Revocation is a server-side boundary, not just the Floor page's
+		// sign-out-and-redirect: a revoked tablet must stop mutating even if it
+		// never re-renders. The device id comes from a signed cookie
+		// (lib/station-session.ts), so a device can't rename itself out of a
+		// revocation. Same check and message as requireOwnStaffId (floor.ts).
+		if (ctx.stationDeviceId) {
+			const { data: revoked, error: revokedError } = await ctx.auth.rpc(
+				"is_station_device_revoked",
+				{ p_device_id: ctx.stationDeviceId },
+			);
+			if (revokedError) {
+				throw dbError("Unable to verify this device.", revokedError);
+			}
+			if (revoked) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "This device was removed. Pair it again.",
+				});
+			}
+		}
 	}
 }
 

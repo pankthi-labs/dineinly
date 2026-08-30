@@ -8,8 +8,10 @@ import {
 	useCanAccessBills,
 	useCanAccessSettings,
 	useCanManageStaff,
+	useCanPairDevice,
 	useIsAdmin,
 	useIsCounter,
+	useIsIndividualWaiter,
 	useIsMenuOnly,
 } from "./viewer-context";
 
@@ -59,6 +61,8 @@ export function RestaurantNavHeader({
 	const canAccessSettings = useCanAccessSettings();
 	const isMenuOnly = useIsMenuOnly();
 	const isCounter = useIsCounter();
+	const isIndividualWaiter = useIsIndividualWaiter();
+	const canPairDevice = useCanPairDevice();
 	const gatedItems: Partial<Record<NavItem, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
 		// Dineinly Menu is view-only (docs/product.md § Dineinly Experiences)
@@ -77,9 +81,12 @@ export function RestaurantNavHeader({
 		"Venue Settings": canAccessSettings,
 		Bills: canAccessBills && !isMenuOnly,
 	};
-	const visibleItems = NAV_ITEMS.filter(
-		(item) => !(item in gatedItems) || gatedItems[item],
-	);
+	// A named Waiter's own OTP session is account-management only — Home and
+	// nothing else. Real floor work happens on a paired station device
+	// instead (useIsIndividualWaiter's doc comment).
+	const visibleItems: NavItem[] = isIndividualWaiter
+		? ["Home"]
+		: NAV_ITEMS.filter((item) => !(item in gatedItems) || gatedItems[item]);
 
 	return (
 		<header className="border-divider border-b bg-surface">
@@ -130,6 +137,7 @@ export function RestaurantNavHeader({
 							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
 							restaurantId={isAdmin ? undefined : restaurantId}
 							isMenuOnly={isMenuOnly}
+							canPairDevice={canPairDevice}
 						/>
 					</div>
 				</div>

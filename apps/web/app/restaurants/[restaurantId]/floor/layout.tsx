@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
 	requireFullServiceExperience,
+	requireNonIndividualWaiterAccess,
 	requireRestaurantRole,
 } from "@/lib/auth";
 
@@ -10,7 +11,10 @@ import {
 // Counter has no tables to merge but does reach [sessionId] (only, never
 // the table-list page above it) via the Bills tab's "Add Item" action, which
 // reuses this same cart+submit machinery — requireFullServiceExperience
-// (Menu only excluded) admits that, requireSeatedExperience would not.
+// (Menu only excluded) admits that, requireSeatedExperience would not. A
+// named Waiter's own OTP session is excluded regardless of the role check
+// above — Floor is a paired station's job, or Manager/Owner's
+// (requireNonIndividualWaiterAccess).
 export default async function FloorLayout({
 	children,
 	params,
@@ -20,6 +24,7 @@ export default async function FloorLayout({
 }) {
 	const { restaurantId } = await params;
 	await requireRestaurantRole(restaurantId, ["waiter", "manager", "owner"]);
+	await requireNonIndividualWaiterAccess(restaurantId);
 	await requireFullServiceExperience(restaurantId);
 	return children;
 }

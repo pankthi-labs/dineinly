@@ -15,6 +15,10 @@ type RestaurantViewer = {
 	/** True only when the caller's own row is the restaurant's primary
 	 * owner (see lib/auth.ts RestaurantAccess). */
 	isPrimaryOwner: boolean;
+	/** True when the caller's own session is a shared station device, not a
+	 * named individual (see lib/auth.ts RestaurantAccess). Drives
+	 * useIsIndividualWaiter below. */
+	isStation: boolean;
 	/** The restaurant's Dineinly package (docs/product.md § Dineinly
 	 * Experiences). Drives useIsMenuOnly below. */
 	experience: RestaurantExperience;
@@ -26,12 +30,13 @@ export function RestaurantViewerProvider({
 	isAdmin,
 	restaurantRole,
 	isPrimaryOwner,
+	isStation,
 	experience,
 	children,
 }: RestaurantViewer & { children: ReactNode }) {
 	return (
 		<RestaurantViewerContext.Provider
-			value={{ isAdmin, restaurantRole, isPrimaryOwner, experience }}
+			value={{ isAdmin, restaurantRole, isPrimaryOwner, isStation, experience }}
 		>
 			{children}
 		</RestaurantViewerContext.Provider>
@@ -71,6 +76,29 @@ export function useIsMenuOnly(): boolean {
 // see kitchen.ts's serveBatch for the real, server-enforced gate.
 export function useIsCounter(): boolean {
 	return useRestaurantViewer().experience === "counter";
+}
+
+// A named Waiter's own OTP session, not the shared station device (which
+// also carries restaurantRole 'waiter' — isStation is the only way to tell
+// them apart). Their personal login is account-management only from here
+// (Profile/PIN, Pair This Device) — real floor work happens on a paired station,
+// never on this session. Client-side UX only — see restaurant-nav-header.tsx
+// and restaurant-home.tsx, the two surfaces this collapses to Home-only.
+export function useIsIndividualWaiter(): boolean {
+	const { restaurantRole, isStation } = useRestaurantViewer();
+	return restaurantRole === "waiter" && !isStation;
+}
+
+// Pair This Device (docs/architecture.md § Station Account Provisioning) is a
+// shortcut to /station/pair for whoever is currently signed into the
+// physical tablet being provisioned — any staff role, but not the station
+// identity itself (already paired) and not Menu/Counter, which have no
+// Waiter station to pair (docs/product.md § Dineinly Experiences: Counter
+// "has no Waiter station"; Menu has neither Waiter/Kitchen roles nor
+// devices).
+export function useCanPairDevice(): boolean {
+	const { isStation, experience } = useRestaurantViewer();
+	return !isStation && experience !== "menu" && experience !== "counter";
 }
 
 // Owner reassignment (Tbd.md "Owner reassignment"): only the current
