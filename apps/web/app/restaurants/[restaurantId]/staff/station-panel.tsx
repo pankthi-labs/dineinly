@@ -110,9 +110,16 @@ export function StationPanel({ restaurantId }: { restaurantId: string }) {
 								key={device.id}
 								className="flex items-center justify-between py-3"
 							>
-								<span className="text-primary text-sm">
-									Paired {new Date(device.createdAt).toLocaleString()}
-								</span>
+								<div>
+									<p className="text-primary text-sm">
+										Paired {new Date(device.createdAt).toLocaleString()}
+									</p>
+									<p className="mt-1 text-secondary text-sm">
+										{device.activeStaffName
+											? `Acting as ${device.activeStaffName}`
+											: "No one signed in"}
+									</p>
+								</div>
 								<button
 									type="button"
 									onClick={() => revokeMutation.mutate({ deviceId: device.id })}

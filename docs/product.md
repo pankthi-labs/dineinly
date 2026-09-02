@@ -132,7 +132,7 @@ Availability changes (see Menu) never modify existing orders.
 
 All permissions are enforced server-side. Client-side checks are UX-only, never security.
 
-| Action | Guest | Waiter | Kitchen | Manager | Owner | Dineinly Admin |
+| Action | Guest | Waiter‡ | Kitchen | Manager | Owner | Dineinly Admin |
 |---|---|---|---|---|---|---|
 | View Menu | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Add to Cart | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
@@ -155,6 +155,7 @@ All permissions are enforced server-side. Client-side checks are UX-only, never 
 
 \* Managers may create/manage Waiters, Kitchen, and other Managers — never Owners.
 † Dineinly Counter has no Waiter station — Kitchen sets `Served` there instead (self-service pickup).
+‡ The Waiter column above is a PIN-unlocked station session only. A Waiter's own personal OTP login (`/sign-in`) reaches none of it — it's account-management only (update their own name/PIN, "Pair This Device" to `/station/pair`), same as every other role's login otherwise. Server-enforced in both places: the route layer (`requireNonIndividualWaiterAccess`, `apps/web/lib/auth.ts`) and the tRPC layer (`requireStaffRole`, `apps/web/server/trpc/rbac.ts`). See `docs/architecture.md` § Station Account Provisioning.
 
 ---
 

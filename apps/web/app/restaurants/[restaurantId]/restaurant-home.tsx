@@ -9,6 +9,7 @@ import {
 	Receipt,
 	Store,
 	Users,
+	Utensils,
 } from "lucide-react";
 import Link from "next/link";
 import { AdminHeaderActions } from "@/app/admin/admin-header-actions";
@@ -19,8 +20,10 @@ import {
 	useCanAccessBills,
 	useCanAccessSettings,
 	useCanManageStaff,
+	useCanPairDevice,
 	useIsAdmin,
 	useIsCounter,
+	useIsIndividualWaiter,
 	useIsMenuOnly,
 } from "./viewer-context";
 
@@ -29,6 +32,7 @@ const CARD_TITLES = [
 	"Kitchen",
 	"Table Matrix",
 	"QR Menu",
+	"Floor",
 	"Staff Roster",
 	"Venue Settings",
 	"Bills",
@@ -69,6 +73,11 @@ const navCards: Array<{
 		icon: QrCode,
 	},
 	{
+		title: "Floor",
+		description: "Order for a guest & merge tables",
+		icon: Utensils,
+	},
+	{
 		title: "Staff Roster",
 		description: "Invite staff & manage roles",
 		icon: Users,
@@ -92,6 +101,7 @@ const GATED_CARD_ROUTES: Partial<Record<CardTitle, string>> = {
 	"Menu Desk": "menu",
 	"Table Matrix": "tables",
 	"QR Menu": "qr",
+	Floor: "floor",
 	"Staff Roster": "staff",
 	"Venue Settings": "settings",
 	Bills: "bills",
@@ -112,6 +122,8 @@ export function RestaurantHome({
 	const canAccessSettings = useCanAccessSettings();
 	const isMenuOnly = useIsMenuOnly();
 	const isCounter = useIsCounter();
+	const isIndividualWaiter = useIsIndividualWaiter();
+	const canPairDevice = useCanPairDevice();
 	const cardAccess: Partial<Record<CardTitle, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
 		// Dineinly Menu is view-only (docs/product.md § Dineinly Experiences)
@@ -123,13 +135,22 @@ export function RestaurantHome({
 		// Menu and Counter share one universal QR instead of per-table ones —
 		// Table Matrix's counterpart for both.
 		"QR Menu": canManageMenuAndTables && (isMenuOnly || isCounter),
+		// Same reach as Bills (docs/product.md § RBAC) — this is the only way
+		// back to Floor from Home, since Home itself has no separate nav bar.
+		Floor: canAccessBills && !isMenuOnly && !isCounter,
 		"Staff Roster": canManageStaff,
 		"Venue Settings": canAccessSettings,
 		Bills: canAccessBills && !isMenuOnly,
 	};
-	const visibleCards = navCards.filter(
-		(card) => !(card.title in cardAccess) || cardAccess[card.title],
-	);
+	// A named Waiter's own OTP session is account-management only (Profile/
+	// PIN, Pair This Device) — real floor work happens on a paired station device
+	// instead (useIsIndividualWaiter's doc comment), so none of these cards
+	// apply here regardless of role gates.
+	const visibleCards = isIndividualWaiter
+		? []
+		: navCards.filter(
+				(card) => !(card.title in cardAccess) || cardAccess[card.title],
+			);
 
 	if (restaurant.isPending) {
 		return <HomeLoading />;
@@ -158,6 +179,7 @@ export function RestaurantHome({
 							directoryHref={isAdmin ? "/admin/restaurants" : undefined}
 							restaurantId={isAdmin ? undefined : restaurantId}
 							isMenuOnly={isMenuOnly}
+							canPairDevice={canPairDevice}
 						/>
 					</div>
 				</div>
@@ -168,41 +190,49 @@ export function RestaurantHome({
 			</header>
 
 			<main className="grid flex-1 content-start gap-4 sm:gap-6 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
-				{visibleCards.map(({ title, description, icon: Icon, href }) => {
-					const resolvedHref = GATED_CARD_ROUTES[title] ?? href;
-					const cardClass =
-						"group flex flex-col gap-4 rounded-xl border border-divider bg-surface p-6 text-left no-underline transition-colors duration-(--duration-base) ease-out sm:gap-6 sm:p-8";
-					const content = (
-						<>
-							<Icon
-								className="icon-xl text-secondary transition-colors duration-(--duration-base) ease-out group-hover:text-accent-hover group-focus-visible:text-accent-hover"
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-							<div>
-								<h2 className="text-lg text-primary">{title}</h2>
-								<p className="mt-2 text-muted text-sm">{description}</p>
-							</div>
-						</>
-					);
+				{isIndividualWaiter ? (
+					<div className="rounded-xl border border-divider bg-surface p-16 text-center md:col-span-2 lg:col-span-3">
+						<p className="text-primary">
+							Set your PIN and pair a device from the menu above to get started.
+						</p>
+					</div>
+				) : (
+					visibleCards.map(({ title, description, icon: Icon, href }) => {
+						const resolvedHref = GATED_CARD_ROUTES[title] ?? href;
+						const cardClass =
+							"group flex flex-col gap-4 rounded-xl border border-divider bg-surface p-6 text-left no-underline transition-colors duration-(--duration-base) ease-out sm:gap-6 sm:p-8";
+						const content = (
+							<>
+								<Icon
+									className="icon-xl text-secondary transition-colors duration-(--duration-base) ease-out group-hover:text-accent-hover group-focus-visible:text-accent-hover"
+									strokeWidth={1.5}
+									aria-hidden="true"
+								/>
+								<div>
+									<h2 className="text-lg text-primary">{title}</h2>
+									<p className="mt-2 text-muted text-sm">{description}</p>
+								</div>
+							</>
+						);
 
-					return resolvedHref ? (
-						<Link
-							key={title}
-							href={`/restaurants/${restaurantId}/${resolvedHref}`}
-							className={`${cardClass} hover:bg-surface-elevated focus-visible:bg-surface-elevated`}
-						>
-							{content}
-						</Link>
-					) : (
-						<div
-							key={title}
-							className={`${cardClass} cursor-not-allowed opacity-60`}
-						>
-							{content}
-						</div>
-					);
-				})}
+						return resolvedHref ? (
+							<Link
+								key={title}
+								href={`/restaurants/${restaurantId}/${resolvedHref}`}
+								className={`${cardClass} hover:bg-surface-elevated focus-visible:bg-surface-elevated`}
+							>
+								{content}
+							</Link>
+						) : (
+							<div
+								key={title}
+								className={`${cardClass} cursor-not-allowed opacity-60`}
+							>
+								{content}
+							</div>
+						);
+					})
+				)}
 			</main>
 
 			<footer className="mt-16 border-divider border-t pt-8 lg:mt-24">

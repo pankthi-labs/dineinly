@@ -26,6 +26,7 @@ const INVITE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export function StaffRow({
 	staff,
+	hasPairedDevice,
 	canManageThisRow,
 	canRemoveThisRow,
 	canReassignOwner,
@@ -37,6 +38,12 @@ export function StaffRow({
 	onResendInvite,
 }: {
 	staff: StaffListItem;
+	/** Whether this restaurant currently has at least one non-revoked
+	 * station device (StationPanel's own live device list) — irrelevant for
+	 * a real named staff row. staff.status on the shared station row is set
+	 * once at first pairing and never changes afterward, so it can't answer
+	 * "is a tablet actually paired right now"; this can. */
+	hasPairedDevice: boolean;
 	/** False for a Manager caller viewing any row whose role is Owner
 	 * (docs/product.md § RBAC: "Managers may not manage Owners") — otherwise
 	 * true, including the primary owner (name-only edit; role/email stay
@@ -77,6 +84,19 @@ export function StaffRow({
 	// Account Provisioning).
 	const isStation = staff.email.endsWith(STATION_EMAIL_SUFFIX);
 	const showResetPin = isActive && canResetPin && !isStation;
+	// The shared station row's own status is never anything but "active"
+	// once created (see the hasPairedDevice prop doc above) — swap it for
+	// what's actually true right now: whether a tablet currently holds it.
+	const statusLabel = isStation
+		? hasPairedDevice
+			? "Device Paired"
+			: "No Device Paired"
+		: STATUS_LABEL[staff.status];
+	const statusColor = isStation
+		? hasPairedDevice
+			? "text-success"
+			: "text-muted"
+		: STATUS_COLOR[staff.status];
 	// Same reach as invite_staff/canManageThisRow — resend_staff_invite
 	// enforces the actual Manager-can't-touch-Owner rule server-side.
 	const showResendInvite = isInvited && canManageThisRow;
@@ -92,9 +112,7 @@ export function StaffRow({
 			className={`flex flex-col gap-3 rounded-xl border border-divider bg-surface p-4 transition-colors duration-(--duration-base) ease-out ${isRemoved ? "opacity-60" : ""}`}
 		>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<span className={`text-caps ${STATUS_COLOR[staff.status]}`}>
-					{STATUS_LABEL[staff.status]}
-				</span>
+				<span className={`text-caps ${statusColor}`}>{statusLabel}</span>
 				{isExpired ? (
 					<span className="text-caps text-warning">Expired</span>
 				) : null}

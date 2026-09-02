@@ -2,6 +2,7 @@ import { pgTable, timestamp, uuid } from "drizzle-orm/pg-core";
 import { stationType } from "./enums.js";
 import { createdAt, id } from "./helpers.js";
 import { restaurants } from "./restaurant.js";
+import { staff } from "./staff.js";
 
 // Per-device pairing registry (docs/architecture.md § Station Account
 // Provisioning, "Per-device revocation"). Doesn't store Supabase's own
@@ -17,4 +18,16 @@ export const stationDevices = pgTable("station_devices", {
 	stationType: stationType("station_type").notNull(),
 	createdAt: createdAt(),
 	revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
+	// Who's currently PIN-unlocked on this specific device — attribution
+	// only, cleared on Switch User/revoke, treated as stale past
+	// STATION_SESSION_TTL_SECONDS (apps/web/lib/station-session.ts, 12h) even
+	// if never explicitly cleared. resolve_staff_by_pin (supabase/migrations)
+	// is what actually sets it and blocks a second concurrent device.
+	activeStaffId: uuid("active_staff_id").references(() => staff.id, {
+		onDelete: "set null",
+	}),
+	activeStaffSince: timestamp("active_staff_since", {
+		withTimezone: true,
+		mode: "string",
+	}),
 });

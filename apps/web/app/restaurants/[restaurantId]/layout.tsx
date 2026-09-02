@@ -25,6 +25,7 @@ export default async function RestaurantLayout({
 			isAdmin={viewer.isAdmin}
 			restaurantRole={viewer.restaurantRole}
 			isPrimaryOwner={viewer.isPrimaryOwner}
+			isStation={viewer.isStation}
 			experience={experience ?? "one"}
 		>
 			{children}

@@ -2,6 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import type { Database } from "@workspace/db";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { STATION_EMAIL_SUFFIX } from "@/lib/station-session";
 import { createClient } from "@/lib/supabase/server";
 
 export type StaffRole = Database["public"]["Enums"]["staff_role"];
@@ -46,6 +47,38 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 	};
 });
 
+// If the current session is a paired station device, its restaurant id —
+// otherwise null. Used only by the root page (app/page.tsx) to route a
+// freshly reopened browser straight to Floor instead of the marketing
+// stub: a station's Supabase session is long-lived and independent of
+// whoever paired it (docs/architecture.md § Station Account Provisioning),
+// but losing the tab otherwise leaves it with no way to find its way back.
+// A station's underlying identity is one auth.users row per restaurant per
+// station type, so user_id maps to at most one Staff row — unlike a real
+// person, who can be staff at more than one restaurant.
+export const getStationRestaurantId = cache(
+	async (): Promise<string | null> => {
+		const viewer = await getViewer();
+		if (!viewer || viewer.isAdmin) {
+			return null;
+		}
+
+		const supabase = await createClient();
+		const { data: staffRow } = await supabase
+			.from("staff")
+			.select("restaurant_id, email")
+			.eq("user_id", viewer.id)
+			.eq("status", "active")
+			.maybeSingle();
+
+		if (!staffRow?.email.endsWith(STATION_EMAIL_SUFFIX)) {
+			return null;
+		}
+
+		return staffRow.restaurant_id;
+	},
+);
+
 /** Viewer, redirecting to /sign-in if not a Dineinly Admin. */
 export async function requireAdmin(): Promise<Viewer> {
 	const viewer = await getViewer();
@@ -68,6 +101,12 @@ export type RestaurantAccess = Viewer & {
 	 * reassignment"): only the current primary owner, not any Owner-role
 	 * staff, may transfer ownership. */
 	isPrimaryOwner: boolean;
+	/** True when the caller's own session is a shared station device's
+	 * synthetic identity (docs/architecture.md § Station Account
+	 * Provisioning), not a named individual signed in via their own OTP —
+	 * both carry the same restaurantRole ('waiter'), so this is the only way
+	 * to tell them apart. False for Dineinly Admin (no Staff row). */
+	isStation: boolean;
 };
 
 /**
@@ -91,7 +130,12 @@ export const requireRestaurantAccess = cache(
 		}
 
 		if (viewer.isAdmin) {
-			return { ...viewer, restaurantRole: null, isPrimaryOwner: false };
+			return {
+				...viewer,
+				restaurantRole: null,
+				isPrimaryOwner: false,
+				isStation: false,
+			};
 		}
 
 		// Scoped to the caller's own row via user_id, not RLS alone —
@@ -101,7 +145,7 @@ export const requireRestaurantAccess = cache(
 		const supabase = await createClient();
 		const { data: staffRow } = await supabase
 			.from("staff")
-			.select("id, role, is_primary_owner")
+			.select("id, role, is_primary_owner, email")
 			.eq("restaurant_id", restaurantId)
 			.eq("user_id", viewer.id)
 			.eq("status", "active")
@@ -115,6 +159,7 @@ export const requireRestaurantAccess = cache(
 			...viewer,
 			restaurantRole: staffRow.role,
 			isPrimaryOwner: staffRow.is_primary_owner,
+			isStation: staffRow.email.endsWith(STATION_EMAIL_SUFFIX),
 		};
 	},
 );
@@ -142,6 +187,26 @@ export async function requireRestaurantRole(
 	}
 
 	return viewer;
+}
+
+/**
+ * Redirects to the restaurant home page if the caller is a named Waiter's
+ * own OTP session — not the shared station device, which also carries
+ * restaurantRole 'waiter' but is unaffected here. A named Waiter's personal
+ * login is account-management only (Profile/PIN, Pair This Device); real floor
+ * work (Kitchen/Floor/Bills) only happens on a paired station or a
+ * Manager/Owner session. No-op for every other role. Call after
+ * requireRestaurantAccess/requireRestaurantRole in kitchen/floor/bills
+ * layout.tsx.
+ */
+export async function requireNonIndividualWaiterAccess(
+	restaurantId: string,
+): Promise<void> {
+	const viewer = await requireRestaurantAccess(restaurantId);
+
+	if (viewer.restaurantRole === "waiter" && !viewer.isStation) {
+		redirect(`/restaurants/${restaurantId}`);
+	}
 }
 
 /**
