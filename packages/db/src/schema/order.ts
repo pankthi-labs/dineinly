@@ -67,11 +67,15 @@ export const orders = pgTable(
 			foreignColumns: [sessions.restaurantId, sessions.id],
 			name: "orders_restaurant_id_session_id_fkey",
 		}),
+		// No onDelete("set null"): Postgres nulls every column in a composite
+		// FK column list on SET NULL, which would null restaurant_id too and
+		// violate its NOT NULL constraint. force_terminate_session() nulls
+		// bill_id itself before deleting a bill, so this stays "no action".
 		foreignKey({
 			columns: [table.restaurantId, table.billId],
 			foreignColumns: [bills.restaurantId, bills.id],
 			name: "orders_restaurant_id_bill_id_fkey",
-		}).onDelete("set null"),
+		}),
 		foreignKey({
 			columns: [table.restaurantId, table.placedByStaffId],
 			foreignColumns: [staff.restaurantId, staff.id],

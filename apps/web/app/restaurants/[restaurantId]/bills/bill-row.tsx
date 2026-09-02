@@ -32,7 +32,11 @@ export function BillRow({
 }) {
 	return (
 		<Link
-			href={`/restaurants/${restaurantId}/bills/${bill.sessionId}`}
+			href={
+				bill.billId
+					? `/restaurants/${restaurantId}/bills/${bill.sessionId}?bill=${bill.billId}`
+					: `/restaurants/${restaurantId}/bills/${bill.sessionId}`
+			}
 			className="flex items-center justify-between gap-4 rounded-xl border border-divider bg-surface p-5 no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
 		>
 			<div className="flex min-w-0 flex-col gap-1">

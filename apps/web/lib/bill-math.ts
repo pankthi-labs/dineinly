@@ -1,8 +1,18 @@
+import { describeModifiers } from "@/lib/order-item-groups";
+
 export type BillLineInput = {
 	name: string;
 	unitPrice: number;
 	quantity: number;
 	taxRate: number;
+	// Preference chosen at order time (Order Item snapshot) — undefined/null
+	// means "not asked" (menu item doesn't offer that preference). Part of
+	// the merge key below: two rows only ever combine into one bill line
+	// when every preference matches too, so "extra spicy" never silently
+	// merges into a plain repeat of the same dish.
+	spice?: string | null;
+	salt?: string | null;
+	ice?: string | null;
 };
 
 export type BillLine = {
@@ -10,6 +20,10 @@ export type BillLine = {
 	unitPrice: number;
 	quantity: number;
 	amount: number;
+	// Non-default preferences only, e.g. "Extra Spicy, Less Salt" — null when
+	// every preference on this line is unset or the restaurant's default
+	// ("regular"), so a plain repeat order shows no tag at all.
+	modifiers: string | null;
 };
 
 export type TaxSlab = {
@@ -43,14 +57,17 @@ export function billableQuantity(
  * All money math runs in integer paisa (round-half-up at each step, 2dp
  * final precision, no whole-rupee round-off line) to avoid floating-point
  * drift, then converts back to rupees at the end. Order Item rows are
- * merged into one bill line per (name, unit price) pair, matching how a
- * physical restaurant bill groups repeat orders of the same dish.
+ * merged into one bill line per (name, unit price, preferences) triple,
+ * matching how a physical restaurant bill groups repeat orders of the same
+ * dish — but a differently-customized repeat (e.g. extra spicy) stays its
+ * own line rather than silently merging into the plain one.
  */
 export function computeBill(rows: BillLineInput[]): BillTotals {
 	const lineMap = new Map<string, BillLine & { unitPricePaisa: number }>();
 	for (const row of rows) {
 		const unitPricePaisa = toPaisa(row.unitPrice);
-		const key = `${row.name}:${unitPricePaisa}`;
+		const modifiers = describeModifiers(row.spice, row.salt, row.ice);
+		const key = `${row.name}:${unitPricePaisa}:${modifiers ?? ""}`;
 		const existing = lineMap.get(key);
 		if (existing) {
 			existing.quantity += row.quantity;
@@ -61,6 +78,7 @@ export function computeBill(rows: BillLineInput[]): BillTotals {
 				unitPricePaisa,
 				quantity: row.quantity,
 				amount: 0,
+				modifiers,
 			});
 		}
 	}
@@ -69,6 +87,7 @@ export function computeBill(rows: BillLineInput[]): BillTotals {
 		unitPrice: line.unitPrice,
 		quantity: line.quantity,
 		amount: (line.unitPricePaisa * line.quantity) / 100,
+		modifiers: line.modifiers,
 	}));
 
 	const slabSubtotalPaisa = new Map<number, number>();

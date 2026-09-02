@@ -20,8 +20,16 @@ import { trpc } from "@/lib/trpc-client";
 // since both read the guest's session through the same cookie.
 export default function GuestCartPage() {
 	const menu = trpc.guest.menu.useQuery(undefined, { retry: false });
+	const isCounter = menu.data?.restaurant.experience === "counter";
 	const cart = trpc.guest.cart.list.useQuery(undefined, {
 		enabled: menu.isSuccess,
+	});
+	// Counter only: whether this round is reusing the session's still-open
+	// bill (submit_order() keeps the same bill/token while it's unsettled) or
+	// about to draw a brand new one — the confirm button's label follows that
+	// distinction rather than always claiming to "generate" a bill.
+	const bill = trpc.guest.bill.get.useQuery(undefined, {
+		enabled: menu.isSuccess && isCounter,
 	});
 	const utils = trpc.useUtils();
 	const setQuantity = trpc.guest.cart.setQuantity.useMutation({
@@ -52,7 +60,8 @@ export default function GuestCartPage() {
 	return (
 		<GuestCartContent
 			restaurantName={menu.data.restaurant.name}
-			isCounter={menu.data.restaurant.experience === "counter"}
+			isCounter={isCounter}
+			isUpdatingExistingBill={isCounter && bill.data?.status === "requested"}
 			tableLabel={menu.data.tableLabel}
 			items={cart.data ?? []}
 			idempotencyKey={idempotencyKey}
@@ -94,6 +103,7 @@ function preferenceNotes(item: CartLine): string[] {
 function GuestCartContent({
 	restaurantName,
 	isCounter,
+	isUpdatingExistingBill,
 	tableLabel,
 	items,
 	idempotencyKey,
@@ -105,6 +115,7 @@ function GuestCartContent({
 }: {
 	restaurantName: string;
 	isCounter: boolean;
+	isUpdatingExistingBill: boolean;
 	tableLabel: string | null;
 	items: CartLine[];
 	idempotencyKey: string;
@@ -226,7 +237,9 @@ function GuestCartContent({
 						{submitOrder.isPending
 							? "Sending…"
 							: isCounter
-								? "Confirm Order & Generate Bill"
+								? isUpdatingExistingBill
+									? "Update Order & Bill"
+									: "Confirm Order & Generate Bill"
 								: "Confirm Order"}
 					</button>
 				</div>

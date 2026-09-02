@@ -999,7 +999,7 @@ export type Database = {
 				}[];
 			};
 			resolve_qr_token: {
-				Args: { p_qr_token: string };
+				Args: { p_existing_session_id?: string; p_qr_token: string };
 				Returns: {
 					experience: Database["public"]["Enums"]["restaurant_experience"];
 					restaurant_id: string;
@@ -1035,6 +1035,10 @@ export type Database = {
 			};
 			set_staff_pin: {
 				Args: { p_pin: string; p_restaurant_id: string };
+				Returns: undefined;
+			};
+			staff_release_order_item_to_kitchen: {
+				Args: { p_order_item_id: string; p_restaurant_id: string };
 				Returns: undefined;
 			};
 			staff_request_bill: {

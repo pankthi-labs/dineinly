@@ -130,7 +130,15 @@ export default function GuestMenuPage() {
 			utils.guest.orders.list.invalidate();
 			utils.guest.bill.get.invalidate();
 		},
-		"bill.status": () => utils.guest.bill.get.invalidate(),
+		// Settling flips which of this session's items guest.orders.list even
+		// returns (Counter-experience gate: an item stays hidden from "My
+		// Orders" until its own bill is settled) — bill.get alone leaves the
+		// status badge above stuck at "Awaiting Payment" until something else
+		// happens to refetch orders.list.
+		"bill.status": () => {
+			utils.guest.bill.get.invalidate();
+			utils.guest.orders.list.invalidate();
+		},
 	});
 	useBroadcastChannel(client, restaurantId ? `menu:${restaurantId}` : null, {
 		"menu_item.change": () => utils.guest.menu.invalidate(),
@@ -166,6 +174,27 @@ export default function GuestMenuPage() {
 		(sum, row) => sum + row.quantity,
 		0,
 	);
+
+	// Already-ordered quantity per menu item, merged into the card's stepper
+	// so a guest who confirmed a round and came back for more still sees what
+	// they already have instead of a stepper reset to 0 (the cart itself is
+	// cleared on confirm — see submit_order()). Counter only: it reuses the
+	// current bill while still unsettled (draws a fresh one once it settles),
+	// so this round's quantity is a meaningful, bounded number. One/Guest has
+	// no such round boundary — every dish ordered for the whole visit would
+	// stay merged in forever, including one served and eaten an hour ago —
+	// so the stepper there stays live-cart-only, as before.
+	const alreadyOrderedByMenuItem = useMemo(() => {
+		const map = new Map<string, number>();
+		if (isCounter && bill.data && bill.data.status !== "settled") {
+			for (const [menuItemId, quantity] of Object.entries(
+				bill.data.itemQuantitiesByMenuItem,
+			)) {
+				map.set(menuItemId, quantity);
+			}
+		}
+		return map;
+	}, [isCounter, bill.data]);
 
 	const [search, setSearch] = useState("");
 	const [activeDiets, setActiveDiets] = useState<Array<"veg" | "non_veg">>([]);
@@ -396,13 +425,16 @@ export default function GuestMenuPage() {
 										0,
 									);
 									const lastRow = rows[rows.length - 1];
+									const alreadyOrdered =
+										alreadyOrderedByMenuItem.get(item.id) ?? 0;
 									return (
 										<MenuItemCard
 											key={item.id}
 											item={item}
 											onOpen={() => setOpenItem(item)}
 											orderingEnabled={orderingEnabled}
-											cartQuantity={cartQuantity}
+											cartQuantity={cartQuantity + alreadyOrdered}
+											disableDecrement={cartQuantity === 0}
 											onAdd={() =>
 												addItem.mutate({
 													menuItemId: item.id,
@@ -469,7 +501,7 @@ export default function GuestMenuPage() {
 								onClick={() =>
 									router.push(isCounter ? "/guest/bill" : "/guest/orders")
 								}
-								className="-my-3 py-3 font-semibold text-accent text-sm"
+								className="-my-3 py-3 font-semibold text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
 							>
 								My Orders{myOrdersStatus ? ` · ${myOrdersStatus}` : ""}
 							</button>
@@ -495,6 +527,7 @@ function MenuItemCard({
 	onOpen,
 	orderingEnabled,
 	cartQuantity,
+	disableDecrement,
 	onAdd,
 	onDecrement,
 }: {
@@ -502,6 +535,7 @@ function MenuItemCard({
 	onOpen: () => void;
 	orderingEnabled: boolean;
 	cartQuantity: number;
+	disableDecrement: boolean;
 	onAdd: () => void;
 	onDecrement: () => void;
 }) {
@@ -557,6 +591,7 @@ function MenuItemCard({
 					<div className="self-start justify-self-end">
 						<QuantityPill
 							value={cartQuantity}
+							disableDecrement={disableDecrement}
 							onDecrement={onDecrement}
 							onIncrement={onAdd}
 						/>

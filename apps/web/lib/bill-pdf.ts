@@ -132,7 +132,10 @@ export async function buildBillPdf(input: {
 	y -= LINE_HEIGHT;
 
 	for (const line of input.totals.lines) {
-		drawRow(`${line.quantity}x ${line.name}`, formatPdfAmount(line.amount));
+		const label = line.modifiers
+			? `${line.quantity}x ${line.name} (${line.modifiers})`
+			: `${line.quantity}x ${line.name}`;
+		drawRow(label, formatPdfAmount(line.amount));
 	}
 
 	y -= LINE_HEIGHT / 2;

@@ -1,3 +1,5 @@
+import { describeModifiers } from "@/lib/order-item-groups";
+
 export type GuestOrder = {
 	id: string;
 	number: number;
@@ -6,6 +8,9 @@ export type GuestOrder = {
 		id: string;
 		name: string;
 		quantity: number;
+		spice: string | null;
+		salt: string | null;
+		ice: string | null;
 		served: boolean;
 		ready: boolean;
 		// Counter only — always true elsewhere (orderGroups below never reads
@@ -28,8 +33,52 @@ export type OrderGroup = {
 	key: string;
 	number: number | null;
 	status: "unsent" | "preparing" | "ready" | "done";
-	items: { id: string; name: string; quantity: number }[];
+	items: {
+		key: string;
+		// Every underlying order_item id this line combines — more than one
+		// when the same dish + preferences was ordered across separate
+		// confirm-cart rounds (e.g. Add More Items before settling). An action
+		// on the merged line (Send to Kitchen) has to reach every one of them.
+		ids: string[];
+		name: string;
+		modifiers: string | null;
+		quantity: number;
+	}[];
 };
+
+// Merges items that repeat the same dish + preferences into one line, same
+// grouping the guest/admin bill and the Kitchen Display's dish batches
+// already use — a differently-customized repeat stays its own line.
+function mergeByDish(
+	items: {
+		id: string;
+		name: string;
+		spice: string | null;
+		salt: string | null;
+		ice: string | null;
+		quantity: number;
+	}[],
+): OrderGroup["items"] {
+	const merged = new Map<string, OrderGroup["items"][number]>();
+	for (const item of items) {
+		const modifiers = describeModifiers(item.spice, item.salt, item.ice);
+		const key = `${item.name}:${modifiers ?? ""}`;
+		const existing = merged.get(key);
+		if (existing) {
+			existing.quantity += item.quantity;
+			existing.ids.push(item.id);
+		} else {
+			merged.set(key, {
+				key,
+				ids: [item.id],
+				name: item.name,
+				modifiers,
+				quantity: item.quantity,
+			});
+		}
+	}
+	return [...merged.values()];
+}
 
 // "unsent" reuses the Kitchen Display's own "Incoming" color (kitchen/
 // page.tsx's COLUMN_STYLE) — same stage, guest side of the same queue.
@@ -58,7 +107,7 @@ export function orderGroups(order: GuestOrder): OrderGroup[] {
 			key: `${order.id}-preparing`,
 			number: order.number,
 			status: "preparing",
-			items: preparing,
+			items: mergeByDish(preparing),
 		});
 	}
 	if (done.length > 0) {
@@ -66,7 +115,7 @@ export function orderGroups(order: GuestOrder): OrderGroup[] {
 			key: `${order.id}-done`,
 			number: order.number,
 			status: "done",
-			items: done,
+			items: mergeByDish(done),
 		});
 	}
 	return groups;
@@ -96,7 +145,7 @@ export function counterOrderGroups(orders: GuestOrder[]): OrderGroup[] {
 			key: "unsent",
 			number: null,
 			status: "unsent",
-			items: unsent,
+			items: mergeByDish(unsent),
 		});
 	}
 	if (preparing.length > 0) {
@@ -104,14 +153,24 @@ export function counterOrderGroups(orders: GuestOrder[]): OrderGroup[] {
 			key: "preparing",
 			number: null,
 			status: "preparing",
-			items: preparing,
+			items: mergeByDish(preparing),
 		});
 	}
 	if (ready.length > 0) {
-		groups.push({ key: "ready", number: null, status: "ready", items: ready });
+		groups.push({
+			key: "ready",
+			number: null,
+			status: "ready",
+			items: mergeByDish(ready),
+		});
 	}
 	if (done.length > 0) {
-		groups.push({ key: "done", number: null, status: "done", items: done });
+		groups.push({
+			key: "done",
+			number: null,
+			status: "done",
+			items: mergeByDish(done),
+		});
 	}
 	return groups;
 }

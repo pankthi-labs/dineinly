@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowLeft, Download, Printer } from "lucide-react";
+import { ArrowLeft, Download, Printer, X } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Fragment, useEffect, useId, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuantityPill } from "@/components/quantity-pill";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
+import { useDismissableOverlay } from "@/components/use-dismissable-overlay";
 import { billableQuantity } from "@/lib/bill-math";
 import { downloadPdf } from "@/lib/download-pdf";
 import {
@@ -16,6 +17,7 @@ import {
 	formatTime,
 	titleCase,
 } from "@/lib/format";
+import { groupOrderItems } from "@/lib/order-item-groups";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
@@ -25,6 +27,11 @@ type EditingAction = { itemId: string; kind: "waive" | "cancel" } | null;
 
 export default function BillDetailPage() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	// Which of the session's bills to view — Bills tab links here with
+	// ?bill=<id> for a specific past round; omitted means the latest
+	// (current, actionable) round, same as before this param existed.
+	const billId = searchParams.get("bill") ?? undefined;
 	const { restaurantId, sessionId } = useParams<{
 		restaurantId: string;
 		sessionId: string;
@@ -37,22 +44,24 @@ export default function BillDetailPage() {
 	const [isDownloading, setIsDownloading] = useState(false);
 	const [editing, setEditing] = useState<EditingAction>(null);
 	const [pendingQty, setPendingQty] = useState(0);
+	const [showOtherRounds, setShowOtherRounds] = useState(false);
 
 	const utils = trpc.useUtils();
 	const restaurantQuery = trpc.restaurants.getById.useQuery({
 		id: restaurantId,
 	});
-	const billQuery = trpc.bills.get.useQuery({ sessionId });
+	const billQuery = trpc.bills.get.useQuery({ sessionId, billId });
 
 	const supabase = createClient();
 	useBroadcastChannel(supabase, `session:${sessionId}`, {
-		"bill.status": () => utils.bills.get.invalidate({ sessionId }),
-		"order.new": () => utils.bills.get.invalidate({ sessionId }),
-		"order_item.status": () => utils.bills.get.invalidate({ sessionId }),
+		"bill.status": () => utils.bills.get.invalidate({ sessionId, billId }),
+		"order.new": () => utils.bills.get.invalidate({ sessionId, billId }),
+		"order_item.status": () =>
+			utils.bills.get.invalidate({ sessionId, billId }),
 	});
 
 	function invalidateAndNotify(message: string) {
-		utils.bills.get.invalidate({ sessionId });
+		utils.bills.get.invalidate({ sessionId, billId });
 		utils.bills.list.invalidate();
 		setToast({ message, tone: "success" });
 	}
@@ -97,6 +106,11 @@ export default function BillDetailPage() {
 		},
 	});
 
+	const releaseItemMutation = trpc.bills.releaseOrderItem.useMutation({
+		onSuccess: () => invalidateAndNotify("Sent to the kitchen."),
+		onError: notifyError,
+	});
+
 	const settleMutation = trpc.bills.settle.useMutation({
 		onSuccess: () => {
 			setConfirming(null);
@@ -137,7 +151,7 @@ export default function BillDetailPage() {
 	async function handleDownload() {
 		setIsDownloading(true);
 		try {
-			const result = await utils.bills.downloadPdf.fetch({ sessionId });
+			const result = await utils.bills.downloadPdf.fetch({ sessionId, billId });
 			downloadPdf(result.fileName, result.base64);
 		} catch (error) {
 			setToast({
@@ -222,6 +236,13 @@ export default function BillDetailPage() {
 	const isSettled = data.status === "settled";
 	const canCorrect = !isSettled;
 	const isCounterBill = data.dailyToken != null;
+	// Repeat confirm-cart rounds against the same still-open bill can leave
+	// more than one order_item row for the same dish + preferences — merged
+	// into one displayed line here (same grouping the guest bill and Kitchen
+	// Display batches already use), so staff see one "2x Fried Rice" instead
+	// of two separate "1x" rows.
+	const itemsById = new Map(data.items.map((item) => [item.id, item]));
+	const groups = groupOrderItems(data.items);
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
@@ -308,7 +329,7 @@ export default function BillDetailPage() {
 				) : null}
 
 				<div className="mt-6 grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start lg:gap-8 print:hidden">
-					{data.items.length === 0 ? (
+					{groups.length === 0 ? (
 						<p className="text-muted">No items ordered yet.</p>
 					) : (
 						<div className="overflow-x-auto rounded-xl border border-divider">
@@ -339,39 +360,57 @@ export default function BillDetailPage() {
 									</tr>
 								</thead>
 								<tbody>
-									{data.items.map((item) => {
-										const fullyWaived = item.waivedQuantity >= item.quantity;
-										const struck = item.status === "cancelled" || fullyWaived;
+									{groups.map((group) => {
+										const fullyWaived = group.waivedQuantity >= group.quantity;
 										const billedQuantity = billableQuantity(
-											item.quantity,
-											item.waivedQuantity,
-											item.cancelledQuantity,
+											group.quantity,
+											group.waivedQuantity,
+											group.cancelledQuantity,
 										);
-										const isEditingThis = editing?.itemId === item.id;
+										const struck = billedQuantity <= 0;
+										const activeItem = itemsById.get(group.activeItemId);
+										const isEditingThis =
+											editing?.itemId === group.activeItemId;
 										const rowClass = struck
 											? "text-muted line-through"
 											: "text-primary";
-										const waiveMax = item.quantity - item.cancelledQuantity;
-										const cancelMax = item.quantity - item.waivedQuantity;
+										// The pill shows the merged quantity but every click still
+										// edits one underlying row (activeItem) outright — see
+										// order-item-groups.ts.
+										const showPill =
+											isCounterBill && group.cancellable && canCorrect;
+										const waiveMax = activeItem
+											? activeItem.quantity - activeItem.cancelledQuantity
+											: 0;
+										const cancelMax = activeItem
+											? activeItem.quantity - activeItem.waivedQuantity
+											: 0;
 										return (
-											<Fragment key={item.id}>
+											<Fragment key={group.key}>
 												<tr className="border-divider border-t">
 													<td
 														className={`px-6 py-5 align-top text-lg ${rowClass}`}
 													>
-														<span className="mr-1 text-base text-muted">
-															{item.quantity}x
-														</span>
-														{titleCase(item.name)}
-														{item.waivedQuantity > 0 && !fullyWaived ? (
+														{showPill ? null : (
+															<span className="mr-1 text-base text-muted">
+																{group.quantity}x
+															</span>
+														)}
+														{titleCase(group.name)}
+														{group.modifiers ? (
+															<span className="ml-1 text-muted text-sm">
+																({group.modifiers})
+															</span>
+														) : null}
+														{group.waivedQuantity > 0 && !fullyWaived ? (
 															<p className="mt-1 text-caps text-muted">
-																{item.waivedQuantity} of {item.quantity} waived
+																{group.waivedQuantity} of {group.quantity}{" "}
+																waived
 															</p>
 														) : null}
-														{item.cancelledQuantity > 0 &&
-														item.status !== "cancelled" ? (
+														{group.cancelledQuantity > 0 && !struck ? (
 															<p className="mt-1 text-caps text-muted">
-																{item.cancelledQuantity} of {item.quantity}{" "}
+																{group.cancelledQuantity} of {group.quantity}{" "}
 																cancelled
 															</p>
 														) : null}
@@ -379,80 +418,98 @@ export default function BillDetailPage() {
 													<td
 														className={`px-3 py-5 text-right align-top tabular-nums ${rowClass}`}
 													>
-														{formatBillAmount(item.unitPrice)}
+														{formatBillAmount(group.unitPrice)}
 													</td>
 													<td
 														className={`px-3 py-5 text-right align-top tabular-nums ${rowClass}`}
 													>
-														{formatBillAmount(item.unitPrice * billedQuantity)}
+														{formatBillAmount(group.unitPrice * billedQuantity)}
 													</td>
 													<td className="px-5 py-5 align-top">
 														{isCounterBill ? (
-															item.cancellable && canCorrect ? (
+															isSettled &&
+															group.releasableItemIds.length > 0 ? (
+																<button
+																	type="button"
+																	disabled={releaseItemMutation.isPending}
+																	onClick={() =>
+																		releaseItemMutation.mutate({
+																			orderItemIds: group.releasableItemIds,
+																		})
+																	}
+																	className="rounded-md border border-divider px-4 py-3 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+																>
+																	{releaseItemMutation.isPending
+																		? "Sending…"
+																		: "Send to Kitchen"}
+																</button>
+															) : showPill && activeItem ? (
 																<div className="flex justify-end">
 																	<QuantityPill
 																		value={billedQuantity}
 																		disabled={setQuantityMutation.isPending}
 																		onDecrement={() =>
 																			setQuantityMutation.mutate({
-																				orderItemId: item.id,
-																				quantity: billedQuantity - 1,
+																				orderItemId: activeItem.id,
+																				quantity: activeItem.quantity - 1,
 																			})
 																		}
 																		onIncrement={() =>
 																			setQuantityMutation.mutate({
-																				orderItemId: item.id,
-																				quantity: billedQuantity + 1,
+																				orderItemId: activeItem.id,
+																				quantity: activeItem.quantity + 1,
 																			})
 																		}
 																	/>
 																</div>
-															) : item.waivable && canCorrect ? (
+															) : group.waivable && canCorrect && activeItem ? (
 																<button
 																	type="button"
 																	onClick={() =>
 																		isEditingThis && editing?.kind === "waive"
 																			? closeEditor()
-																			: openEditor(item, "waive")
+																			: openEditor(activeItem, "waive")
 																	}
 																	aria-expanded={
 																		isEditingThis && editing?.kind === "waive"
 																	}
 																	className="text-caps text-secondary hover:text-primary"
 																>
-																	{item.waivedQuantity > 0
+																	{group.waivedQuantity > 0
 																		? "Edit waiver"
 																		: "Waive"}
 																</button>
 															) : null
 														) : (
 															<div className="flex flex-col items-end gap-2">
-																{item.waivable && canCorrect ? (
+																{group.waivable && canCorrect && activeItem ? (
 																	<button
 																		type="button"
 																		onClick={() =>
 																			isEditingThis && editing?.kind === "waive"
 																				? closeEditor()
-																				: openEditor(item, "waive")
+																				: openEditor(activeItem, "waive")
 																		}
 																		aria-expanded={
 																			isEditingThis && editing?.kind === "waive"
 																		}
 																		className="text-caps text-secondary hover:text-primary"
 																	>
-																		{item.waivedQuantity > 0
+																		{group.waivedQuantity > 0
 																			? "Edit waiver"
 																			: "Waive"}
 																	</button>
 																) : null}
-																{item.cancellable && canCorrect ? (
+																{group.cancellable &&
+																canCorrect &&
+																activeItem ? (
 																	<button
 																		type="button"
 																		onClick={() =>
 																			isEditingThis &&
 																			editing?.kind === "cancel"
 																				? closeEditor()
-																				: openEditor(item, "cancel")
+																				: openEditor(activeItem, "cancel")
 																		}
 																		aria-expanded={
 																			isEditingThis &&
@@ -460,7 +517,7 @@ export default function BillDetailPage() {
 																		}
 																		className="text-accent-secondary text-caps hover:opacity-80"
 																	>
-																		{item.cancelledQuantity > 0
+																		{group.cancelledQuantity > 0
 																			? "Edit cancel"
 																			: "Cancel"}
 																	</button>
@@ -469,7 +526,7 @@ export default function BillDetailPage() {
 														)}
 													</td>
 												</tr>
-												{isEditingThis ? (
+												{isEditingThis && editing && activeItem ? (
 													<tr className="border-divider border-t bg-background">
 														<td colSpan={4} className="px-6 py-4">
 															<div className="flex flex-wrap items-center justify-between gap-4">
@@ -504,7 +561,7 @@ export default function BillDetailPage() {
 																		}
 																	/>
 																	<span className="text-secondary text-sm">
-																		of {item.quantity}
+																		of {activeItem.quantity}
 																	</span>
 																</div>
 																<div className="flex items-center gap-4">
@@ -518,7 +575,7 @@ export default function BillDetailPage() {
 																	</button>
 																	<button
 																		type="button"
-																		onClick={() => applyEditor(item)}
+																		onClick={() => applyEditor(activeItem)}
 																		disabled={isPending()}
 																		className="text-accent text-caps hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
 																	>
@@ -527,7 +584,7 @@ export default function BillDetailPage() {
 																</div>
 															</div>
 															{editing.kind === "cancel" &&
-															pendingQty === item.quantity ? (
+															pendingQty === activeItem.quantity ? (
 																<p className="mt-3 text-secondary text-sm">
 																	Cancelling the full quantity removes this item
 																	from the kitchen queue for good.
@@ -555,89 +612,85 @@ export default function BillDetailPage() {
 							</div>
 						</dl>
 
-						{data.priorBills.length > 0 ? (
-							<dl className="flex flex-col gap-3 rounded-xl border border-divider bg-surface p-5 print:hidden">
-								<p className="text-caps text-secondary">Previous rounds</p>
-								{data.priorBills.map((prior) => (
-									<div key={prior.billId} className="flex flex-col gap-0.5">
-										<div className="flex items-baseline justify-between gap-4 tabular-nums">
-											<span className="text-primary text-sm">
-												{prior.dailyToken != null
-													? `Token ${prior.dailyToken}`
-													: `Bill #${prior.billNumber}`}
-											</span>
-											<span className="text-secondary text-sm">
-												{formatBillAmount(prior.total)}
-											</span>
-										</div>
-										{prior.settledAt ? (
-											<span className="text-muted text-xs">
-												Settled {formatTime(prior.settledAt)}
-											</span>
-										) : null}
-									</div>
-								))}
-							</dl>
+						{/* Counter only (docs/product.md § "A bill paid, then another
+						order"): a Full-Service (One) session's one bill is settled
+						exactly once, permanently, so it never has another round to show
+						here — this is only ever populated on Counter, where paying
+						doesn't end the session and each round draws its own bill. */}
+						{isCounterBill && data.otherBills.length > 0 ? (
+							<button
+								type="button"
+								onClick={() => setShowOtherRounds(true)}
+								className="rounded-xl border border-divider bg-surface px-5 py-3 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary print:hidden"
+							>
+								Previous Rounds ({data.otherBills.length})
+							</button>
 						) : null}
 
-						<div className="flex flex-col gap-3">
-							{data.status === "open" ? (
-								<button
-									type="button"
-									onClick={() => requestMutation.mutate({ sessionId })}
-									disabled={requestMutation.isPending}
-									className="rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
-								>
-									{requestMutation.isPending ? "Requesting…" : "Request Bill"}
-								</button>
-							) : null}
-
-							{data.status === "requested" ? (
-								<button
-									type="button"
-									onClick={() => setConfirming("settle")}
-									disabled={settleMutation.isPending}
-									className="rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
-								>
-									Mark Bill Settled
-								</button>
-							) : data.status === "settled" &&
-								data.sessionStatus === "active" ? (
-								<>
+						{data.isLatestBill ? (
+							<div className="flex flex-col gap-3">
+								{data.status === "open" ? (
 									<button
 										type="button"
-										onClick={() => setConfirming("close")}
-										disabled={
-											data.hasItemsInProgress || closeMutation.isPending
-										}
+										onClick={() => requestMutation.mutate({ sessionId })}
+										disabled={requestMutation.isPending}
 										className="rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
 									>
-										Close Session
+										{requestMutation.isPending ? "Requesting…" : "Request Bill"}
 									</button>
-									{data.hasItemsInProgress ? (
-										<p className="text-center text-error text-sm">
-											This session still has orders in progress — every item
-											must be served or cancelled before it can close.
-										</p>
-									) : null}
-								</>
-							) : data.status === "settled" ? (
-								<p className="text-center text-muted text-sm">
-									Session closed.
-								</p>
-							) : null}
+								) : null}
 
-							{data.sessionStatus === "active" ? (
-								<button
-									type="button"
-									onClick={() => setConfirming("terminate")}
-									disabled={terminateMutation.isPending}
-									className="rounded-md border border-error px-6 py-3 font-medium text-error text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-60"
-								>
-									Force-Terminate Session
-								</button>
-							) : null}
-						</div>
+								{data.status === "requested" ? (
+									<button
+										type="button"
+										onClick={() => setConfirming("settle")}
+										disabled={settleMutation.isPending}
+										className="rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
+									>
+										Mark Bill Settled
+									</button>
+								) : null}
+
+								{/* Full-Service only (docs/product.md § Bills tab: "Counter has
+								no equivalent button") — the routine, non-override end of a
+								visit, gated by close_session() on every bill settled and
+								nothing left in progress. Counter only ever ends via idle
+								auto-sweep or the Force-Terminate override below. */}
+								{!isCounterBill &&
+								data.status === "settled" &&
+								data.sessionStatus === "active" ? (
+									<>
+										<button
+											type="button"
+											onClick={() => setConfirming("close")}
+											disabled={
+												data.hasItemsInProgress || closeMutation.isPending
+											}
+											className="rounded-md bg-accent px-6 py-3 font-medium text-background text-sm transition-colors duration-(--duration-base) ease-out hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
+										>
+											Close Session
+										</button>
+										{data.hasItemsInProgress ? (
+											<p className="text-center text-error text-sm">
+												This session still has orders in progress — every item
+												must be served or cancelled before it can close.
+											</p>
+										) : null}
+									</>
+								) : null}
+
+								{data.sessionStatus === "active" ? (
+									<button
+										type="button"
+										onClick={() => setConfirming("terminate")}
+										disabled={terminateMutation.isPending}
+										className="rounded-md border border-error px-6 py-3 font-medium text-error text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-60"
+									>
+										Force-Terminate Session
+									</button>
+								) : null}
+							</div>
+						) : null}
 					</div>
 				</div>
 
@@ -698,12 +751,19 @@ export default function BillDetailPage() {
 							</thead>
 							<tbody>
 								{data.lines.map((line) => (
-									<tr key={`${line.name}:${line.unitPrice}`}>
+									<tr
+										key={`${line.name}:${line.unitPrice}:${line.modifiers ?? ""}`}
+									>
 										<td className="py-1.5 align-top text-base text-primary">
 											<span className="mr-1 text-muted text-sm">
 												{line.quantity}×
 											</span>
 											{titleCase(line.name)}
+											{line.modifiers ? (
+												<span className="ml-1 text-muted text-sm">
+													({line.modifiers})
+												</span>
+											) : null}
 										</td>
 										<td className="py-1.5 pl-3 text-right align-top text-secondary text-sm">
 											{formatBillAmount(line.unitPrice)}
@@ -766,8 +826,12 @@ export default function BillDetailPage() {
 					title="Force-terminate this session?"
 					body={
 						data.status === "settled"
-							? "This frees every table in this session. The settled bill stays exactly as it is in your history."
-							: "This frees every table in this session and voids the open bill — it won't appear as revenue. Use this only for an abandoned table (walkout)."
+							? isCounterBill
+								? "This closes the session. The settled bill stays exactly as it is in your history."
+								: "This frees every table in this session. The settled bill stays exactly as it is in your history."
+							: isCounterBill
+								? "This closes the session and voids the open bill — it won't appear as revenue. Sessions only auto-close once their bill is settled and every item is served, so use this to clear one stuck before that point, such as a guest who left without paying."
+								: "This frees every table in this session and voids the open bill — it won't appear as revenue. Use this only for an abandoned table (walkout)."
 					}
 					confirmLabel="Force-Terminate"
 					pendingLabel="Terminating…"
@@ -777,7 +841,103 @@ export default function BillDetailPage() {
 				/>
 			) : null}
 
+			{showOtherRounds ? (
+				<OtherRoundsDialog
+					restaurantId={restaurantId}
+					sessionId={sessionId}
+					otherBills={data.otherBills}
+					onClose={() => setShowOtherRounds(false)}
+				/>
+			) : null}
+
 			{toast ? <Toast toast={toast} onDismiss={() => setToast(null)} /> : null}
+		</div>
+	);
+}
+
+// Lists every other round of this session in a modal rather than a permanent
+// sidebar disclosure, so a session with several settled rounds doesn't push
+// the totals panel and action buttons down the page.
+function OtherRoundsDialog({
+	restaurantId,
+	sessionId,
+	otherBills,
+	onClose,
+}: {
+	restaurantId: string;
+	sessionId: string;
+	otherBills: {
+		billId: string;
+		billNumber: string | null;
+		dailyToken: number | null;
+		total: number;
+		status: string;
+		settledAt: string | null;
+	}[];
+	onClose: () => void;
+}) {
+	const [isVisible, setIsVisible] = useState(false);
+	const titleId = useId();
+	const containerRef = useDismissableOverlay<HTMLDivElement>(true, onClose);
+
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => setIsVisible(true));
+		return () => cancelAnimationFrame(frame);
+	}, []);
+
+	return (
+		<div className="fixed inset-0 z-(--z-overlay) flex items-center justify-center bg-glass p-4">
+			<div
+				ref={containerRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby={titleId}
+				className={`w-full max-w-sm rounded-xl border border-divider bg-surface-elevated p-8 shadow-lg transition-[opacity,transform] duration-(--duration-deliberate) ease-out ${
+					isVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+				}`}
+			>
+				<div className="flex items-center justify-between">
+					<h2 id={titleId} className="text-lg text-primary">
+						Previous Rounds
+					</h2>
+					<button
+						type="button"
+						onClick={onClose}
+						className="icon-tap-target rounded-full text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
+					>
+						<X className="icon-md" strokeWidth={1.5} aria-hidden="true" />
+						<span className="sr-only">Close</span>
+					</button>
+				</div>
+				<dl className="mt-5 flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
+					{otherBills.map((other) => (
+						<Link
+							key={other.billId}
+							href={`/restaurants/${restaurantId}/bills/${sessionId}?bill=${other.billId}`}
+							onClick={onClose}
+							className="flex flex-col gap-0.5 no-underline hover:opacity-80"
+						>
+							<div className="flex items-baseline justify-between gap-4 tabular-nums">
+								<span className="text-primary text-sm">
+									{other.dailyToken != null
+										? `Token ${other.dailyToken}`
+										: `Bill #${other.billNumber}`}
+								</span>
+								<span className="text-secondary text-sm">
+									{formatBillAmount(other.total)}
+								</span>
+							</div>
+							<span className="text-muted text-xs">
+								{other.status === "settled"
+									? `Settled${other.settledAt ? ` ${formatTime(other.settledAt)}` : ""}`
+									: other.status === "requested"
+										? "Requested"
+										: "Open"}
+							</span>
+						</Link>
+					))}
+				</dl>
+			</div>
 		</div>
 	);
 }

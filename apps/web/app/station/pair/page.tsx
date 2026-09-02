@@ -60,6 +60,7 @@ export default function StationPairPage() {
 			// requireOwnStaffId can verify it server-side before trusting it for
 			// revocation checks. If the station ever re-pairs, a fresh redemption
 			// overwrites this with the new device's signed token.
+			// biome-ignore lint/suspicious/noDocumentCookie: Cookie Store API isn't supported on every browser this device could be; this write is well-formed and needs no wider surface.
 			document.cookie = `${STATION_DEVICE_ID_COOKIE}=${deviceToken}; path=/; max-age=${STATION_DEVICE_TOKEN_TTL_SECONDS}`;
 			router.replace(`/restaurants/${restaurantId}/floor`);
 		} catch (mutationError) {

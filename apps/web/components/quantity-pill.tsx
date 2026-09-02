@@ -22,6 +22,7 @@ export function QuantityPill({
 	onIncrement,
 	max,
 	disabled = false,
+	disableDecrement = false,
 }: {
 	value: number;
 	onDecrement: () => void;
@@ -32,6 +33,11 @@ export function QuantityPill({
 	// cart's "nothing added yet" affordance.
 	max?: number;
 	disabled?: boolean;
+	// For a displayed value that blends live cart quantity with quantity
+	// already placed elsewhere (e.g. an earlier confirmed round) — decrementing
+	// only ever removes from the cart side, so this stays true once that part
+	// hits 0 even though the shown value is still above 0.
+	disableDecrement?: boolean;
 }) {
 	if (value === 0 && max === undefined) {
 		return (
@@ -52,7 +58,7 @@ export function QuantityPill({
 				type="button"
 				aria-label="Decrease quantity"
 				onClick={onDecrement}
-				disabled={disabled || value <= 0}
+				disabled={disabled || disableDecrement || value <= 0}
 				className="flex h-full flex-1 items-center justify-center text-primary text-sm leading-none transition-colors duration-(--duration-base) ease-out hover:text-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-primary"
 			>
 				−

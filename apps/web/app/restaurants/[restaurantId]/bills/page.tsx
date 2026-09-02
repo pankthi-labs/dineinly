@@ -28,7 +28,7 @@ export default function BillsPage() {
 	const [search, setSearch] = useState("");
 	const [tokenSearch, setTokenSearch] = useState("");
 	const [exactDate, setExactDate] = useState("");
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>("requested");
 
 	const restaurantQuery = trpc.restaurants.getById.useQuery({
 		id: restaurantId,
@@ -55,7 +55,15 @@ export default function BillsPage() {
 		"order_item.status": () => utils.bills.list.invalidate(),
 	});
 
-	const bills = listQuery.data ?? [];
+	const isCounter = restaurantQuery.data?.experience === "counter";
+	// Counter only (docs/product.md § Close): a scanned-but-never-ordered
+	// token has no bill and nothing to act on, and idle-sweeps on its own
+	// (close_idle_counter_sessions) — there's nothing here for staff to do,
+	// so it never appears. A session that did draw a bill keeps showing
+	// (Requested/Settled) for as long as it's unsettled or unfinished.
+	const bills = (listQuery.data ?? []).filter(
+		(b) => !isCounter || b.status !== "open",
+	);
 	const filterCounts = {
 		all: bills.length,
 		open: bills.filter((b) => b.status === "open").length,
@@ -66,11 +74,20 @@ export default function BillsPage() {
 		["open", "requested", "settled"] as StatusFilter[]
 	).filter((status) => filterCounts[status] > 0);
 	const visibleStatusFilters = visibleFilters(STATUS_FILTERS, statusesPresent);
-	const isCounter = restaurantQuery.data?.experience === "counter";
 	const normalizedSearch = search.trim().toLowerCase();
 	const normalizedTokenSearch = tokenSearch.trim();
+	// Defaults to Requested so staff land on what needs action — but with
+	// nothing requested that default would silently show an empty list, so it
+	// falls back to All rather than leave the page looking broken.
+	const effectiveStatusFilter =
+		statusFilter === "requested" && filterCounts.requested === 0
+			? "all"
+			: statusFilter;
 	const visibleBills = bills
-		.filter((b) => statusFilter === "all" || b.status === statusFilter)
+		.filter(
+			(b) =>
+				effectiveStatusFilter === "all" || b.status === effectiveStatusFilter,
+		)
 		.filter(
 			(b: Bill) =>
 				!normalizedSearch ||
@@ -153,9 +170,9 @@ export default function BillsPage() {
 									key={filter.value}
 									type="button"
 									onClick={() => setStatusFilter(filter.value)}
-									aria-pressed={statusFilter === filter.value}
+									aria-pressed={effectiveStatusFilter === filter.value}
 									className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
-										statusFilter === filter.value
+										effectiveStatusFilter === filter.value
 											? "border-accent text-primary"
 											: "border-divider text-secondary hover:text-primary"
 									}`}
@@ -216,7 +233,7 @@ export default function BillsPage() {
 					) : (
 						visibleBills.map((bill) => (
 							<BillRow
-								key={bill.sessionId}
+								key={bill.billId ?? bill.sessionId}
 								restaurantId={restaurantId}
 								bill={bill}
 							/>

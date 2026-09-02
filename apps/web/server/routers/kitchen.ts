@@ -83,20 +83,24 @@ async function assertCounterBillsSettled(
 		throw dbError("Unable to update the order.", ordersResult.error);
 	}
 	const orders = ordersResult.data ?? [];
-	const billIds = [
-		...new Set(
-			orders.map((row) => row.bill_id).filter((id): id is string => id != null),
-		),
-	];
 	// An order with no bill yet can't possibly be settled — same unpaid
-	// outcome as a bill that exists but hasn't settled.
-	if (billIds.length < orders.length) {
+	// outcome as a bill that exists but hasn't settled. Checked directly
+	// (not by comparing counts against a deduped bill-id set) because a
+	// Counter round can carry more than one order against the same bill
+	// (repeat pre-settle confirms) — a count comparison would flag that as
+	// "missing a bill" for every order past the first.
+	if (orders.some((row) => row.bill_id == null)) {
 		throw new TRPCError({
 			code: "BAD_REQUEST",
 			message:
 				"This order hasn't been paid yet — settle the bill before the kitchen can start.",
 		});
 	}
+	const billIds = [
+		...new Set(
+			orders.map((row) => row.bill_id).filter((id): id is string => id != null),
+		),
+	];
 
 	const billsResult = await ctx.auth
 		.from("bills")

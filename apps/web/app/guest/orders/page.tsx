@@ -80,7 +80,14 @@ export default function GuestOrdersPage() {
 			utils.guest.orders.list.invalidate();
 			utils.guest.bill.get.invalidate();
 		},
-		"bill.status": () => utils.guest.bill.get.invalidate(),
+		// Settling flips which of this session's items guest.orders.list even
+		// returns (Counter-experience gate: hidden until its own bill settles)
+		// — bill.get alone leaves this page's order groups stuck until
+		// something else refetches orders.list.
+		"bill.status": () => {
+			utils.guest.bill.get.invalidate();
+			utils.guest.orders.list.invalidate();
+		},
 	});
 
 	if (

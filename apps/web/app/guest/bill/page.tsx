@@ -2,7 +2,8 @@
 
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { GuestBillReceipt } from "@/components/guest-bill-receipt";
 import { GuestPageHeader } from "@/components/guest-page-header";
 import {
 	GuestError,
@@ -10,7 +11,6 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { OrderGroupCard } from "@/components/order-status-groups";
-import { formatBillAmount, titleCase } from "@/lib/format";
 import { counterOrderGroups } from "@/lib/order-groups";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
@@ -25,27 +25,36 @@ import { trpc } from "@/lib/trpc-client";
 export default function GuestBillPage() {
 	const router = useRouter();
 	const bill = trpc.guest.bill.get.useQuery(undefined, { retry: false });
-	// Counter only (dailyToken is null on every other experience): once
-	// settled, the kitchen has started, so per-item status becomes meaningful
-	// — reuses the same guest.orders.list query and OrderGroup pattern as the
-	// Full-Service "My Orders" screen (app/guest/orders/page.tsx).
-	const showOrderStatus =
-		bill.data?.dailyToken != null && bill.data.status === "settled";
+	// Counter only (dailyToken is null on every other experience) — reuses the
+	// same guest.orders.list query and OrderGroup pattern as the Full-Service
+	// "My Orders" screen (app/guest/orders/page.tsx). Independent of *this*
+	// bill's own status: guest.orders.list already scopes itself to
+	// settled-bill items only, so a still-unpaid new round (Add More Items
+	// before settling) never hides an earlier, already-settled round's items
+	// still awaiting pickup.
+	const showOrderStatus = bill.data?.dailyToken != null;
 	const orders = trpc.guest.orders.list.useQuery(undefined, {
 		enabled: showOrderStatus,
 	});
 	const utils = trpc.useUtils();
-	const [sendingItemId, setSendingItemId] = useState<string | null>(null);
+	const [sendingKey, setSendingKey] = useState<string | null>(null);
 	const releaseItem = trpc.guest.orders.release.useMutation({
 		onSettled: () => {
-			setSendingItemId(null);
+			setSendingKey(null);
 			utils.guest.orders.list.invalidate();
 		},
 	});
 
 	const { client, sessionId } = useGuestRealtime();
 	useBroadcastChannel(client, sessionId ? `session:${sessionId}` : null, {
-		"bill.status": () => utils.guest.bill.get.invalidate(),
+		// Settling flips which of this session's items guest.orders.list even
+		// returns (Counter-experience gate: hidden from "Ready to send" etc.
+		// until its own bill settles) — bill.get alone leaves the order-status
+		// section below stuck until something else refetches orders.list.
+		"bill.status": () => {
+			utils.guest.bill.get.invalidate();
+			utils.guest.orders.list.invalidate();
+		},
 		"order.new": () => {
 			utils.guest.bill.get.invalidate();
 			utils.guest.orders.list.invalidate();
@@ -81,6 +90,9 @@ export default function GuestBillPage() {
 
 	const data = bill.data;
 	const isCounter = data.dailyToken != null;
+	const showOrderMore =
+		isCounter && (data.status === "requested" || data.status === "settled");
+	const showPastBills = data.otherBills.length > 0;
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
@@ -88,7 +100,9 @@ export default function GuestBillPage() {
 				restaurantName={data.restaurant.name}
 				tableLabel={isCounter ? null : data.tableLabel}
 			/>
-			<main className="px-5 pt-4 pb-16">
+			<main
+				className={`px-5 pt-4 ${showPastBills || showOrderMore ? "pb-24" : "pb-16"}`}
+			>
 				{isCounter ? (
 					<p className="text-secondary text-sm">
 						Please show this token at the counter to complete your payment.
@@ -117,103 +131,16 @@ export default function GuestBillPage() {
 					</div>
 				) : null}
 
-				<div className="mx-auto mt-6 max-w-md rounded-xl border border-divider bg-surface p-5 tabular-nums">
-					<header className="text-center">
-						<h2 className="text-3xl">{titleCase(data.restaurant.name)}</h2>
-						<p className="mt-2 text-secondary text-sm">
-							{data.restaurant.address}, {data.restaurant.city},{" "}
-							{data.restaurant.state} {data.restaurant.pincode}
-						</p>
-						<p className="mt-1 text-muted text-xs">
-							GSTIN: {data.restaurant.gstNumber}
-						</p>
-						<p className="mt-1 text-caps text-muted">
-							Bill #{data.billNumber}
-							{data.tableLabel ? ` · Table ${data.tableLabel}` : ""}
-							{data.status === "settled" ? " · Settled" : ""}
-						</p>
-					</header>
-
-					<div className="mt-4 border-divider border-t border-dashed" />
-
-					{data.lines.length === 0 ? (
-						<p className="mt-6 text-center text-muted">
-							No billable items yet.
-						</p>
-					) : (
-						<>
-							<table className="mt-4 w-full border-collapse">
-								<thead>
-									<tr>
-										<th
-											scope="col"
-											className="pb-3 text-left text-caps text-secondary"
-										>
-											Item
-										</th>
-										<th
-											scope="col"
-											className="pb-3 pl-3 text-right text-caps text-secondary"
-										>
-											Rate
-										</th>
-										<th
-											scope="col"
-											className="pb-3 pl-3 text-right text-caps text-secondary"
-										>
-											Amount
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{data.lines.map((line) => (
-										<tr key={`${line.name}:${line.unitPrice}`}>
-											<td className="py-1.5 align-top text-base text-primary">
-												<span className="mr-1 text-muted text-sm">
-													{line.quantity}×
-												</span>
-												{titleCase(line.name)}
-											</td>
-											<td className="py-1.5 pl-3 text-right align-top text-secondary text-sm">
-												{formatBillAmount(line.unitPrice)}
-											</td>
-											<td className="py-1.5 pl-3 text-right align-top text-base text-primary">
-												{formatBillAmount(line.amount)}
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-
-							<div className="mt-5 border-divider border-t border-dashed" />
-
-							<dl className="mt-4 flex flex-col gap-2">
-								<TotalsRow label="Subtotal" amount={data.subtotal} strong />
-								{data.taxSlabs.map((slab) => (
-									<Fragment key={`cgst-${slab.ratePercent}`}>
-										<TotalsRow
-											label={`CGST (${slab.ratePercent}%)`}
-											amount={slab.cgst}
-										/>
-										<TotalsRow
-											label={`SGST (${slab.ratePercent}%)`}
-											amount={slab.sgst}
-										/>
-									</Fragment>
-								))}
-							</dl>
-
-							<div className="mt-4 border-divider border-t" />
-
-							<div className="mt-4 flex items-baseline justify-between gap-4">
-								<span className="text-xl">Grand Total</span>
-								<span className="text-2xl text-accent">
-									{formatBillAmount(data.total)}
-								</span>
-							</div>
-						</>
-					)}
-				</div>
+				<GuestBillReceipt
+					restaurant={data.restaurant}
+					billNumber={data.billNumber}
+					tableLabel={data.tableLabel}
+					status={data.status}
+					lines={data.lines}
+					subtotal={data.subtotal}
+					taxSlabs={data.taxSlabs}
+					total={data.total}
+				/>
 
 				{showOrderStatus ? (
 					<div className="mx-auto mt-6 flex max-w-md flex-col gap-6">
@@ -221,62 +148,48 @@ export default function GuestBillPage() {
 							<OrderGroupCard
 								key={group.key}
 								group={group}
-								onSend={(itemId) => {
-									setSendingItemId(itemId);
-									releaseItem.mutate({ orderItemId: itemId });
+								onSend={(itemIds, key) => {
+									setSendingKey(key);
+									releaseItem.mutate({ orderItemIds: itemIds });
 								}}
-								sendingItemId={sendingItemId}
+								sendingKey={sendingKey}
 							/>
 						))}
 					</div>
 				) : null}
-
-				{showOrderStatus ? (
-					<a
-						href="/guest/menu"
-						className="mx-auto mt-6 block max-w-md rounded-md border border-divider px-6 py-4 text-center font-medium text-primary text-sm no-underline transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
-					>
-						Order More
-					</a>
-				) : null}
-
-				{/* Counter: submit_order() no longer blocks ordering after settle
-				(a new round just draws a fresh bill on this same session) — both
-				this and "Order More" above are plain navigation back to the menu,
-				never a special resume/reorder flow. */}
-				{isCounter && data.status === "requested" ? (
-					<button
-						type="button"
-						onClick={() => router.push("/guest/menu")}
-						className="mx-auto mt-6 block w-full max-w-md rounded-md border border-divider px-6 py-4 text-center font-medium text-primary text-sm transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated"
-					>
-						Add More Items
-					</button>
-				) : null}
 			</main>
-		</div>
-	);
-}
 
-function TotalsRow({
-	label,
-	amount,
-	strong,
-}: {
-	label: string;
-	amount: number;
-	strong?: boolean;
-}) {
-	return (
-		<div
-			className={`flex items-baseline justify-between ${strong ? "text-base" : "text-sm"}`}
-		>
-			<dt className={strong ? "font-medium text-primary" : "text-secondary"}>
-				{label}
-			</dt>
-			<dd className={strong ? "font-medium text-primary" : "text-primary"}>
-				{formatBillAmount(amount)}
-			</dd>
+			{showPastBills || showOrderMore ? (
+				<div className="fixed inset-x-0 bottom-0 z-(--z-sticky) border-divider border-t bg-surface-elevated px-5 py-4">
+					<div
+						className={`flex items-center gap-4 ${showOrderMore ? "" : "justify-center"}`}
+					>
+						{showPastBills ? (
+							<button
+								type="button"
+								onClick={() => router.push("/guest/past-bills")}
+								className="-my-3 py-3 font-semibold text-secondary text-sm transition-colors duration-(--duration-base) ease-out hover:text-primary"
+							>
+								Past Bills ({data.otherBills.length})
+							</button>
+						) : null}
+						{/* Counter: submit_order() never blocks ordering again, before or
+						after settle (a new round just draws a fresh bill on the same
+						session) — this is plain navigation back to the menu either way,
+						never a special resume/reorder flow. One button, not two: label
+						only changes with whether this round has been paid yet. */}
+						{showOrderMore ? (
+							<button
+								type="button"
+								onClick={() => router.push("/guest/menu")}
+								className="ml-auto rounded-md bg-accent px-6 py-4 font-medium text-background text-sm"
+							>
+								{data.status === "settled" ? "Order More" : "Add More Items"}
+							</button>
+						) : null}
+					</div>
+				</div>
+			) : null}
 		</div>
 	);
 }

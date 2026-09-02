@@ -1048,7 +1048,25 @@ grant execute on function public.set_menu_item_availability(uuid, uuid, public.a
 -- ''` with fully schema-qualified references, `execute` revoked from
 -- `public`.
 
-create or replace function public.resolve_qr_token(p_qr_token text)
+create or replace function public.resolve_qr_token(
+	p_qr_token text,
+	-- The scanning browser's own current guest session, if it has one — its
+	-- signature is verified server-side (apps/web/app/qr/[qrToken]/route.ts,
+	-- against its existing httpOnly cookie) before this call, so it's a
+	-- genuine claim of that session, not caller-asserted. This function only
+	-- re-checks it belongs to the restaurant this QR resolves to and is
+	-- still active before reusing it — it does not re-verify the caller owns
+	-- it, so tenancy here still rests on the id being a private, unguessable
+	-- v4 UUID that's never exposed anywhere a guest (or anyone else) can read
+	-- it outside their own signed cookie. Counter-only resume path:
+	-- re-scanning Counter's shared QR used to always mint a fresh, disjoint
+	-- session, silently orphaning any cart/paid-but-unsent items the guest
+	-- still had open in their real one. Table QR ignores this entirely —
+	-- that branch already joins whichever session the table itself currently
+	-- holds, by design (shared cart, every scan same session), so there is
+	-- nothing to "resume" there.
+	p_existing_session_id uuid default null
+)
 returns table (
 	restaurant_id uuid,
 	session_id uuid,
@@ -1066,6 +1084,8 @@ declare
 	v_session_id uuid;
 	v_session_status public.session_status;
 	v_experience public.restaurant_experience;
+	v_existing_restaurant_id uuid;
+	v_existing_status public.session_status;
 begin
 	select rt.id, rt.restaurant_id, rt.label, rt.session_id
 	into v_table_id, v_restaurant_id, v_label, v_session_id
@@ -1100,12 +1120,13 @@ begin
 	end if;
 
 	-- No table QR matched — try the Menu/Counter universal QR
-	-- (docs/core-data-model.md § Experience Gating). Unlike the table branch
-	-- above, this never joins an existing session: one universal QR serves
-	-- many concurrent guests, so every scan starts its own fresh, tableless
-	-- session. sessions already has no table_id column, so no schema
-	-- change is needed for this second entry path. Which behavior the guest
-	-- gets (view-only Menu vs order-taking Counter) comes from the live
+	-- (docs/core-data-model.md § Experience Gating). One universal QR serves
+	-- many concurrent guests, so a scan normally starts its own fresh,
+	-- tableless session — except Counter's own re-scan resume path just
+	-- below, which is the one case this reuses an existing session here.
+	-- sessions already has no table_id column, so no schema change is
+	-- needed for this second entry path. Which behavior the guest gets
+	-- (view-only Menu vs order-taking Counter) comes from the live
 	-- `experience` value read here, not from a hardcoded branch — the same
 	-- token means whichever the restaurant is currently running as.
 	select r.id, r.experience into v_restaurant_id, v_experience
@@ -1116,19 +1137,39 @@ begin
 		raise exception 'Invalid QR code';
 	end if;
 
-	insert into public.sessions (restaurant_id)
-	values (v_restaurant_id)
-	returning id into v_session_id;
+	-- Counter re-scan resume: only when the browser's own existing session
+	-- both belongs to this same restaurant and is still active — a session
+	-- closed since (settled, served, and either idle-swept or explicitly
+	-- closed) or one carried over from a different restaurant's QR both
+	-- fall through to minting a fresh session below, same as before this
+	-- parameter existed. Menu keeps its original always-fresh behavior
+	-- (short capped TTL is the point there — docs/guest-token.ts) — this
+	-- reuse only ever applies to Counter.
+	if v_experience = 'counter' and p_existing_session_id is not null then
+		select restaurant_id, status into v_existing_restaurant_id, v_existing_status
+		from public.sessions
+		where id = p_existing_session_id;
+
+		if v_existing_restaurant_id = v_restaurant_id and v_existing_status = 'active' then
+			v_session_id := p_existing_session_id;
+		end if;
+	end if;
+
+	if v_session_id is null then
+		insert into public.sessions (restaurant_id)
+		values (v_restaurant_id)
+		returning id into v_session_id;
+	end if;
 
 	return query select v_restaurant_id, v_session_id, null::text, v_experience;
 end;
 $$;
 
-revoke execute on function public.resolve_qr_token(text) from public;
+revoke execute on function public.resolve_qr_token(text, uuid) from public;
 -- Called pre-auth (no guest JWT minted yet), so the request arrives as
 -- `anon`; also grant `authenticated` for the same leftover-session-cookie
 -- reason as resolve_staff_signin above.
-grant execute on function public.resolve_qr_token(text) to anon, authenticated;
+grant execute on function public.resolve_qr_token(text, uuid) to anon, authenticated;
 
 -- ============================================================================
 -- 9. Guest ordering: submit_order
@@ -1922,6 +1963,73 @@ $$;
 revoke execute on function public.release_order_item_to_kitchen(uuid) from public;
 grant execute on function public.release_order_item_to_kitchen(uuid) to authenticated;
 
+-- Staff-side safety net for the guest release above (docs/product.md § RBAC:
+-- every guest-facing self-service action stays staff-reachable too) — a
+-- guest can lose their own access to a paid round (a stray QR re-scan before
+-- that resumed sessions, a dead phone, a browser that dropped the cookie)
+-- and there is no other path back to release_order_item_to_kitchen(), which
+-- only ever checks jwt_is_guest_for_session. Same settled-bill gate, same
+-- idempotent no-op on an already-released item; only the caller check
+-- differs — Waiter/Manager/Owner or Dineinly Admin, mirroring
+-- staff_request_bill()'s role list, since this lives in the Bills tab
+-- alongside it.
+create or replace function public.staff_release_order_item_to_kitchen(
+	p_restaurant_id uuid,
+	p_order_item_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_staff_id uuid;
+	v_order_id uuid;
+	v_bill_status public.bill_status;
+begin
+	if not public.is_dineinly_admin() then
+		select id into v_staff_id
+		from public.staff
+		where restaurant_id = p_restaurant_id
+			and user_id = auth.uid()
+			and status = 'active'
+			and role in ('waiter', 'manager', 'owner');
+
+		if v_staff_id is null then
+			raise exception 'Only an active Waiter, Manager, or Owner may send an item to the kitchen';
+		end if;
+	end if;
+
+	select order_id into v_order_id
+	from public.order_items
+	where id = p_order_item_id and restaurant_id = p_restaurant_id;
+
+	if v_order_id is null then
+		raise exception 'Order item not found';
+	end if;
+
+	-- This item's own bill, not "the session's bill" — a Counter session can
+	-- carry more than one bill over its life (settle, order again), so the
+	-- gate has to be the round this specific item was ordered and paid in
+	-- (orders.bill_id), never a different round's status.
+	select b.status into v_bill_status
+	from public.orders o
+	join public.bills b on b.id = o.bill_id
+	where o.restaurant_id = p_restaurant_id and o.id = v_order_id;
+
+	if v_bill_status is distinct from 'settled' then
+		raise exception 'Pay the bill before sending items to the kitchen';
+	end if;
+
+	update public.order_items
+	set released_at = now(), updated_at = now()
+	where id = p_order_item_id and restaurant_id = p_restaurant_id and released_at is null;
+end;
+$$;
+
+revoke execute on function public.staff_release_order_item_to_kitchen(uuid, uuid) from public;
+grant execute on function public.staff_release_order_item_to_kitchen(uuid, uuid) to authenticated;
+
 -- ============================================================================
 -- 12. Realtime broadcast: publish side (docs/realtime.md)
 -- ============================================================================
@@ -2485,6 +2593,18 @@ begin
 		raise exception 'Only an active Waiter, Manager, or Owner may force-terminate a session';
 	end if;
 
+	-- orders.bill_id's FK is plain "no action" (not SET NULL: Postgres would
+	-- null the composite FK's restaurant_id column too, violating its NOT
+	-- NULL constraint) — null it out here, on bill_id alone, before deleting
+	-- the bill it points to.
+	update public.orders
+	set bill_id = null
+	where session_id = p_session_id
+		and bill_id in (
+			select id from public.bills
+			where session_id = p_session_id and status <> 'settled'
+		);
+
 	delete from public.bills
 	where session_id = p_session_id and status <> 'settled';
 
@@ -2576,12 +2696,16 @@ grant execute on function public.merge_table_into_session(uuid, uuid) to authent
 -- needs bussing before the next party can be seated, which no idle timer can
 -- confirm.
 --
--- Eligible: every bill for the session is settled (and at least one exists —
--- a session with none has nothing finished to sweep), every order item is
--- `served` or `cancelled`, and the idle clock — the later of the last bill's
--- settled_at or the last order_item's updated_at — has run past
--- p_idle_minutes. No restaurant_tables cleanup: Counter sessions never have
--- a table pointing at them (docs/core-data-model.md § Experience Gating).
+-- Eligible, either:
+--   - every bill for the session is settled (and at least one exists), every
+--     order item is `served` or `cancelled`, and the idle clock — the later
+--     of the last bill's settled_at or the last order_item's updated_at —
+--     has run past p_idle_minutes; or
+--   - the session never drew a bill at all (scanned, never ordered) and has
+--     simply sat idle since opened_at past the same threshold — nothing to
+--     finish, so there's nothing to wait on but the clock itself.
+-- No restaurant_tables cleanup: Counter sessions never have a table pointing
+-- at them (docs/core-data-model.md § Experience Gating).
 --
 -- SECURITY DEFINER, but deliberately never granted to `authenticated` —
 -- unlike every guest/staff RPC in this file, this is a maintenance sweep
@@ -2604,30 +2728,38 @@ begin
 			select 1 from public.restaurants r
 			where r.id = s.restaurant_id and r.experience = 'counter'
 		)
-		and exists (select 1 from public.bills b where b.session_id = s.id)
-		and not exists (
-			select 1 from public.bills b
-			where b.session_id = s.id and b.status <> 'settled'
-		)
-		and not exists (
-			select 1
-			from public.order_items oi
-			join public.orders o on o.id = oi.order_id
-			where o.session_id = s.id
-				and oi.status not in ('served', 'cancelled')
-		)
-		and greatest(
-			(select max(b.settled_at) from public.bills b where b.session_id = s.id),
-			coalesce(
-				(
-					select max(oi.updated_at)
+		and (
+			(
+				exists (select 1 from public.bills b where b.session_id = s.id)
+				and not exists (
+					select 1 from public.bills b
+					where b.session_id = s.id and b.status <> 'settled'
+				)
+				and not exists (
+					select 1
 					from public.order_items oi
 					join public.orders o on o.id = oi.order_id
 					where o.session_id = s.id
-				),
-				'-infinity'::timestamptz
+						and oi.status not in ('served', 'cancelled')
+				)
+				and greatest(
+					(select max(b.settled_at) from public.bills b where b.session_id = s.id),
+					coalesce(
+						(
+							select max(oi.updated_at)
+							from public.order_items oi
+							join public.orders o on o.id = oi.order_id
+							where o.session_id = s.id
+						),
+						'-infinity'::timestamptz
+					)
+				) < now() - make_interval(mins => p_idle_minutes)
 			)
-		) < now() - make_interval(mins => p_idle_minutes);
+			or (
+				not exists (select 1 from public.bills b where b.session_id = s.id)
+				and s.opened_at < now() - make_interval(mins => p_idle_minutes)
+			)
+		);
 end;
 $$;
 

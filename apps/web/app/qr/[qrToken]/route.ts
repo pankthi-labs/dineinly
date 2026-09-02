@@ -6,6 +6,7 @@ import {
 	GUEST_TOKEN_MENU_TTL_SECONDS,
 	GUEST_TOKEN_MIN_TTL_SECONDS,
 	mintGuestToken,
+	verifyGuestToken,
 } from "@/lib/guest-token";
 
 // Resolve-only route (docs/architecture.md § Route Structure) — not a page
@@ -35,8 +36,24 @@ export async function GET(
 		env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 	);
 
+	// Counter re-scan resume (resolve_qr_token's own comment has the full
+	// reasoning): if this browser already carries a still-valid guest cookie,
+	// hand its session_id along so the RPC can resume that same session
+	// instead of minting a disjoint one — a re-scan is far more often "let me
+	// order again" than "start over," and Counter's shared universal QR used
+	// to treat every scan as a brand-new guest regardless. Only ever a hint:
+	// the RPC independently re-checks this session actually belongs to the
+	// restaurant this QR resolves to and is still active before reusing it.
+	const existingToken = request.cookies.get(GUEST_TOKEN_COOKIE)?.value;
+	const existingClaims = existingToken
+		? await verifyGuestToken(existingToken)
+		: null;
+
 	const { data, error } = await supabase
-		.rpc("resolve_qr_token", { p_qr_token: qrToken })
+		.rpc("resolve_qr_token", {
+			p_qr_token: qrToken,
+			p_existing_session_id: existingClaims?.session_id,
+		})
 		.single();
 
 	// Invalid or rotated QR: land on the menu with no cookie set. Per

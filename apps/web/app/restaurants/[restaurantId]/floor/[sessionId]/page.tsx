@@ -130,36 +130,58 @@ export default function FloorOrderPage() {
 									<section key={category.id}>
 										<h2 className="text-caps text-muted">{category.name}</h2>
 										<div className="mt-3 flex flex-col">
-											{items.map((item) => (
-												<div
-													key={item.id}
-													className="flex items-center justify-between gap-4 border-divider border-b py-4"
-												>
-													<div className="min-w-0">
-														<p className="truncate text-primary">
-															{titleCase(item.name)}
-														</p>
-														<p className="text-secondary text-sm">
-															{formatPrice(item.price)}
-														</p>
-													</div>
-													<button
-														type="button"
-														onClick={() =>
-															addItem.mutate({
-																restaurantId,
-																sessionId,
-																menuItemId: item.id,
-																quantity: 1,
-															})
-														}
-														disabled={addItem.isPending}
-														className="shrink-0 rounded-md border border-divider px-4 py-2 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+											{items.map((item) => {
+												// Staff cart lines never carry preferences (no spice/salt/ice
+												// picker here), so at most one cart row ever matches a menu item.
+												const cartRow = cart.find(
+													(row) => row.menuItemId === item.id,
+												);
+												return (
+													<div
+														key={item.id}
+														className="flex items-center justify-between gap-4 border-divider border-b py-4"
 													>
-														Add
-													</button>
-												</div>
-											))}
+														<div className="min-w-0">
+															<p className="truncate text-primary">
+																{titleCase(item.name)}
+															</p>
+															<p className="text-secondary text-sm">
+																{formatPrice(item.price)}
+															</p>
+														</div>
+														<QuantityPill
+															value={cartRow?.quantity ?? 0}
+															disabled={
+																addItem.isPending || setQuantity.isPending
+															}
+															onIncrement={() =>
+																cartRow
+																	? setQuantity.mutate({
+																			restaurantId,
+																			sessionId,
+																			cartItemId: cartRow.id,
+																			quantity: cartRow.quantity + 1,
+																		})
+																	: addItem.mutate({
+																			restaurantId,
+																			sessionId,
+																			menuItemId: item.id,
+																			quantity: 1,
+																		})
+															}
+															onDecrement={() =>
+																cartRow &&
+																setQuantity.mutate({
+																	restaurantId,
+																	sessionId,
+																	cartItemId: cartRow.id,
+																	quantity: cartRow.quantity - 1,
+																})
+															}
+														/>
+													</div>
+												);
+											})}
 										</div>
 									</section>
 								);

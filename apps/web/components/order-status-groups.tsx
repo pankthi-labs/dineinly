@@ -13,14 +13,16 @@ import {
 export function OrderGroupCard({
 	group,
 	onSend,
-	sendingItemId,
+	sendingKey,
 }: {
 	group: OrderGroup;
 	// Counter only: present when the guest can act on this group (unsent
 	// items) — omitted entirely for Full-Service's orderGroups(), which never
-	// produces an "unsent" group in the first place.
-	onSend?: (itemId: string) => void;
-	sendingItemId?: string | null;
+	// produces an "unsent" group in the first place. Takes every underlying
+	// order_item id a merged line combines (apps/web/lib/order-groups.ts),
+	// plus that line's own key for the caller's pending-state tracking.
+	onSend?: (itemIds: string[], key: string) => void;
+	sendingKey?: string | null;
 }) {
 	const [expanded, setExpanded] = useState(false);
 
@@ -34,7 +36,7 @@ export function OrderGroupCard({
 				<div className="mt-4 flex flex-col gap-3">
 					{group.items.map((item) => (
 						<div
-							key={item.id}
+							key={item.key}
 							className="flex items-center justify-between gap-4"
 						>
 							<span className="text-base text-primary">
@@ -42,14 +44,19 @@ export function OrderGroupCard({
 									{item.quantity}x
 								</span>
 								{titleCase(item.name)}
+								{item.modifiers ? (
+									<span className="ml-1 text-muted text-sm">
+										({item.modifiers})
+									</span>
+								) : null}
 							</span>
 							<button
 								type="button"
-								onClick={() => onSend?.(item.id)}
-								disabled={sendingItemId === item.id}
+								onClick={() => onSend?.(item.ids, item.key)}
+								disabled={sendingKey === item.key}
 								className="shrink-0 rounded-md border border-divider px-4 py-3 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
 							>
-								{sendingItemId === item.id ? "Sending…" : "Send to Kitchen"}
+								{sendingKey === item.key ? "Sending…" : "Send to Kitchen"}
 							</button>
 						</div>
 					))}
@@ -95,8 +102,13 @@ export function OrderGroupCard({
 			{expanded ? (
 				<div className="mt-4 flex flex-col gap-3 border-divider border-t pt-4">
 					{group.items.map((item) => (
-						<span key={item.id} className="text-base text-primary">
+						<span key={item.key} className="text-base text-primary">
 							{item.quantity}x {titleCase(item.name)}
+							{item.modifiers ? (
+								<span className="ml-1 text-muted text-sm">
+									({item.modifiers})
+								</span>
+							) : null}
 						</span>
 					))}
 				</div>

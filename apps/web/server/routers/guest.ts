@@ -225,7 +225,7 @@ export const guestRouter = router({
 
 			const ordersResult = await ctx.supabase
 				.from("orders")
-				.select("id, placed_at")
+				.select("id, placed_at, bill_id")
 				.eq("restaurant_id", ctx.guest.restaurant_id)
 				.eq("session_id", ctx.guest.session_id)
 				.order("placed_at", { ascending: true });
@@ -234,13 +234,50 @@ export const guestRouter = router({
 				throw dbError("Unable to load your orders.", ordersResult.error);
 			}
 
-			const orders = ordersResult.data ?? [];
+			let orders = ordersResult.data ?? [];
 			if (orders.length === 0) return [];
+
+			// Counter-experience gate (docs/core-data-model.md § Lifecycle
+			// invariants): an order's items are still "Awaiting Payment" until
+			// its own bill settles — that state is already shown in full on the
+			// bill screen's line-item table, so this My Orders/status-ladder
+			// view only ever covers a round once it's actually paid. Without
+			// this, an in-flight later round (Add More Items before settling)
+			// would show its unpaid items mixed into "Ready to send" here, where
+			// tapping Send to Kitchen would just fail server-side.
+			if (ctx.experience === "counter") {
+				const billIds = [
+					...new Set(
+						orders
+							.map((order) => order.bill_id)
+							.filter((id): id is string => id != null),
+					),
+				];
+				const billsResult =
+					billIds.length === 0
+						? { data: [], error: null }
+						: await ctx.supabase
+								.from("bills")
+								.select("id, status")
+								.in("id", billIds);
+				if (billsResult.error) {
+					throw dbError("Unable to load your orders.", billsResult.error);
+				}
+				const settledBillIds = new Set(
+					(billsResult.data ?? [])
+						.filter((bill) => bill.status === "settled")
+						.map((bill) => bill.id),
+				);
+				orders = orders.filter(
+					(order) => order.bill_id != null && settledBillIds.has(order.bill_id),
+				);
+				if (orders.length === 0) return [];
+			}
 
 			const itemsResult = await ctx.supabase
 				.from("order_items")
 				.select(
-					"id, order_id, item_name, quantity, cancelled_quantity, status, released_at",
+					"id, order_id, item_name, menu_item_id, quantity, cancelled_quantity, status, released_at, spice, salt, ice",
 				)
 				.eq("restaurant_id", ctx.guest.restaurant_id)
 				.in(
@@ -284,7 +321,11 @@ export const guestRouter = router({
 					items: items.map((item) => ({
 						id: item.id,
 						name: item.item_name,
+						menuItemId: item.menu_item_id,
 						quantity: item.quantity - item.cancelled_quantity,
+						spice: item.spice,
+						salt: item.salt,
+						ice: item.ice,
 						served: item.status === "served",
 						// Counter-only distinction (docs/core-data-model.md §
 						// Lifecycle invariants: "Counter shows its own mapping, e.g.
@@ -305,19 +346,37 @@ export const guestRouter = router({
 		// gated there on the item belonging to this guest's own session and the
 		// bill being settled, so a stale/racing tap fails cleanly rather than
 		// silently releasing an item on an unpaid or already-served order.
+		// Accepts more than one id at once: a merged "Ready to send" row (same
+		// dish + preferences repeated across separate confirm-cart rounds,
+		// apps/web/lib/order-groups.ts) sends every underlying order_item in
+		// one tap. The RPC itself only ever handles one row — same shape as
+		// kitchen.ts's advanceBatch batching over a single-item RPC/update.
 		release: guestProcedure
-			.input(z.object({ orderItemId: z.uuid() }))
+			.input(z.object({ orderItemIds: z.array(z.uuid()).min(1) }))
 			.mutation(async ({ ctx, input }) => {
 				requireOrderingEnabled(ctx.experience);
 
-				const { error } = await ctx.supabase.rpc(
-					"release_order_item_to_kitchen",
-					{ p_order_item_id: input.orderItemId },
+				// Concurrent, not sequential — the RPC re-validates each row on its
+				// own (session ownership, bill settled), so one failing id must not
+				// block the others in the same merged line from still going through.
+				const results = await Promise.allSettled(
+					input.orderItemIds.map((orderItemId) =>
+						ctx.supabase.rpc("release_order_item_to_kitchen", {
+							p_order_item_id: orderItemId,
+						}),
+					),
 				);
-				if (error) {
+				const failure = results.find(
+					(result) => result.status === "rejected" || result.value.error,
+				);
+				if (failure) {
+					const error =
+						failure.status === "rejected"
+							? failure.reason
+							: failure.value.error;
 					throw new TRPCError({
 						code: "BAD_REQUEST",
-						message: error.message,
+						message: error?.message ?? "Unable to send an item to the kitchen.",
 						cause: error,
 					});
 				}
@@ -336,25 +395,25 @@ export const guestRouter = router({
 		get: guestProcedure.query(async ({ ctx }) => {
 			requireBillEnabled(ctx.experience);
 
-			const [restaurantResult, billResult] = await Promise.all([
+			const [restaurantResult, billsResult] = await Promise.all([
 				ctx.supabase
 					.from("restaurants")
 					.select("name, address, city, gst_number, state, pincode")
 					.eq("id", ctx.guest.restaurant_id)
 					.maybeSingle(),
-				// Latest round only — a session can carry more than one bill over
-				// its life (Counter: settle, then order again, docs/core-data-model.md
-				// § Lifecycle invariants); this is always the current, actionable one.
+				// Every bill this session has ever drawn, oldest first — a session
+				// can carry more than one (Counter: settle, then order again,
+				// docs/core-data-model.md § Lifecycle invariants). The last row is
+				// this round's current, actionable bill; every earlier one is
+				// already-settled history (otherBills below).
 				ctx.supabase
 					.from("bills")
-					.select("id, bill_number, daily_token, status")
+					.select("id, bill_number, daily_token, status, total, settled_at")
 					.eq("session_id", ctx.guest.session_id)
-					.order("created_at", { ascending: false })
-					.limit(1)
-					.maybeSingle(),
+					.order("created_at", { ascending: true }),
 			]);
 
-			for (const result of [restaurantResult, billResult]) {
+			for (const result of [restaurantResult, billsResult]) {
 				if (result.error) {
 					throw dbError("Unable to load the bill.", result.error);
 				}
@@ -369,7 +428,9 @@ export const guestRouter = router({
 			// This round's orders only — a session with no bill yet (nothing to
 			// scope by) falls back to every order it has (there's no prior round
 			// to accidentally re-sum in that case).
-			const bill = billResult.data;
+			const bills = billsResult.data ?? [];
+			const bill = bills.at(-1) ?? null;
+			const otherBills = bill ? bills.slice(0, -1) : [];
 			const ordersResult = await ctx.supabase
 				.from("orders")
 				.select("id")
@@ -389,7 +450,7 @@ export const guestRouter = router({
 					: await ctx.supabase
 							.from("order_items")
 							.select(
-								"item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity",
+								"item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity, spice, salt, ice, menu_item_id",
 							)
 							.eq("restaurant_id", ctx.guest.restaurant_id)
 							.in("order_id", orderIds)
@@ -411,9 +472,26 @@ export const guestRouter = router({
 							row.cancelled_quantity,
 						),
 						taxRate: Number(row.tax_rate),
+						spice: row.spice,
+						salt: row.salt,
+						ice: row.ice,
 					}))
 					.filter((row) => row.quantity > 0),
 			);
+
+			// This round's already-ordered quantity per menu item (ignoring
+			// waived, which is a billing correction rather than a change in what
+			// was actually ordered) — lets the guest menu show "you already have
+			// 2 of these this round" instead of resetting to 0 after a confirmed
+			// order clears the cart.
+			const itemQuantitiesByMenuItem: Record<string, number> = {};
+			for (const row of itemsResult.data ?? []) {
+				if (!row.menu_item_id) continue;
+				const remaining = row.quantity - row.cancelled_quantity;
+				if (remaining <= 0) continue;
+				itemQuantitiesByMenuItem[row.menu_item_id] =
+					(itemQuantitiesByMenuItem[row.menu_item_id] ?? 0) + remaining;
+			}
 
 			return {
 				// A Bill only ever exists on One/Counter, which require these fields
@@ -432,9 +510,135 @@ export const guestRouter = router({
 				billNumber: bill?.bill_number ?? null,
 				dailyToken: bill?.daily_token ?? null,
 				status,
+				// Every earlier round of this same visit (Counter only, in
+				// practice) — shown as separate settled receipts, never summed
+				// into one running total (each was already its own payment).
+				otherBills: otherBills.map((b) => ({
+					billId: b.id,
+					billNumber: b.bill_number,
+					dailyToken: b.daily_token,
+					total: Number(b.total ?? 0),
+					settledAt: b.settled_at,
+				})),
+				itemQuantitiesByMenuItem,
 				...totals,
 			};
 		}),
+
+		// Full receipt for one of this session's earlier rounds (the otherBills
+		// list `get` above returns) — reached from the guest's Past Bills page,
+		// which lets them pick a token from a dropdown rather than only ever
+		// seeing the current round's line items. Scoped to this guest's own
+		// session, same as every other query here; every bill this reaches is
+		// already settled (it only ever shows up in otherBills once a later
+		// round exists), so totals are the frozen row, not a live recompute.
+		getPast: guestProcedure
+			.input(z.object({ billId: z.uuid() }))
+			.query(async ({ ctx, input }) => {
+				requireBillEnabled(ctx.experience);
+
+				const [restaurantResult, billResult] = await Promise.all([
+					ctx.supabase
+						.from("restaurants")
+						.select("name, address, city, gst_number, state, pincode")
+						.eq("id", ctx.guest.restaurant_id)
+						.maybeSingle(),
+					ctx.supabase
+						.from("bills")
+						.select(
+							"id, bill_number, daily_token, status, subtotal, total, settled_at",
+						)
+						.eq("id", input.billId)
+						.eq("session_id", ctx.guest.session_id)
+						.maybeSingle(),
+				]);
+
+				for (const result of [restaurantResult, billResult]) {
+					if (result.error) {
+						throw dbError("Unable to load the bill.", result.error);
+					}
+				}
+				if (!restaurantResult.data) {
+					throw dbError(
+						"Unable to load the bill.",
+						new Error("Missing restaurant"),
+					);
+				}
+				if (!billResult.data) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Bill not found.",
+					});
+				}
+				const bill = billResult.data;
+
+				const ordersResult = await ctx.supabase
+					.from("orders")
+					.select("id")
+					.eq("restaurant_id", ctx.guest.restaurant_id)
+					.eq("bill_id", bill.id);
+				if (ordersResult.error) {
+					throw dbError("Unable to load the bill.", ordersResult.error);
+				}
+
+				const orderIds = (ordersResult.data ?? []).map((order) => order.id);
+				const itemsResult =
+					orderIds.length === 0
+						? { data: [], error: null }
+						: await ctx.supabase
+								.from("order_items")
+								.select(
+									"item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity, spice, salt, ice",
+								)
+								.eq("restaurant_id", ctx.guest.restaurant_id)
+								.in("order_id", orderIds)
+								.neq("status", "cancelled");
+				if (itemsResult.error) {
+					throw dbError("Unable to load the bill.", itemsResult.error);
+				}
+
+				// Only the line/tax-slab breakdown is recomputed here (never stored
+				// on the row) — the subtotal/total themselves come straight from the
+				// frozen row, same as the staff bill detail page.
+				const computed = computeBill(
+					(itemsResult.data ?? [])
+						.map((row) => ({
+							name: row.item_name,
+							unitPrice: Number(row.unit_price),
+							quantity: billableQuantity(
+								row.quantity,
+								row.waived_quantity,
+								row.cancelled_quantity,
+							),
+							taxRate: Number(row.tax_rate),
+							spice: row.spice,
+							salt: row.salt,
+							ice: row.ice,
+						}))
+						.filter((row) => row.quantity > 0),
+				);
+
+				return {
+					restaurant: {
+						name: restaurantResult.data.name,
+						address: restaurantResult.data.address as string,
+						city: restaurantResult.data.city as string,
+						gstNumber: restaurantResult.data.gst_number as string,
+						state: restaurantResult.data.state as string,
+						pincode: restaurantResult.data.pincode as string,
+					},
+					tableLabel: ctx.guest.table_label,
+					billId: bill.id,
+					billNumber: bill.bill_number,
+					dailyToken: bill.daily_token,
+					status: bill.status as "open" | "requested" | "settled",
+					settledAt: bill.settled_at,
+					lines: computed.lines,
+					subtotal: Number(bill.subtotal ?? 0),
+					taxSlabs: computed.taxSlabs,
+					total: Number(bill.total ?? 0),
+				};
+			}),
 
 		// Request Bill (docs/product.md § Billing & Settlement) — the explicit
 		// guest action, separate from viewing. Only this moves the session's

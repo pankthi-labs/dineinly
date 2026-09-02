@@ -20,6 +20,10 @@ export const listBillsInput = z.object({
 
 export const getBillInput = z.object({
 	sessionId: sessionIdSchema,
+	// Which of the session's bills to view — a session can carry more than
+	// one (Counter: settle, then order again). Omitted means the latest
+	// (current, actionable) round, same as before this field existed.
+	billId: z.string().uuid().optional(),
 });
 
 export const requestBillInput = z.object({
@@ -46,6 +50,16 @@ export const waiveOrderItemInput = z.object({
 	waivedQuantity: z.number().int().min(0),
 });
 
+// Counter only: staff-side safety net for release_order_item_to_kitchen()
+// (guest.orders.release) — a guest who lost access to a paid round (e.g. a
+// stray QR re-scan before that was guarded against) still has a staff-side
+// way to send their stuck item(s) to the kitchen from the Bills tab. Takes
+// every underlying id a merged line combines (order-item-groups.ts), same
+// shape as guest.orders.release.
+export const releaseOrderItemInput = z.object({
+	orderItemIds: z.array(orderItemIdSchema).min(1),
+});
+
 export const settleBillInput = z.object({
 	sessionId: sessionIdSchema,
 });
@@ -60,4 +74,5 @@ export const forceTerminateSessionInput = z.object({
 
 export const downloadBillPdfInput = z.object({
 	sessionId: sessionIdSchema,
+	billId: z.string().uuid().optional(),
 });
