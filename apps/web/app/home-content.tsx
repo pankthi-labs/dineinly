@@ -90,7 +90,7 @@ function DineinlyLoop({ reduceMotion }: { reduceMotion: boolean | null }) {
 			className="mb-16 flex flex-col items-center gap-12"
 		>
 			<div className="flex flex-col items-center gap-3 text-center">
-				<h2 className="text-balance text-3xl md:text-4xl">
+				<h2 className="text-balance font-medium text-3xl md:text-4xl">
 					Four moments. One live system.
 				</h2>
 				<p className="max-w-[36ch] text-balance text-secondary">
