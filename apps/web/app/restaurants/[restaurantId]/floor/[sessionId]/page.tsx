@@ -62,7 +62,17 @@ export default function FloorOrderPage() {
 		.filter((t) => t.session_id === sessionId)
 		.map((t) => t.label)
 		.join(", ");
-	const isCounter = !tableLabel;
+	const isCounter = tablesQuery.isSuccess && !tableLabel;
+	// Counter only (docs/product.md § "A bill paid, then another order" —
+	// same bounded-round rule as the guest menu's own alreadyOrderedByMenuItem,
+	// guest/menu/page.tsx): what's already on this round's bill, merged into
+	// the stepper below so it doesn't read as 0 for a dish the guest already
+	// has. Full-Service has no such round boundary, so it skips this.
+	const billQuery = trpc.bills.get.useQuery(
+		{ sessionId },
+		{ enabled: isCounter },
+	);
+	const alreadyOrderedByMenuItem = billQuery.data?.itemQuantitiesByMenuItem;
 	const cart = cartQuery.data ?? [];
 	const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -137,6 +147,8 @@ export default function FloorOrderPage() {
 												const cartRow = cart.find(
 													(row) => row.menuItemId === item.id,
 												);
+												const alreadyOrdered =
+													alreadyOrderedByMenuItem?.[item.id] ?? 0;
 												return (
 													<div
 														key={item.id}
@@ -151,7 +163,8 @@ export default function FloorOrderPage() {
 															</p>
 														</div>
 														<QuantityPill
-															value={cartRow?.quantity ?? 0}
+															value={(cartRow?.quantity ?? 0) + alreadyOrdered}
+															disableDecrement={!cartRow}
 															disabled={
 																addItem.isPending || setQuantity.isPending
 															}

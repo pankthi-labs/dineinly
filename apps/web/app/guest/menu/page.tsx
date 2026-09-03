@@ -475,11 +475,16 @@ export default function GuestMenuPage() {
 				enough for its heading to clear the sticky header — the page runs
 				out of content below it, so jumpToCategory's target position gets
 				clamped short and the section lands mid-screen instead of at the
-				top. */}
-				<div
-					aria-hidden="true"
-					style={{ height: `calc(100dvh - ${stickyHeight}px)` }}
-				/>
+				top. Only needed when the category nav (jumpToCategory's only
+				caller) actually renders — a single-category menu has no jump
+				target and shouldn't pay for a viewport of dead space after the
+				footer. */}
+				{menu.data.categories.length > 1 ? (
+					<div
+						aria-hidden="true"
+						style={{ height: `calc(100dvh - ${stickyHeight}px)` }}
+					/>
+				) : null}
 			</main>
 
 			{openItem ? (

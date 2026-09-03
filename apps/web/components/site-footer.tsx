@@ -18,12 +18,12 @@ export function SiteFooter({
 }) {
 	return (
 		<footer
-			className={`flex flex-col gap-4 border-divider border-t pt-8 sm:flex-row sm:items-center sm:justify-between ${className}`}
+			className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-divider border-t pt-8 ${className}`}
 		>
 			<p className="text-muted text-xs">
 				© {new Date().getFullYear()} Dineinly. All rights reserved.
 			</p>
-			<nav className="flex gap-5">
+			<nav className="flex flex-wrap gap-5">
 				{variant === "public" ? (
 					<>
 						<Link href="/legal/privacy" className={LINK_CLASS}>

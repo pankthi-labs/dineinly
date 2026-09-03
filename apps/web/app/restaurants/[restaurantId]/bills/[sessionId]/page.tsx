@@ -1,23 +1,17 @@
 "use client";
 
-import { ArrowLeft, Download, Printer, X } from "lucide-react";
+import { ArrowLeft, Download, Printer } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useId, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuantityPill } from "@/components/quantity-pill";
 import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
-import { useDismissableOverlay } from "@/components/use-dismissable-overlay";
 import { billableQuantity } from "@/lib/bill-math";
 import { downloadPdf } from "@/lib/download-pdf";
-import {
-	formatBillAmount,
-	formatBillLocation,
-	formatTime,
-	titleCase,
-} from "@/lib/format";
+import { formatBillAmount, formatBillLocation, titleCase } from "@/lib/format";
 import { groupOrderItems } from "@/lib/order-item-groups";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
@@ -45,13 +39,26 @@ export default function BillDetailPage() {
 	const [isDownloading, setIsDownloading] = useState(false);
 	const [editing, setEditing] = useState<EditingAction>(null);
 	const [pendingQty, setPendingQty] = useState(0);
-	const [showOtherRounds, setShowOtherRounds] = useState(false);
 
 	const utils = trpc.useUtils();
 	const restaurantQuery = trpc.restaurants.getById.useQuery({
 		id: restaurantId,
 	});
 	const billQuery = trpc.bills.get.useQuery({ sessionId, billId });
+
+	// Landing here with no ?bill= means "the current round" — but on Counter a
+	// later round created while this page is open would otherwise silently
+	// swap the view to that new round the moment its broadcast invalidates
+	// this same billId-less query. Pinning the URL to the round actually being
+	// looked at the first time we learn its id keeps every round's view
+	// independent, matching the Bills tab's own links (bill-row.tsx).
+	useEffect(() => {
+		if (!billId && billQuery.data?.billId) {
+			router.replace(
+				`/restaurants/${restaurantId}/bills/${sessionId}?bill=${billQuery.data.billId}`,
+			);
+		}
+	}, [billId, billQuery.data?.billId, restaurantId, sessionId, router]);
 
 	const supabase = createClient();
 	useBroadcastChannel(supabase, `session:${sessionId}`, {
@@ -334,7 +341,18 @@ export default function BillDetailPage() {
 						<p className="text-muted">No items ordered yet.</p>
 					) : (
 						<div className="overflow-x-auto rounded-xl border border-divider">
-							<table className="w-full border-collapse bg-surface">
+							{/* table-fixed + colgroup pin every column's width up front —
+							without it, the browser recomputes column widths from
+							content on every render, so the actions column (button vs.
+							pill vs. short text vs. nothing) visibly resizes and its
+							right-aligned content jumps sideways as rows change state. */}
+							<table className="w-full table-fixed border-collapse bg-surface">
+								<colgroup>
+									<col />
+									<col className="w-24" />
+									<col className="w-28" />
+									<col className="w-52" />
+								</colgroup>
 								<thead>
 									<tr className="border-divider border-b">
 										<th
@@ -426,26 +444,31 @@ export default function BillDetailPage() {
 													>
 														{formatBillAmount(group.unitPrice * billedQuantity)}
 													</td>
-													<td className="px-5 py-5 align-top">
+													<td className="px-5 py-5 align-middle">
 														{isCounterBill ? (
-															isSettled &&
-															group.releasableItemIds.length > 0 ? (
-																<button
-																	type="button"
-																	disabled={releaseItemMutation.isPending}
-																	onClick={() =>
-																		releaseItemMutation.mutate({
-																			orderItemIds: group.releasableItemIds,
-																		})
-																	}
-																	className="rounded-md border border-divider px-4 py-3 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-																>
-																	{releaseItemMutation.isPending
-																		? "Sending…"
-																		: "Send to Kitchen"}
-																</button>
-															) : showPill && activeItem ? (
-																<div className="flex justify-end">
+															// Fixed min-height so this cell holds its place
+															// when Send to Kitchen's button gives way to a
+															// shorter Waive link (or nothing) post-click —
+															// without it every row below jumps the moment the
+															// button disappears.
+															<div className="flex min-h-11 items-center justify-end">
+																{isSettled &&
+																group.releasableItemIds.length > 0 ? (
+																	<button
+																		type="button"
+																		disabled={releaseItemMutation.isPending}
+																		onClick={() =>
+																			releaseItemMutation.mutate({
+																				orderItemIds: group.releasableItemIds,
+																			})
+																		}
+																		className="rounded-md border border-divider px-4 py-3 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+																	>
+																		{releaseItemMutation.isPending
+																			? "Sending…"
+																			: "Send to Kitchen"}
+																	</button>
+																) : showPill && activeItem ? (
 																	<QuantityPill
 																		value={billedQuantity}
 																		disabled={setQuantityMutation.isPending}
@@ -462,25 +485,27 @@ export default function BillDetailPage() {
 																			})
 																		}
 																	/>
-																</div>
-															) : group.waivable && canCorrect && activeItem ? (
-																<button
-																	type="button"
-																	onClick={() =>
-																		isEditingThis && editing?.kind === "waive"
-																			? closeEditor()
-																			: openEditor(activeItem, "waive")
-																	}
-																	aria-expanded={
-																		isEditingThis && editing?.kind === "waive"
-																	}
-																	className="text-caps text-secondary hover:text-primary"
-																>
-																	{group.waivedQuantity > 0
-																		? "Edit waiver"
-																		: "Waive"}
-																</button>
-															) : null
+																) : group.waivable &&
+																	canCorrect &&
+																	activeItem ? (
+																	<button
+																		type="button"
+																		onClick={() =>
+																			isEditingThis && editing?.kind === "waive"
+																				? closeEditor()
+																				: openEditor(activeItem, "waive")
+																		}
+																		aria-expanded={
+																			isEditingThis && editing?.kind === "waive"
+																		}
+																		className="text-caps text-secondary hover:text-primary"
+																	>
+																		{group.waivedQuantity > 0
+																			? "Edit waiver"
+																			: "Waive"}
+																	</button>
+																) : null}
+															</div>
 														) : (
 															<div className="flex flex-col items-end gap-2">
 																{group.waivable && canCorrect && activeItem ? (
@@ -612,21 +637,6 @@ export default function BillDetailPage() {
 								</span>
 							</div>
 						</dl>
-
-						{/* Counter only (docs/product.md § "A bill paid, then another
-						order"): a Full-Service (One) session's one bill is settled
-						exactly once, permanently, so it never has another round to show
-						here — this is only ever populated on Counter, where paying
-						doesn't end the session and each round draws its own bill. */}
-						{isCounterBill && data.otherBills.length > 0 ? (
-							<button
-								type="button"
-								onClick={() => setShowOtherRounds(true)}
-								className="rounded-xl border border-divider bg-surface px-5 py-3 text-caps text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary print:hidden"
-							>
-								Previous Rounds ({data.otherBills.length})
-							</button>
-						) : null}
 
 						{data.isLatestBill ? (
 							<div className="flex flex-col gap-3">
@@ -846,103 +856,7 @@ export default function BillDetailPage() {
 				/>
 			) : null}
 
-			{showOtherRounds ? (
-				<OtherRoundsDialog
-					restaurantId={restaurantId}
-					sessionId={sessionId}
-					otherBills={data.otherBills}
-					onClose={() => setShowOtherRounds(false)}
-				/>
-			) : null}
-
 			{toast ? <Toast toast={toast} onDismiss={() => setToast(null)} /> : null}
-		</div>
-	);
-}
-
-// Lists every other round of this session in a modal rather than a permanent
-// sidebar disclosure, so a session with several settled rounds doesn't push
-// the totals panel and action buttons down the page.
-function OtherRoundsDialog({
-	restaurantId,
-	sessionId,
-	otherBills,
-	onClose,
-}: {
-	restaurantId: string;
-	sessionId: string;
-	otherBills: {
-		billId: string;
-		billNumber: string | null;
-		dailyToken: number | null;
-		total: number;
-		status: string;
-		settledAt: string | null;
-	}[];
-	onClose: () => void;
-}) {
-	const [isVisible, setIsVisible] = useState(false);
-	const titleId = useId();
-	const containerRef = useDismissableOverlay<HTMLDivElement>(true, onClose);
-
-	useEffect(() => {
-		const frame = requestAnimationFrame(() => setIsVisible(true));
-		return () => cancelAnimationFrame(frame);
-	}, []);
-
-	return (
-		<div className="fixed inset-0 z-(--z-overlay) flex items-center justify-center bg-glass p-4">
-			<div
-				ref={containerRef}
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby={titleId}
-				className={`w-full max-w-sm rounded-xl border border-divider bg-surface-elevated p-8 shadow-lg transition-[opacity,transform] duration-(--duration-deliberate) ease-out ${
-					isVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
-				}`}
-			>
-				<div className="flex items-center justify-between">
-					<h2 id={titleId} className="text-lg text-primary">
-						Previous Rounds
-					</h2>
-					<button
-						type="button"
-						onClick={onClose}
-						className="icon-tap-target rounded-full text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
-					>
-						<X className="icon-md" strokeWidth={1.5} aria-hidden="true" />
-						<span className="sr-only">Close</span>
-					</button>
-				</div>
-				<dl className="mt-5 flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
-					{otherBills.map((other) => (
-						<Link
-							key={other.billId}
-							href={`/restaurants/${restaurantId}/bills/${sessionId}?bill=${other.billId}`}
-							onClick={onClose}
-							className="flex flex-col gap-0.5 no-underline hover:opacity-80"
-						>
-							<div className="flex items-baseline justify-between gap-4 tabular-nums">
-								<span className="text-primary text-sm">
-									{other.dailyToken != null
-										? `Token ${other.dailyToken}`
-										: `Bill #${other.billNumber}`}
-								</span>
-								<span className="text-secondary text-sm">
-									{formatBillAmount(other.total)}
-								</span>
-							</div>
-							<span className="text-muted text-xs">
-								{other.status === "settled"
-									? `Settled${other.settledAt ? ` ${formatTime(other.settledAt)}` : ""}`
-									: other.status === "requested"
-										? "Requested"
-										: "Open"}
-							</span>
-						</Link>
-					))}
-				</dl>
-			</div>
 		</div>
 	);
 }

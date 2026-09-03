@@ -461,7 +461,7 @@ export const billsRouter = router({
 				: await ctx.auth
 						.from("order_items")
 						.select(
-							"id, item_name, unit_price, tax_rate, quantity, status, waived_quantity, cancelled_quantity, order_id, spice, salt, ice, released_at",
+							"id, item_name, unit_price, tax_rate, quantity, status, waived_quantity, cancelled_quantity, order_id, spice, salt, ice, released_at, menu_item_id",
 						)
 						.eq("restaurant_id", session.restaurant_id)
 						.in("order_id", orderIds)
@@ -516,6 +516,20 @@ export const billsRouter = router({
 			["placed", "preparing", "ready"].includes(item.status),
 		);
 
+		// This round's already-ordered quantity per menu item (ignoring waived,
+		// a billing correction rather than a change in what was ordered) — lets
+		// the staff Add Items screen (floor/[sessionId]/page.tsx) show what's
+		// already on the bill instead of a stepper reset to 0, same rule as the
+		// guest menu's own itemQuantitiesByMenuItem (guest.ts).
+		const itemQuantitiesByMenuItem: Record<string, number> = {};
+		for (const item of items) {
+			if (!item.menu_item_id || item.status === "cancelled") continue;
+			const remaining = item.quantity - item.cancelled_quantity;
+			if (remaining <= 0) continue;
+			itemQuantitiesByMenuItem[item.menu_item_id] =
+				(itemQuantitiesByMenuItem[item.menu_item_id] ?? 0) + remaining;
+		}
+
 		return {
 			sessionId: session.id,
 			sessionStatus: session.status as "active" | "closed",
@@ -538,6 +552,7 @@ export const billsRouter = router({
 			settledAt: bill?.settled_at ?? null,
 			isLatestBill,
 			hasItemsInProgress,
+			itemQuantitiesByMenuItem,
 			// Every other bill this same session has drawn (Counter only, in
 			// practice) — admin/staff visibility into the full visit, each one
 			// independently viewable via its own billId (Bills tab links here

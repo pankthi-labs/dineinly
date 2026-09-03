@@ -2232,6 +2232,11 @@ execute function public.broadcast_bill_status();
 -- sessions: open/close -> restaurant:{id} (Floor view; staff only —
 -- no guest topic, a guest never needs to know about session metadata beyond
 -- what the cart/order/bill broadcasts above already tell them).
+-- Also -> session:{id} (guest: status only) — force_terminate_session() and
+-- close_session() end a session out from under a guest who's still on the
+-- menu/bill screen; without this they only find out the session died once
+-- some other action of theirs hits RLS and fails, instead of the client
+-- catching it live and routing them out the moment it happens.
 create or replace function public.broadcast_session_change()
 returns trigger
 language plpgsql
@@ -2239,6 +2244,11 @@ security definer
 set search_path = ''
 as $$
 begin
+	perform public.broadcast_event(
+		'session:' || new.id,
+		'session.change',
+		jsonb_build_object('status', new.status)
+	);
 	perform realtime.broadcast_changes(
 		'restaurant:' || new.restaurant_id,
 		'session.change', tg_op, tg_table_name, tg_table_schema, new, old
