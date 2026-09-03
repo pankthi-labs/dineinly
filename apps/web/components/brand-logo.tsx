@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-// Matches the SVG's viewBox (public/brand/dineinly-logo-dark-v2.svg), cropped
+// Matches the SVG's viewBox (public/brand/dineinly-logo-dark.svg), cropped
 // tight to the visible mark+wordmark — width is derived from height so every
 // call site renders undistorted without repeating the ratio.
 const ASPECT_RATIO = 252 / 58;
@@ -17,7 +17,7 @@ export function BrandLogo({
 	const width = Math.round(height * ASPECT_RATIO);
 	return (
 		<Image
-			src="/brand/dineinly-logo-dark-v2.svg"
+			src="/brand/dineinly-logo-dark.svg"
 			alt="Dineinly"
 			width={width}
 			height={height}
@@ -29,7 +29,7 @@ export function BrandLogo({
 }
 
 // LogoMark-only and wordmark-only geometry, split from the master lockup
-// (public/brand/dineinly-logo-dark-v2.svg) into their own asset files —
+// (public/brand/dineinly-logo-dark.svg) into their own asset files —
 // dineinly-logomark-dark.svg and dineinly-wordmark-dark.svg — so the mark
 // can animate independently of the wordmark. Same viewBox height (58) and
 // y-origin (15) as the master; MARK_WIDTH/WORD_WIDTH/GAP are that file's
