@@ -45,13 +45,7 @@
 
 	a {
 		color: inherit;
-		text-decoration: underline;
-		text-decoration-color: var(--color-divider);
-		text-underline-offset: var(--space-0_5);
-	}
-
-	a:hover {
-		text-decoration-color: currentColor;
+		text-decoration: none;
 	}
 
 	button,

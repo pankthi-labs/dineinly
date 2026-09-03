@@ -1,6 +1,7 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PoweredByDineinly } from "@/components/brand-logo";
@@ -322,7 +323,16 @@ export default function GuestMenuPage() {
 								<h1 className="text-2xl">
 									{titleCase(menu.data.restaurant.name)}
 								</h1>
-								<PoweredByDineinly className="mt-1" />
+								<div className="mt-1 flex items-center gap-2">
+									<PoweredByDineinly />
+									<span className="text-muted text-xs">·</span>
+									<Link
+										href="/legal"
+										className="text-muted text-xs hover:text-secondary"
+									>
+										Legal
+									</Link>
+								</div>
 							</div>
 							{/* Dineinly Menu's QR is universal, not per-table (docs/product.md
 							§ Dineinly Experiences) — nothing to label here. */}

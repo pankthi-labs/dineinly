@@ -135,7 +135,7 @@ Fonts: **Outfit** (display) + **Inter** (UI). Load both via `next/font`. Never f
 - Minimum tap-target text size: `text-sm` (14px) for any interactive label.
 - Interactive labels (buttons, tabs, actionable chips) are **w500 minimum** at `text-sm`. The `text-sm` w400 in the scale is for captions and helper text — a button label at w400 under-weights the highest-priority element on screen.
 - Outfit + Inter only for typographic text. `--font-mono` (`ui-monospace, monospace`) is a generic system fallback stack for `code`/`kbd`/`pre`/`samp`, not a third brand typeface — it introduces no named font.
-- Links: underline at rest in `--color-divider`, strengthening to `currentColor` on hover, offset `--space-0_5`. No color change on hover — `--color-accent-hover` is reserved for gold buttons/inputs only (§06).
+- Links: no underline at rest or on hover — `color: inherit`, distinguished from surrounding text by weight/color/context (e.g. `text-accent`, `text-secondary` + hover `text-primary`), not text-decoration. No color change to `--color-accent-hover` on hover — that token is reserved for gold buttons/inputs only (§06).
 
 ---
 

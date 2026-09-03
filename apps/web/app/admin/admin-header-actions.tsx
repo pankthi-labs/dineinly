@@ -4,6 +4,7 @@ import {
 	ArrowLeftFromLine,
 	LogOut,
 	MoreVertical,
+	Scale,
 	Tablet,
 	User,
 } from "lucide-react";
@@ -179,6 +180,14 @@ export function AdminHeaderActions({
 							Pair This Device
 						</Link>
 					) : null}
+					<Link
+						href="/legal"
+						className={menuItemClass}
+						onClick={() => close(false)}
+					>
+						<Scale className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
+						Legal
+					</Link>
 					{isStation ? null : (
 						<button
 							type="button"

@@ -22,6 +22,7 @@ import {
 import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { AnimatedBrandLogo } from "@/components/brand-logo";
+import { SiteFooter } from "@/components/site-footer";
 
 // Scroll-in reveal shared by every section below. `initial: false` under
 // reduced motion skips the offset entirely, so the element renders at rest.
@@ -435,11 +436,7 @@ export function HomeContent() {
 				</div>
 			</motion.section>
 
-			<footer className="border-divider border-t pt-8">
-				<p className="text-muted text-xs">
-					© {new Date().getFullYear()} Dineinly. All rights reserved.
-				</p>
-			</footer>
+			<SiteFooter />
 		</main>
 	);
 }

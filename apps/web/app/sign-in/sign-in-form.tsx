@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
 	type ChangeEvent,
@@ -193,9 +194,31 @@ export function SignInForm() {
 				)}
 			</div>
 
-			<p className="text-caps text-muted">
-				© {new Date().getFullYear()} Dineinly. All rights reserved.
-			</p>
+			<div className="flex flex-col items-center gap-2">
+				<p className="text-caps text-muted">
+					© {new Date().getFullYear()} Dineinly. All rights reserved.
+				</p>
+				<nav className="flex gap-4">
+					<Link
+						href="/legal/privacy"
+						className="text-caps text-muted hover:text-secondary"
+					>
+						Privacy
+					</Link>
+					<Link
+						href="/legal/terms"
+						className="text-caps text-muted hover:text-secondary"
+					>
+						Terms
+					</Link>
+					<Link
+						href="/legal/copyright"
+						className="text-caps text-muted hover:text-secondary"
+					>
+						Copyright
+					</Link>
+				</nav>
+			</div>
 		</main>
 	);
 }
