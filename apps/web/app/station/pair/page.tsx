@@ -3,7 +3,7 @@
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { BrandLogo } from "@/components/brand-logo";
+import { AnimatedBrandLogo } from "@/components/brand-logo";
 import { Field } from "@/components/form-sheet";
 import {
 	STATION_DEVICE_ID_COOKIE,
@@ -75,7 +75,7 @@ export default function StationPairPage() {
 
 	return (
 		<main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-16">
-			<BrandLogo height={40} priority />
+			<AnimatedBrandLogo height={40} priority />
 
 			<div className="relative w-full max-w-sm rounded-xl border border-divider bg-surface p-6">
 				<button

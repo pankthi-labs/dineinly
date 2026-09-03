@@ -33,6 +33,7 @@
 | UI Components | None — no component library. Raw semantic HTML styled with `design-system.md` tokens only |
 | Icons | Lucide (`lucide-react`) — sanctioned choice, ISC license. See `design-system.md` §11 for stroke/size rules. Do not reach for another icon set |
 | Breakpoint mechanism | `postcss-custom-media` — sanctioned choice, MIT license, dev dependency. Defines the 4 breakpoint tokens once; see `design-system.md` §10. `var()` cannot be used in `@media`, this is the mechanism instead of raw duplicated values |
+| Motion (public home page only) | `motion` (MIT license, the framer-motion successor) — scoped exclusively to `apps/web/app/home-content.tsx`. Product UI stays on the CSS keyframe/transition tokens in `design-system.md` §05; see that doc's §09 exception for why the marketing page gets latitude. Do not import it elsewhere |
 | Client State | Zustand |
 | Server State | TanStack Query (via tRPC) |
 | QR rendering (inline preview) | `qrcode.react` — client-side canvas, renders straight from `qr_token`, no server round-trip. See `architecture.md` § Table QR Generation |

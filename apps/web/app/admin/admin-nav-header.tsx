@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BrandLogo } from "@/components/brand-logo";
+import { AnimatedBrandLogo } from "@/components/brand-logo";
 import { AdminHeaderActions } from "./admin-header-actions";
 
 const NAV_ITEMS = [
@@ -23,7 +23,7 @@ export function AdminNavHeader({ active }: { active: NavItem }) {
 	return (
 		<header className="border-divider border-b bg-surface">
 			<div className="flex flex-col gap-6 px-4 py-5 md:flex-row md:items-center md:justify-between md:px-16 xl:px-24">
-				<BrandLogo height={28} />
+				<AnimatedBrandLogo height={28} />
 
 				<div className="flex min-w-0 items-center gap-6 lg:gap-8">
 					<nav

@@ -12,7 +12,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { BrandLogo } from "@/components/brand-logo";
+import { AnimatedBrandLogo } from "@/components/brand-logo";
 import { Field } from "@/components/form-sheet";
 import { createClient } from "@/lib/supabase/client";
 import { trpc } from "@/lib/trpc-client";
@@ -161,7 +161,7 @@ export function SignInForm() {
 
 	return (
 		<main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-16">
-			<BrandLogo height={40} priority />
+			<AnimatedBrandLogo height={40} priority />
 
 			<div className="w-full max-w-sm rounded-xl border border-divider bg-surface p-6">
 				{step === "email" ? (
