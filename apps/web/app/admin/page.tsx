@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { Settings, UserCog, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { AnimatedBrandLogo } from "@/components/brand-logo";
+import { SiteFooter } from "@/components/site-footer";
 import { getViewer } from "@/lib/auth";
 import { getGreeting } from "@/lib/greeting";
 import { AdminHeaderActions } from "./admin-header-actions";
@@ -89,11 +90,7 @@ export default async function AdminDashboardPage() {
 				})}
 			</main>
 
-			<footer className="mt-16 border-divider border-t pt-8 lg:mt-24">
-				<p className="text-caps text-muted">
-					© {new Date().getFullYear()} Dineinly. All rights reserved.
-				</p>
-			</footer>
+			<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 		</div>
 	);
 }

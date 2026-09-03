@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { AnimatedBrandLogo } from "@/components/brand-logo";
 import { Field } from "@/components/form-sheet";
+import { SiteFooter } from "@/components/site-footer";
 import {
 	STATION_DEVICE_ID_COOKIE,
 	STATION_DEVICE_TOKEN_TTL_SECONDS,
@@ -120,6 +121,8 @@ export default function StationPairPage() {
 					</button>
 				</form>
 			</div>
+
+			<SiteFooter variant="compact" className="w-full max-w-sm" />
 		</main>
 	);
 }

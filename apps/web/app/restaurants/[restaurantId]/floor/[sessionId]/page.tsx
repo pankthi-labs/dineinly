@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { QuantityPill } from "@/components/quantity-pill";
+import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { formatPrice, titleCase } from "@/lib/format";
@@ -254,6 +255,8 @@ export default function FloorOrderPage() {
 						)}
 					</div>
 				</div>
+
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 			</main>
 
 			{cart.length > 0 ? (

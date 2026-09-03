@@ -28,7 +28,7 @@ export default async function LegalDocPage({
 			<div className="mb-16 flex flex-col gap-4">
 				<LegalDocument markdown={doc.content} />
 			</div>
-			<SiteFooter />
+			<SiteFooter variant="compact" />
 		</main>
 	);
 }

@@ -10,6 +10,7 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { QuantityPill } from "@/components/quantity-pill";
+import { SiteFooter } from "@/components/site-footer";
 import { formatPrice, titleCase } from "@/lib/format";
 import { ICE_LABELS } from "@/lib/menu-options";
 import { trpc } from "@/lib/trpc-client";
@@ -216,6 +217,8 @@ function GuestCartContent({
 						</div>
 					</div>
 				)}
+
+				<SiteFooter variant="compact" className="mt-10" />
 			</main>
 
 			{items.length > 0 ? (

@@ -5,6 +5,7 @@ import { Receipt } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { SiteFooter } from "@/components/site-footer";
 import { visibleFilters } from "@/lib/filter-pills";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { createClient } from "@/lib/supabase/client";
@@ -240,6 +241,8 @@ export default function BillsPage() {
 						))
 					)}
 				</div>
+
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 			</main>
 		</div>
 	);

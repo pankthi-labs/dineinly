@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { trpc } from "@/lib/trpc-client";
@@ -43,6 +44,8 @@ export default function QrMenuPage() {
 						onToast={setToast}
 					/>
 				</div>
+
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 			</main>
 
 			{toast ? <Toast toast={toast} onDismiss={() => setToast(null)} /> : null}

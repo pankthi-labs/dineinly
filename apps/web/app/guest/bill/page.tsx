@@ -11,6 +11,7 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { OrderGroupCard } from "@/components/order-status-groups";
+import { SiteFooter } from "@/components/site-footer";
 import { counterOrderGroups } from "@/lib/order-groups";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
@@ -157,6 +158,8 @@ export default function GuestBillPage() {
 						))}
 					</div>
 				) : null}
+
+				<SiteFooter variant="compact" className="mt-10" />
 			</main>
 
 			{showPastBills || showOrderMore ? (

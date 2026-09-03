@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AnimatedBrandLogo } from "@/components/brand-logo";
-import { SiteFooter } from "@/components/site-footer";
 import { LEGAL_DOCS } from "@/lib/legal-content";
 
 export default function LegalIndexPage() {
@@ -13,7 +12,7 @@ export default function LegalIndexPage() {
 			</header>
 			<div className="mb-16 flex flex-col gap-8">
 				<h1 className="text-3xl text-primary">Legal</h1>
-				<ul className="flex flex-col divide-y divide-divider rounded-xl border border-divider">
+				<ul className="flex flex-col divide-y divide-divider overflow-hidden rounded-xl border border-divider">
 					{LEGAL_DOCS.map((doc) => (
 						<li key={doc.slug}>
 							<Link
@@ -29,7 +28,6 @@ export default function LegalIndexPage() {
 					))}
 				</ul>
 			</div>
-			<SiteFooter />
 		</main>
 	);
 }

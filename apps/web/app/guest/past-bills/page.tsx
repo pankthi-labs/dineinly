@@ -10,6 +10,7 @@ import {
 	GuestLoading,
 	NoGuestSession,
 } from "@/components/guest-page-states";
+import { SiteFooter } from "@/components/site-footer";
 import { trpc } from "@/lib/trpc-client";
 
 // Every earlier round of the current visit (Counter only, in practice) — the
@@ -130,6 +131,8 @@ export default function GuestPastBillsPage() {
 						)}
 					</>
 				)}
+
+				<SiteFooter variant="compact" className="mt-10" />
 			</main>
 		</div>
 	);

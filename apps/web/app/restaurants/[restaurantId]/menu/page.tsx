@@ -15,6 +15,7 @@ import { useState } from "react";
 import { Detail } from "@/components/detail";
 import { DietMark } from "@/components/diet-mark";
 import { PageHeader } from "@/components/page-header";
+import { SiteFooter } from "@/components/site-footer";
 import { capitalizeFirst, formatPrice, titleCase } from "@/lib/format";
 import {
 	type PREP_TIME_OPTIONS,
@@ -353,6 +354,8 @@ export default function RestaurantMenuPage() {
 						})}
 					</div>
 				)}
+
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 			</main>
 
 			{isAddingCategory ? (

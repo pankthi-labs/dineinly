@@ -3,6 +3,7 @@
 import { Plus, UtensilsCrossed } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { getPageRange } from "@/lib/pagination";
@@ -304,11 +305,7 @@ export default function RestaurantsDirectoryPage() {
 					</nav>
 				) : null}
 
-				<footer className="mt-16 border-divider border-t pt-8 lg:mt-24">
-					<p className="text-caps text-muted">
-						© {new Date().getFullYear()} Dineinly. All rights reserved.
-					</p>
-				</footer>
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 
 				{sheetMode !== "closed" ? (
 					<RestaurantFormSheet

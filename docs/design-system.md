@@ -274,6 +274,12 @@ Deviations require explicit written sign-off — never implement speculatively.
 
 - **Dark-only** in the MVP; no light mode. Wordmark ships as one asset, `apps/web/public/brand/dineinly-logo-dark.svg` — no light-mode variant to maintain.
 - **"Powered by Dineinly" lockup** (`PoweredByDineinly` in `apps/web/components/brand-logo.tsx`) — the only sanctioned pairing of the wordmark with adjacent text. `text-xs` (12px/w500/Inter, §02), `--color-muted`, `--space-1` gap (matches "Powered by"'s own word-space, so the text-to-logo gap reads even with the word gap), logo `height={12}`. Never rebuild this pairing inline at a call site — import the component.
+- **Every page has a header and a footer.** The footer is `SiteFooter` (`apps/web/components/site-footer.tsx`) — never rebuild copyright/legal links inline at a call site. `variant` has no default; every call site must choose:
+  - `variant="public"` (Privacy Policy / Terms of Service / Copyright as three separate links) — `apps/web/app/home-content.tsx` only. No other page uses this variant.
+  - `variant="compact"` (a single "Legal" link) — every other page in the app: admin, every restaurant-scoped staff page, every guest QR page, sign-in, station pairing, and the legal doc pages themselves (`/legal/[slug]`).
+  - The `/legal` index page renders no footer at all — its own content already is the three links, so repeating them below would be redundant.
+  - **Exception — Kitchen Display** (`apps/web/app/restaurants/[restaurantId]/kitchen/page.tsx`): no footer. It's a full-height live queue board meant to fill a kitchen tablet screen; a footer would permanently eat vertical space from a working screen for no operational benefit.
+  - New pages: add `SiteFooter` (almost always `variant="compact"`) as the last child of `<main>` before shipping — don't leave a page without one.
 - **No component library** — semantic HTML/CSS with these tokens only.
 - **No values beyond this document.** The four accents are exhaustive — never a fifth. Breakpoints (§10), icons (§11), shadow (§12), and z-index (§13) define the only allowed values for those — never invent a value outside them.
 - Gold (`--color-accent-primary`) stays under 12% of any screen.

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { useDismissableOverlay } from "@/components/use-dismissable-overlay";
@@ -276,6 +277,8 @@ export default function FloorPage() {
 						</div>
 					</>
 				)}
+
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 			</main>
 
 			{mergeTarget ? (

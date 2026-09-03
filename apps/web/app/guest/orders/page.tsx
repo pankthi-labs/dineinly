@@ -13,6 +13,7 @@ import {
 	GuestOrderCard,
 	OrderGroupCard,
 } from "@/components/order-status-groups";
+import { SiteFooter } from "@/components/site-footer";
 import { formatBillAmount } from "@/lib/format";
 import { orderGroups } from "@/lib/order-groups";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
@@ -180,6 +181,8 @@ export default function GuestOrdersPage() {
 						) : null}
 					</div>
 				) : null}
+
+				<SiteFooter variant="compact" className="mt-10" />
 			</main>
 		</div>
 	);

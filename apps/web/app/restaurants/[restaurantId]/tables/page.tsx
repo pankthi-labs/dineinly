@@ -5,6 +5,7 @@ import { Plus, QrCode, UtensilsCrossed } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { downloadPdf } from "@/lib/download-pdf";
@@ -363,6 +364,8 @@ export default function TableMatrixPage() {
 						))
 					)}
 				</div>
+
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 			</main>
 
 			{sheetMode !== "closed" ? (

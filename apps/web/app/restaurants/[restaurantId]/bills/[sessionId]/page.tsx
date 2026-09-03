@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useId, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuantityPill } from "@/components/quantity-pill";
+import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { useDismissableOverlay } from "@/components/use-dismissable-overlay";
@@ -791,6 +792,10 @@ export default function BillDetailPage() {
 							{formatBillAmount(data.total)}
 						</span>
 					</div>
+				</div>
+
+				<div className="print:hidden">
+					<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 				</div>
 			</main>
 

@@ -436,7 +436,7 @@ export function HomeContent() {
 				</div>
 			</motion.section>
 
-			<SiteFooter />
+			<SiteFooter variant="public" />
 		</main>
 	);
 }

@@ -5,6 +5,7 @@ import { Plus, Search, Users } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import type { StaffRole } from "@/lib/auth";
@@ -415,6 +416,8 @@ export default function StaffRosterPage() {
 					viewerRole === "manager") ? (
 					<StationPanel restaurantId={restaurantId} />
 				) : null}
+
+				<SiteFooter variant="compact" className="mt-16 lg:mt-24" />
 			</main>
 
 			{sheetMode !== "closed" ? (

@@ -1,32 +1,46 @@
 import Link from "next/link";
 
-// The one standard public-page footer - home, /legal, and every legal doc
-// page render this exact block, never a breadcrumb or back-link instead.
-export function SiteFooter() {
+const LINK_CLASS = "text-muted text-xs hover:text-secondary";
+
+// The footer every page renders (docs/design-system.md § 09 — every page has
+// a header and a footer, Kitchen Display excepted). `variant` has no default
+// on purpose — every call site must choose: "public" (the three-link spread)
+// is home.tsx only; every other page, /legal/[slug] included, is "compact"
+// (single "Legal" link). The /legal index page renders neither — its own
+// content already is the three links, so a footer repeating them is
+// redundant.
+export function SiteFooter({
+	variant,
+	className = "",
+}: {
+	variant: "public" | "compact";
+	className?: string;
+}) {
 	return (
-		<footer className="flex flex-col gap-4 border-divider border-t pt-8 sm:flex-row sm:items-center sm:justify-between">
+		<footer
+			className={`flex flex-col gap-4 border-divider border-t pt-8 sm:flex-row sm:items-center sm:justify-between ${className}`}
+		>
 			<p className="text-muted text-xs">
 				© {new Date().getFullYear()} Dineinly. All rights reserved.
 			</p>
 			<nav className="flex gap-5">
-				<Link
-					href="/legal/privacy"
-					className="text-muted text-xs hover:text-secondary"
-				>
-					Privacy Policy
-				</Link>
-				<Link
-					href="/legal/terms"
-					className="text-muted text-xs hover:text-secondary"
-				>
-					Terms of Service
-				</Link>
-				<Link
-					href="/legal/copyright"
-					className="text-muted text-xs hover:text-secondary"
-				>
-					Copyright
-				</Link>
+				{variant === "public" ? (
+					<>
+						<Link href="/legal/privacy" className={LINK_CLASS}>
+							Privacy Policy
+						</Link>
+						<Link href="/legal/terms" className={LINK_CLASS}>
+							Terms of Service
+						</Link>
+						<Link href="/legal/copyright" className={LINK_CLASS}>
+							Copyright
+						</Link>
+					</>
+				) : (
+					<Link href="/legal" className={LINK_CLASS}>
+						Legal
+					</Link>
+				)}
 			</nav>
 		</footer>
 	);
