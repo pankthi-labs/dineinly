@@ -9,6 +9,7 @@ import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { formatPrice, titleCase } from "@/lib/format";
+import { randomId } from "@/lib/random-id";
 import { trpc } from "@/lib/trpc-client";
 import { RestaurantNavHeader } from "../../restaurant-nav-header";
 
@@ -34,7 +35,7 @@ export default function FloorOrderPage() {
 		sessionId: string;
 	}>();
 	const [toast, setToast] = useState<ToastState | null>(null);
-	const [idempotencyKey] = useState(() => crypto.randomUUID());
+	const [idempotencyKey] = useState(() => randomId());
 
 	const utils = trpc.useUtils();
 	const restaurantQuery = trpc.restaurants.getById.useQuery({

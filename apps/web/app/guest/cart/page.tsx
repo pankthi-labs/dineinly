@@ -13,6 +13,7 @@ import { QuantityPill } from "@/components/quantity-pill";
 import { SiteFooter } from "@/components/site-footer";
 import { formatPrice, titleCase } from "@/lib/format";
 import { ICE_LABELS } from "@/lib/menu-options";
+import { randomId } from "@/lib/random-id";
 import { trpc } from "@/lib/trpc-client";
 
 // Confirm Order screen — reached from the guest menu's "Review Order" bar
@@ -42,7 +43,7 @@ export default function GuestCartPage() {
 	// One key per visit to this screen — reused across retries of the same
 	// confirm attempt so a duplicate tap or a network retry lands on the same
 	// order instead of creating a second one (submit_order is keyed on this).
-	const [idempotencyKey] = useState(() => crypto.randomUUID());
+	const [idempotencyKey] = useState(() => randomId());
 	const [submitError, setSubmitError] = useState<string | null>(null);
 
 	if (menu.isLoading || (menu.isSuccess && cart.isLoading)) {
