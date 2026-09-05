@@ -14,6 +14,12 @@ const handler = (request: Request) =>
 		req: request,
 		router: appRouter,
 		createContext,
+		// The client forces queries over POST too (methodOverride: "POST" in
+		// lib/trpc-client.tsx) so no request ever exposes a same-URL-for-every-
+		// caller GET for a caching intermediary to key on. Without this flag the
+		// server still enforces the underlying query/mutation split by HTTP
+		// method and rejects a query arriving as POST.
+		allowMethodOverride: true,
 		responseMeta: () => ({
 			headers: { "cache-control": "no-store" },
 		}),
