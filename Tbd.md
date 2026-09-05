@@ -92,6 +92,22 @@ pages receive it without a manual refresh.
 
 ---
 
+## Guest table sessions cannot be closed from Floor
+
+Dineinly Guest restaurants do not use the Dineinly Bills workflow, but the
+current Floor view has no action for staff to close a completed table session.
+As a result, submitted Guest orders remain attached to active sessions and
+continue appearing in Floor indefinitely, preventing the table from being
+cleanly reset for the next visit.
+
+**Pick up:** add a server-enforced Close Session action to the Guest Floor
+workflow for Waiter/Manager/Owner, reusing the documented session closure
+guards and realtime session update. The action must only close a session when
+its order lifecycle satisfies the existing closure rules, then free the table
+and remove the session's orders from the active Floor view.
+
+---
+
 ## No Call Waiter action on the bill
 
 The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.
