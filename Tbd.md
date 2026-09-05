@@ -75,6 +75,23 @@ Menu Desk has no way to see what a dish/category looks like from the guest order
 
 ---
 
+## Guest menu does not update instantly after restaurant changes
+
+An already-open Guest menu can remain stale after a restaurant user updates a
+menu item or category. The guest currently has to refresh the mobile browser
+before the updated menu becomes visible.
+
+The expected behavior is immediate, refresh-free propagation to all active QR
+guest sessions, including item edits, availability changes, category changes,
+and other guest-visible menu updates.
+
+**Pick up:** trace the menu Broadcast trigger, `menu:{restaurant_id}` realtime
+subscription, and Guest menu query invalidation/refetch path. Verify that
+restaurant-side updates publish the correct event and that active mobile Guest
+pages receive it without a manual refresh.
+
+---
+
 ## No Call Waiter action on the bill
 
 The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.
