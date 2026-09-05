@@ -9,6 +9,7 @@ import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
 import { useDismissableOverlay } from "@/components/use-dismissable-overlay";
+import { titleCase } from "@/lib/format";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { STATION_DEVICE_ID_COOKIE } from "@/lib/station-session";
 import { createClient } from "@/lib/supabase/client";
@@ -35,6 +36,9 @@ export default function FloorPage() {
 		id: restaurantId,
 	});
 	const listQuery = trpc.tables.list.useQuery({ restaurantId });
+	const guestOrdersQuery = trpc.floor.orders.listGuest.useQuery({
+		restaurantId,
+	});
 	const statusQuery = trpc.station.myStationStatus.useQuery({ restaurantId });
 	const [pin, setPin] = useState("");
 	const [pinError, setPinError] = useState<string | null>(null);
@@ -98,6 +102,8 @@ export default function FloorPage() {
 	const supabase = createClient();
 	useBroadcastChannel(supabase, `restaurant:${restaurantId}`, {
 		"session.change": () => utils.tables.list.invalidate({ restaurantId }),
+		"order.new": () =>
+			utils.floor.orders.listGuest.invalidate({ restaurantId }),
 	});
 
 	const mergeMutation = trpc.tables.merge.useMutation({
@@ -118,6 +124,19 @@ export default function FloorPage() {
 	const free = tables
 		.filter((t) => t.session_id === null)
 		.sort((a, b) => a.label.localeCompare(b.label));
+	const tableLabelBySession = new Map(
+		tables
+			.filter((table) => table.session_id !== null)
+			.reduce((map, table) => {
+				const sessionId = table.session_id as string;
+				const current = map.get(sessionId);
+				map.set(
+					sessionId,
+					current ? `${current}, ${table.label}` : table.label,
+				);
+				return map;
+			}, new Map<string, string>()),
+	);
 
 	return (
 		<div className="min-h-dvh bg-background text-primary">
@@ -206,7 +225,14 @@ export default function FloorPage() {
 			<main className="px-4 pt-8 pb-10 lg:px-16 lg:pt-12 lg:pb-16 xl:px-24">
 				<PageHeader
 					title="Floor"
-					description="Order for a guest or merge a free table into an occupied one."
+					description="See guest orders, order for a guest, or merge a free table into an occupied one."
+				/>
+
+				<GuestOrdersPanel
+					restaurantId={restaurantId}
+					orders={guestOrdersQuery.data ?? []}
+					tableLabelBySession={tableLabelBySession}
+					isLoading={guestOrdersQuery.isPending}
 				/>
 
 				{listQuery.isPending ? (
@@ -299,6 +325,96 @@ export default function FloorPage() {
 
 			{toast ? <Toast toast={toast} onDismiss={() => setToast(null)} /> : null}
 		</div>
+	);
+}
+type GuestOrder =
+	inferRouterOutputs<AppRouter>["floor"]["orders"]["listGuest"][number];
+
+function GuestOrdersPanel({
+	restaurantId,
+	orders,
+	tableLabelBySession,
+	isLoading,
+}: {
+	restaurantId: string;
+	orders: GuestOrder[];
+	tableLabelBySession: Map<string, string>;
+	isLoading: boolean;
+}) {
+	return (
+		<section className="mt-8" aria-labelledby="guest-orders-heading">
+			<div className="flex items-baseline justify-between gap-4">
+				<h2 id="guest-orders-heading" className="text-caps text-muted">
+					Guest Orders
+				</h2>
+				{orders.length > 0 ? (
+					<span className="text-muted text-sm">{orders.length} submitted</span>
+				) : null}
+			</div>
+			{isLoading ? (
+				<div className="skeleton mt-4 h-32 rounded-xl border border-divider" />
+			) : orders.length === 0 ? (
+				<div className="mt-4 rounded-xl border border-divider bg-surface p-6 text-center">
+					<p className="text-muted text-sm">No guest orders yet.</p>
+				</div>
+			) : (
+				<div className="mt-4 grid gap-4 lg:grid-cols-2">
+					{orders.map((order) => (
+						<article
+							key={order.id}
+							className="rounded-xl border border-divider bg-surface p-5"
+						>
+							<div className="flex items-baseline justify-between gap-4">
+								<h3 className="text-lg text-primary">
+									Table {tableLabelBySession.get(order.sessionId) ?? "Unknown"}
+								</h3>
+								<time className="text-muted text-xs" dateTime={order.placedAt}>
+									{new Date(order.placedAt).toLocaleTimeString([], {
+										hour: "numeric",
+										minute: "2-digit",
+									})}
+								</time>
+							</div>
+							<div className="mt-1 flex items-center justify-between gap-4">
+								<p className="text-secondary text-sm">
+									Order round {order.round}
+								</p>
+								<Link
+									href={`/restaurants/${restaurantId}/floor/${order.sessionId}`}
+									className="text-accent text-sm hover:opacity-80"
+								>
+									Open table
+								</Link>
+							</div>
+							<ul className="mt-4 flex flex-col gap-3">
+								{order.items.map((item) => {
+									const preferences = [item.spice, item.salt, item.ice]
+										.filter(Boolean)
+										.map((value) => titleCase(value as string));
+									return (
+										<li
+											key={item.id}
+											className="flex items-start justify-between gap-4 border-divider border-b pb-3 last:border-0 last:pb-0"
+										>
+											<div>
+												<p className="text-primary">
+													{item.quantity} × {titleCase(item.name)}
+												</p>
+												{preferences.length > 0 ? (
+													<p className="mt-1 text-secondary text-sm">
+														{preferences.join(", ")}
+													</p>
+												) : null}
+											</div>
+										</li>
+									);
+								})}
+							</ul>
+						</article>
+					))}
+				</div>
+			)}
+		</section>
 	);
 }
 

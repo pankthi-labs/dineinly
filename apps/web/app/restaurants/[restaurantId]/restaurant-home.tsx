@@ -24,6 +24,7 @@ import {
 	useCanPairDevice,
 	useIsAdmin,
 	useIsCounter,
+	useIsGuest,
 	useIsIndividualWaiter,
 	useIsMenuOnly,
 } from "./viewer-context";
@@ -123,13 +124,14 @@ export function RestaurantHome({
 	const canAccessSettings = useCanAccessSettings();
 	const isMenuOnly = useIsMenuOnly();
 	const isCounter = useIsCounter();
+	const isGuest = useIsGuest();
 	const isIndividualWaiter = useIsIndividualWaiter();
 	const canPairDevice = useCanPairDevice();
 	const cardAccess: Partial<Record<CardTitle, boolean>> = {
 		"Menu Desk": canManageMenuAndTables,
 		// Dineinly Menu is view-only (docs/product.md § Dineinly Experiences)
 		// — no tables, kitchen, or bills, for any role.
-		Kitchen: !isMenuOnly,
+		Kitchen: !isMenuOnly && !isGuest,
 		// Counter has zero Restaurant Table rows (docs/product.md § Dineinly
 		// Experiences) — no Table Matrix either, same as Menu.
 		"Table Matrix": canManageMenuAndTables && !isMenuOnly && !isCounter,
@@ -141,7 +143,7 @@ export function RestaurantHome({
 		Floor: canAccessBills && !isMenuOnly && !isCounter,
 		"Staff Roster": canManageStaff,
 		"Venue Settings": canAccessSettings,
-		Bills: canAccessBills && !isMenuOnly,
+		Bills: canAccessBills && !isMenuOnly && !isGuest,
 	};
 	// A named Waiter's own OTP session is account-management only (Profile/
 	// PIN, Pair This Device) — real floor work happens on a paired station device

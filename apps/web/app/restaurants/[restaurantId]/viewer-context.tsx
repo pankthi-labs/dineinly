@@ -78,6 +78,10 @@ export function useIsCounter(): boolean {
 	return useRestaurantViewer().experience === "counter";
 }
 
+export function useIsGuest(): boolean {
+	return useRestaurantViewer().experience === "guest";
+}
+
 // A named Waiter's own OTP session, not the shared station device (which
 // also carries restaurantRole 'waiter' — isStation is the only way to tell
 // them apart). Their personal login is account-management only from here

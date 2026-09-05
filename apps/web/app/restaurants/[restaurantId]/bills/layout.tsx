@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import {
-	requireFullServiceExperience,
+	requireIntegratedServiceExperience,
 	requireNonIndividualWaiterAccess,
 	requireRestaurantRole,
 } from "@/lib/auth";
@@ -21,6 +21,6 @@ export default async function BillsLayout({
 	const { restaurantId } = await params;
 	await requireRestaurantRole(restaurantId, ["waiter", "manager", "owner"]);
 	await requireNonIndividualWaiterAccess(restaurantId);
-	await requireFullServiceExperience(restaurantId);
+	await requireIntegratedServiceExperience(restaurantId);
 	return children;
 }

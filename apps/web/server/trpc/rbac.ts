@@ -136,3 +136,35 @@ export async function requireFullServiceRole(
 	]);
 	return experience;
 }
+
+export async function requireIntegratedServiceRole(
+	ctx: Context,
+	restaurantId: string,
+	allowedRoles: StaffRole[],
+): Promise<Database["public"]["Enums"]["restaurant_experience"] | null> {
+	const [, experience] = await Promise.all([
+		requireStaffRole(ctx, restaurantId, allowedRoles),
+		assertFullServiceExperience(ctx, restaurantId),
+	]);
+	if (experience !== "one" && experience !== "counter") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "This feature isn't available on the Dineinly Guest package.",
+		});
+	}
+	return experience;
+}
+
+export async function assertIntegratedServiceExperience(
+	ctx: Context,
+	restaurantId: string,
+): Promise<Database["public"]["Enums"]["restaurant_experience"] | null> {
+	const experience = await assertFullServiceExperience(ctx, restaurantId);
+	if (experience !== "one" && experience !== "counter") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "This feature isn't available on the Dineinly Guest package.",
+		});
+	}
+	return experience;
+}
