@@ -108,6 +108,23 @@ and remove the session's orders from the active Floor view.
 
 ---
 
+## Guest orders need a dedicated table-associated view
+
+The Floor view currently presents Guest orders as a growing list, which can
+make it difficult for staff to understand which table each order belongs to
+and to follow a table's multiple order rounds together.
+
+The proposed experience is to keep the existing card for each occupied table
+and add a **View orders** action beside **Order for guest**. View orders should
+open a dedicated page for that table/session showing all submitted Guest
+orders, including multiple rounds, in the correct table context.
+
+**Pick up:** add the table-level navigation and dedicated order-history view,
+preserving realtime updates and the existing server-side table/session
+scoping.
+
+---
+
 ## No Call Waiter action on the bill
 
 The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.
