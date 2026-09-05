@@ -3,13 +3,13 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { titleCase } from "@/lib/format";
-import { describeModifiers } from "@/lib/order-item-groups";
 import {
 	GROUP_DOT_CLASS,
 	GROUP_TEXT_CLASS,
 	type GuestOrder,
 	type OrderGroup,
 } from "@/lib/order-groups";
+import { describeModifiers } from "@/lib/order-item-groups";
 
 export function OrderGroupCard({
 	group,
