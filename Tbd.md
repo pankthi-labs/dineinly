@@ -75,6 +75,56 @@ Menu Desk has no way to see what a dish/category looks like from the guest order
 
 ---
 
+## Guest menu does not update instantly after restaurant changes
+
+An already-open Guest menu can remain stale after a restaurant user updates a
+menu item or category. The guest currently has to refresh the mobile browser
+before the updated menu becomes visible.
+
+The expected behavior is immediate, refresh-free propagation to all active QR
+guest sessions, including item edits, availability changes, category changes,
+and other guest-visible menu updates.
+
+**Pick up:** trace the menu Broadcast trigger, `menu:{restaurant_id}` realtime
+subscription, and Guest menu query invalidation/refetch path. Verify that
+restaurant-side updates publish the correct event and that active mobile Guest
+pages receive it without a manual refresh.
+
+---
+
+## Guest table sessions cannot be closed from Floor
+
+Dineinly Guest restaurants do not use the Dineinly Bills workflow, but the
+current Floor view has no action for staff to close a completed table session.
+As a result, submitted Guest orders remain attached to active sessions and
+continue appearing in Floor indefinitely, preventing the table from being
+cleanly reset for the next visit.
+
+**Pick up:** add a server-enforced Close Session action to the Guest Floor
+workflow for Waiter/Manager/Owner, reusing the documented session closure
+guards and realtime session update. The action must only close a session when
+its order lifecycle satisfies the existing closure rules, then free the table
+and remove the session's orders from the active Floor view.
+
+---
+
+## Guest orders need a dedicated table-associated view
+
+The Floor view currently presents Guest orders as a growing list, which can
+make it difficult for staff to understand which table each order belongs to
+and to follow a table's multiple order rounds together.
+
+The proposed experience is to keep the existing card for each occupied table
+and add a **View orders** action beside **Order for guest**. View orders should
+open a dedicated page for that table/session showing all submitted Guest
+orders, including multiple rounds, in the correct table context.
+
+**Pick up:** add the table-level navigation and dedicated order-history view,
+preserving realtime updates and the existing server-side table/session
+scoping.
+
+---
+
 ## No Call Waiter action on the bill
 
 The guest bill screen (`apps/web/app/guest/bill/page.tsx`) has no way to summon staff — no mutation, no realtime notification to the floor.
