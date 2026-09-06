@@ -411,9 +411,7 @@ function TrackSection({
 				</div>
 				<p className="text-secondary text-sm">{track.blurb}</p>
 			</div>
-			<div className="rounded-xl bg-surface-elevated p-4 md:p-6">
-				<PackageRow track={track} />
-			</div>
+			<PackageRow track={track} />
 			<div className="rounded-xl bg-surface-elevated p-4 md:p-6">
 				<FeatureMatrixTable track={track} />
 			</div>
