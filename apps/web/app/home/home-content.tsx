@@ -5,10 +5,11 @@
 // successor). No other route may adopt it - the rest of the product uses
 // CSS-only motion per §05.
 import {
-	Award,
+	ArrowRight,
 	Check,
 	ChefHat,
 	ClipboardList,
+	ConciergeBell,
 	Crown,
 	LogIn,
 	QrCode,
@@ -184,8 +185,6 @@ const TRACKS = [
 				name: "Dineinly Guest",
 				icon: User,
 				inheritsFrom: "Dineinly Menu",
-				tagline:
-					"Guests order straight from their phone, no staff flag-down needed.",
 				features: [
 					"Guests order directly from their phones",
 					"Order requests go straight to your team",
@@ -196,8 +195,6 @@ const TRACKS = [
 				icon: Crown,
 				featured: true,
 				inheritsFrom: "Dineinly Guest",
-				tagline:
-					"The full table-service loop - kitchen, live status, and billing, all in one system.",
 				features: [
 					"Orders go straight to the kitchen",
 					"Live kitchen queue",
@@ -228,11 +225,8 @@ const TRACKS = [
 			},
 			{
 				name: "Dineinly Counter",
-				icon: Award,
-				featured: true,
+				icon: ConciergeBell,
 				inheritsFrom: "Dineinly Menu",
-				tagline:
-					"Guests order and pay from their phone - the kitchen fires the moment payment clears.",
 				features: [
 					"Guests order directly from their phone",
 					"Instant token, ready to show at the counter",
@@ -245,150 +239,10 @@ const TRACKS = [
 	},
 ];
 
-// All features across a track's packages, in tier order, de-duplicated -
-// the row labels of that track's feature matrix.
-function trackFeatureRows(track: (typeof TRACKS)[number]) {
-	const seen = new Set<string>();
-	const rows: string[] = [];
-	for (const pkg of track.packages) {
-		for (const feature of pkg.features) {
-			if (!seen.has(feature)) {
-				seen.add(feature);
-				rows.push(feature);
-			}
-		}
-	}
-	return rows;
-}
-
-// A package's checked features are its own plus every earlier tier's, since
-// each package inherits from the one before it in the track.
-function cumulativeFeatures(track: (typeof TRACKS)[number], tierIndex: number) {
-	const features = new Set<string>();
-	for (const pkg of track.packages.slice(0, tierIndex + 1)) {
-		for (const feature of pkg.features) {
-			features.add(feature);
-		}
-	}
-	return features;
-}
-
-// The packages of one track, side by side - icon, name, and a short 3-4
-// line summary of what that tier adds. The full checklist lives only in the
-// matrix table below, kept in its own separate card.
-function PackageRow({ track }: { track: (typeof TRACKS)[number] }) {
-	return (
-		<div
-			className="grid gap-4"
-			style={{ gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))" }}
-		>
-			{track.packages.map((pkg) => {
-				const Icon = pkg.icon;
-				return (
-					<div
-						key={pkg.name}
-						className="flex flex-col gap-1 rounded-xl border border-transparent bg-surface-raised p-4 transition-colors duration-(--duration-base) ease-out hover:border-accent/30"
-					>
-						<div className="flex items-center gap-2">
-							<Icon
-								className={`${pkg.featured ? "icon-lg" : "icon-md"} shrink-0 text-accent`}
-								strokeWidth={1.5}
-								aria-hidden="true"
-							/>
-							<p className="font-medium text-primary">{pkg.name}</p>
-						</div>
-						{pkg.inheritsFrom ? (
-							<>
-								<p className="text-caps text-muted">
-									Everything in {pkg.inheritsFrom}, plus
-								</p>
-								<p className="text-secondary text-sm">{pkg.tagline}</p>
-							</>
-						) : (
-							<p className="text-secondary text-sm">{pkg.description}</p>
-						)}
-					</div>
-				);
-			})}
-		</div>
-	);
-}
-
-// The full feature comparison for one track - what the row above only
-// names, this spells out row by row.
-function FeatureMatrixTable({ track }: { track: (typeof TRACKS)[number] }) {
-	const rows = trackFeatureRows(track);
-	return (
-		<div className="overflow-x-auto">
-			<table className="w-full min-w-lg border-collapse text-left">
-				<thead>
-					<tr>
-						<th className="w-full pr-4 pb-4 align-bottom font-medium text-secondary text-sm">
-							Feature
-						</th>
-						{track.packages.map((pkg) => {
-							const Icon = pkg.icon;
-							return (
-								<th
-									key={pkg.name}
-									scope="col"
-									className={`px-4 pb-4 text-center align-bottom ${pkg.featured ? "text-accent" : "text-primary"}`}
-								>
-									<div className="flex flex-col items-center gap-1.5">
-										<Icon
-											className={pkg.featured ? "icon-lg" : "icon-md"}
-											strokeWidth={1.5}
-											aria-hidden="true"
-										/>
-										<span className="whitespace-nowrap font-medium text-sm">
-											{pkg.name}
-										</span>
-									</div>
-								</th>
-							);
-						})}
-					</tr>
-				</thead>
-				<tbody>
-					{rows.map((feature) => (
-						<tr key={feature} className="border-divider border-t">
-							<td className="py-3 pr-4 text-secondary text-sm">{feature}</td>
-							{track.packages.map((pkg, tierIndex) => {
-								const included = cumulativeFeatures(track, tierIndex).has(
-									feature,
-								);
-								return (
-									<td
-										key={pkg.name}
-										className={`px-4 py-3 text-center ${pkg.featured ? "bg-surface-raised" : ""}`}
-									>
-										{included ? (
-											<Check
-												className="icon-sm mx-auto text-accent-secondary"
-												strokeWidth={1.5}
-												aria-hidden="true"
-											/>
-										) : (
-											<span className="text-muted" aria-hidden="true">
-												—
-											</span>
-										)}
-										<span className="sr-only">
-											{pkg.name}: {feature}{" "}
-											{included ? "included" : "not included"}
-										</span>
-									</td>
-								);
-							})}
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
-	);
-}
-
-function TrackSection({
+// Row rendering of a service track: packages laid out left to right as
+// chained steps (an arrow between each), same inner-card content and full
+// bullet list as the original column layout - just turned sideways.
+function TrackRow({
 	track,
 	reduceMotion,
 }: {
@@ -398,7 +252,7 @@ function TrackSection({
 	return (
 		<motion.div
 			{...fadeUp(0.1, reduceMotion)}
-			className="flex flex-col gap-6 rounded-3xl border border-divider bg-surface p-6 transition-colors duration-(--duration-base) ease-out hover:border-accent/40 md:p-8"
+			className="flex flex-col gap-8 rounded-3xl border border-divider bg-surface p-8 transition-colors duration-(--duration-base) ease-out hover:border-accent/40 md:p-10"
 		>
 			<div className="flex flex-col gap-3">
 				<div className="flex items-baseline justify-between">
@@ -411,11 +265,56 @@ function TrackSection({
 				</div>
 				<p className="text-secondary text-sm">{track.blurb}</p>
 			</div>
-			<div className="rounded-xl bg-surface-elevated p-4 md:p-6">
-				<PackageRow track={track} />
-			</div>
-			<div className="rounded-xl bg-surface-elevated p-4 md:p-6">
-				<FeatureMatrixTable track={track} />
+			<div className="flex items-stretch gap-12 overflow-x-auto px-1 pb-2">
+				{track.packages.map((pkg, index) => {
+					const Icon = pkg.icon;
+					return (
+						<div key={pkg.name} className="flex items-stretch gap-12">
+							<div className="flex w-72 shrink-0 flex-col gap-4 rounded-xl bg-surface-elevated p-6 transition-colors duration-(--duration-base) ease-out hover:bg-surface-raised">
+								<div className="flex flex-col gap-1">
+									<div className="flex items-center gap-2">
+										<Icon
+											className={`${pkg.featured ? "icon-lg" : "icon-md"} text-accent`}
+											strokeWidth={1.5}
+											aria-hidden="true"
+										/>
+										<p className="font-medium text-lg text-primary">
+											{pkg.name}
+										</p>
+									</div>
+									{pkg.inheritsFrom ? (
+										<p className="text-caps text-muted">
+											Everything in {pkg.inheritsFrom}, plus
+										</p>
+									) : (
+										<p className="text-secondary text-sm">{pkg.description}</p>
+									)}
+								</div>
+								<ul className="flex flex-col gap-2">
+									{pkg.features.map((feature) => (
+										<li key={feature} className="flex items-start gap-2">
+											<Check
+												className="icon-sm mt-0.5 shrink-0 text-accent-secondary"
+												strokeWidth={1.5}
+												aria-hidden="true"
+											/>
+											<span className="font-medium text-secondary text-sm">
+												{feature}
+											</span>
+										</li>
+									))}
+								</ul>
+							</div>
+							{index < track.packages.length - 1 && (
+								<ArrowRight
+									className="icon-md shrink-0 self-center text-muted"
+									strokeWidth={1.5}
+									aria-hidden="true"
+								/>
+							)}
+						</div>
+					);
+				})}
 			</div>
 		</motion.div>
 	);
@@ -518,9 +417,9 @@ export function HomeContent() {
 					</p>
 				</div>
 
-				<div className="flex flex-col gap-8">
+				<div className="flex flex-col gap-10">
 					{TRACKS.map((track) => (
-						<TrackSection
+						<TrackRow
 							key={track.key}
 							track={track}
 							reduceMotion={reduceMotion}
