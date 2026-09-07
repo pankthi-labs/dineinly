@@ -5,7 +5,7 @@ import { buildBillPdf } from "@/lib/bill-pdf";
 import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
-import { requireFullServiceRole } from "../trpc/rbac";
+import { requireIntegratedServiceRole as requireFullServiceRole } from "../trpc/rbac";
 import {
 	cancelOrderItemInput,
 	closeSessionInput,

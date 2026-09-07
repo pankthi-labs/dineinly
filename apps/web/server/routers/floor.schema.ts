@@ -21,6 +21,10 @@ export const listCartInput = z.object({
 	sessionId: sessionIdSchema,
 });
 
+export const listGuestOrdersInput = z.object({
+	restaurantId: restaurantIdSchema,
+});
+
 export const addCartItemInput = preferencesInput.extend({
 	restaurantId: restaurantIdSchema,
 	sessionId: sessionIdSchema,

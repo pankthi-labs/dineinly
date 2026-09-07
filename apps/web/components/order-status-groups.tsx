@@ -9,6 +9,7 @@ import {
 	type GuestOrder,
 	type OrderGroup,
 } from "@/lib/order-groups";
+import { describeModifiers } from "@/lib/order-item-groups";
 
 export function OrderGroupCard({
 	group,
@@ -146,9 +147,16 @@ export function GuestOrderCard({ order }: { order: GuestOrder }) {
 			{expanded ? (
 				<div className="mt-4 flex flex-col gap-3 border-divider border-t pt-4">
 					{order.items.map((item) => (
-						<span key={item.id} className="text-base text-primary">
-							{item.quantity}x {titleCase(item.name)}
-						</span>
+						<div key={item.id} className="text-base text-primary">
+							<p>
+								{item.quantity}x {titleCase(item.name)}
+							</p>
+							{describeModifiers(item.spice, item.salt, item.ice) ? (
+								<p className="mt-1 text-muted text-sm">
+									{describeModifiers(item.spice, item.salt, item.ice)}
+								</p>
+							) : null}
+						</div>
 					))}
 				</div>
 			) : null}

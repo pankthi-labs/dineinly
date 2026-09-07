@@ -10,6 +10,7 @@ import { assertFullServiceExperience, requireStaffRole } from "../trpc/rbac";
 import {
 	addCartItemInput,
 	listCartInput,
+	listGuestOrdersInput,
 	removeCartItemInput,
 	setCartItemQuantityInput,
 	submitFloorOrderInput,
@@ -151,6 +152,84 @@ export async function requireOwnStaffId(
 }
 
 export const floorRouter = router({
+	orders: router({
+		// Guest submissions are shown on Floor by table/session. This is a
+		// read-only incoming-order view; Guest experience orders do not enter
+		// Dineinly's kitchen status workflow.
+		listGuest: authedProcedure
+			.input(listGuestOrdersInput)
+			.query(async ({ ctx, input }) => {
+				const experience = await assertFullServiceExperience(
+					ctx,
+					input.restaurantId,
+				);
+				await requireStaffRole(
+					ctx,
+					input.restaurantId,
+					floorRolesFor(experience),
+				);
+
+				const sessionsResult = await ctx.auth
+					.from("sessions")
+					.select("id")
+					.eq("restaurant_id", input.restaurantId)
+					.eq("status", "active");
+				if (sessionsResult.error) {
+					throw dbError("Unable to load guest orders.", sessionsResult.error);
+				}
+				const sessionIds = (sessionsResult.data ?? []).map(
+					(session) => session.id,
+				);
+				if (sessionIds.length === 0) return [];
+
+				const ordersResult = await ctx.auth
+					.from("orders")
+					.select("id, session_id, placed_at, placed_by_type")
+					.eq("restaurant_id", input.restaurantId)
+					.eq("placed_by_type", "guest")
+					.in("session_id", sessionIds)
+					.order("placed_at", { ascending: true });
+				if (ordersResult.error) {
+					throw dbError("Unable to load guest orders.", ordersResult.error);
+				}
+				const orders = ordersResult.data ?? [];
+				if (orders.length === 0) return [];
+
+				const itemsResult = await ctx.auth
+					.from("order_items")
+					.select("id, order_id, item_name, quantity, spice, salt, ice")
+					.eq("restaurant_id", input.restaurantId)
+					.in(
+						"order_id",
+						orders.map((order) => order.id),
+					);
+				if (itemsResult.error) {
+					throw dbError("Unable to load guest order items.", itemsResult.error);
+				}
+
+				const roundsBySession = new Map<string, number>();
+				return orders.map((order) => {
+					const round = (roundsBySession.get(order.session_id) ?? 0) + 1;
+					roundsBySession.set(order.session_id, round);
+					return {
+						id: order.id,
+						sessionId: order.session_id,
+						round,
+						placedAt: order.placed_at,
+						items: (itemsResult.data ?? [])
+							.filter((item) => item.order_id === order.id)
+							.map((item) => ({
+								id: item.id,
+								name: item.item_name,
+								quantity: item.quantity,
+								spice: item.spice,
+								salt: item.salt,
+								ice: item.ice,
+							})),
+					};
+				});
+			}),
+	}),
 	cart: router({
 		list: authedProcedure.input(listCartInput).query(async ({ ctx, input }) => {
 			const experience = await assertFullServiceExperience(

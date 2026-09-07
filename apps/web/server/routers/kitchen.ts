@@ -6,7 +6,7 @@ import type { Context } from "../trpc/context";
 import { dbError } from "../trpc/errors";
 import { authedProcedure, router } from "../trpc/init";
 import {
-	assertFullServiceExperience,
+	assertIntegratedServiceExperience,
 	requireFullServiceRole,
 	requireStaffRole,
 } from "../trpc/rbac";
@@ -355,7 +355,7 @@ export const kitchenRouter = router({
 			// requireFullServiceRole's own internal one — Serve's allowed roles
 			// depend on the experience, so it has to be known before the role
 			// check runs, not just alongside it.
-			const experience = await assertFullServiceExperience(
+			const experience = await assertIntegratedServiceExperience(
 				ctx,
 				input.restaurantId,
 			);

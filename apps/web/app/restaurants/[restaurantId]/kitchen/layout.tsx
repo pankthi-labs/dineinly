@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import {
-	requireFullServiceExperience,
+	requireIntegratedServiceExperience,
 	requireNonIndividualWaiterAccess,
 } from "@/lib/auth";
 
@@ -20,6 +20,6 @@ export default async function KitchenLayout({
 }) {
 	const { restaurantId } = await params;
 	await requireNonIndividualWaiterAccess(restaurantId);
-	await requireFullServiceExperience(restaurantId);
+	await requireIntegratedServiceExperience(restaurantId);
 	return children;
 }

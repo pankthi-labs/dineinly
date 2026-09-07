@@ -248,6 +248,18 @@ export async function requireFullServiceExperience(
 	}
 }
 
+/** Kitchen and Dineinly billing belong to One and Counter. Guest uses the
+ * restaurant's existing kitchen and billing systems, with Floor handling
+ * incoming table orders instead. */
+export async function requireIntegratedServiceExperience(
+	restaurantId: string,
+): Promise<void> {
+	const experience = await getRestaurantExperience(restaurantId);
+	if (experience !== "one" && experience !== "counter") {
+		redirect(`/restaurants/${restaurantId}`);
+	}
+}
+
 /**
  * Redirects to the restaurant home page unless the restaurant's package has
  * a single universal QR — Dineinly Menu or Counter — for the one route
