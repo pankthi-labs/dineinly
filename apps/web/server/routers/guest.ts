@@ -381,6 +381,37 @@ export const guestRouter = router({
 					});
 				}
 			}),
+
+		// Counter only: the guest's own self-service correction on a still-open
+		// bill (docs/product.md § Order Lifecycle) — reduce a line's quantity or
+		// cancel it outright (0) any time before settle, since nothing has
+		// reached the kitchen yet. set_order_item_quantity() does the real
+		// enforcement (own session, own restaurant's experience, bill not
+		// settled, decrease-only) — this procedure only forwards the call and
+		// translates its exception.
+		setQuantity: guestProcedure
+			.input(
+				z.object({
+					orderItemId: z.uuid(),
+					quantity: z.number().int().min(0).max(99),
+				}),
+			)
+			.mutation(async ({ ctx, input }) => {
+				requireOrderingEnabled(ctx.experience);
+
+				const { error } = await ctx.supabase.rpc("set_order_item_quantity", {
+					p_order_item_id: input.orderItemId,
+					p_quantity: input.quantity,
+				});
+
+				if (error) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: error.message,
+						cause: error,
+					});
+				}
+			}),
 	}),
 
 	bill: router({
@@ -450,7 +481,7 @@ export const guestRouter = router({
 					: await ctx.supabase
 							.from("order_items")
 							.select(
-								"item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity, spice, salt, ice, menu_item_id",
+								"id, item_name, unit_price, tax_rate, quantity, waived_quantity, cancelled_quantity, spice, salt, ice, menu_item_id",
 							)
 							.eq("restaurant_id", ctx.guest.restaurant_id)
 							.in("order_id", orderIds)
@@ -461,6 +492,26 @@ export const guestRouter = router({
 			}
 
 			const status: "open" | "requested" | "settled" = bill?.status ?? "open";
+
+			// Counter only, pre-settle: the raw per-line rows behind the
+			// aggregated `lines` below, so the guest can reduce/cancel one
+			// specific line (guest.orders.setQuantity) — every experience uses
+			// `lines` for display, but only Counter pre-settle needs individual
+			// order_item ids to edit against, so this stays empty everywhere
+			// else rather than shipping ids nothing on the client will ever use.
+			const editableItems =
+				ctx.experience === "counter" && status !== "settled"
+					? (itemsResult.data ?? [])
+							.filter((row) => row.quantity - row.cancelled_quantity > 0)
+							.map((row) => ({
+								id: row.id,
+								name: row.item_name,
+								quantity: row.quantity - row.cancelled_quantity,
+								spice: row.spice,
+								salt: row.salt,
+								ice: row.ice,
+							}))
+					: [];
 			const totals = computeBill(
 				(itemsResult.data ?? [])
 					.map((row) => ({
@@ -521,6 +572,7 @@ export const guestRouter = router({
 					settledAt: b.settled_at,
 				})),
 				itemQuantitiesByMenuItem,
+				editableItems,
 				...totals,
 			};
 		}),

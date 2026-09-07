@@ -11,8 +11,11 @@ import {
 	NoGuestSession,
 } from "@/components/guest-page-states";
 import { OrderGroupCard } from "@/components/order-status-groups";
+import { QuantityPill } from "@/components/quantity-pill";
 import { SiteFooter } from "@/components/site-footer";
+import { titleCase } from "@/lib/format";
 import { counterOrderGroups } from "@/lib/order-groups";
+import { describeModifiers } from "@/lib/order-item-groups";
 import { useBroadcastChannel } from "@/lib/realtime/use-broadcast-channel";
 import { useGuestRealtime } from "@/lib/realtime/use-guest-realtime";
 import { trpc } from "@/lib/trpc-client";
@@ -44,6 +47,9 @@ export default function GuestBillPage() {
 			setSendingKey(null);
 			utils.guest.orders.list.invalidate();
 		},
+	});
+	const setItemQuantity = trpc.guest.orders.setQuantity.useMutation({
+		onSuccess: () => utils.guest.bill.get.invalidate(),
 	});
 
 	const { client, sessionId } = useGuestRealtime();
@@ -129,6 +135,51 @@ export default function GuestBillPage() {
 						<p className="mt-1 font-semibold text-5xl text-accent tabular-nums">
 							{data.dailyToken}
 						</p>
+					</div>
+				) : null}
+
+				{isCounter &&
+				data.status !== "settled" &&
+				data.editableItems.length > 0 ? (
+					<div className="mx-auto mt-6 flex max-w-md flex-col">
+						<h2 className="text-caps text-secondary">Your Order</h2>
+						{data.editableItems.map((item) => {
+							const modifiers = describeModifiers(
+								item.spice,
+								item.salt,
+								item.ice,
+							);
+							return (
+								<div
+									key={item.id}
+									className="flex items-center justify-between gap-4 border-divider border-b py-4"
+								>
+									<div className="min-w-0 flex-1">
+										<p className="text-base text-primary">
+											{titleCase(item.name)}
+										</p>
+										{modifiers ? (
+											<p className="text-secondary text-sm">{modifiers}</p>
+										) : null}
+									</div>
+									<QuantityPill
+										value={item.quantity}
+										// Decrease-only (docs/core-data-model.md § Lifecycle
+										// invariants) — raising it back up goes through the
+										// menu's Add to Cart instead, so + stays capped shut.
+										max={item.quantity}
+										disabled={setItemQuantity.isPending}
+										onDecrement={() =>
+											setItemQuantity.mutate({
+												orderItemId: item.id,
+												quantity: item.quantity - 1,
+											})
+										}
+										onIncrement={() => {}}
+									/>
+								</div>
+							);
+						})}
 					</div>
 				) : null}
 

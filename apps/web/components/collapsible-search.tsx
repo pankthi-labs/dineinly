@@ -74,7 +74,8 @@ export function CollapsibleSearch({
 				aria-label={label}
 				// biome-ignore lint/a11y/noAutofocus: triggered by the user's own click on the search button, not on page load — the field they just opened is the obvious next focus target.
 				autoFocus
-				className="h-12 w-full appearance-none rounded-sm border border-divider bg-surface pr-4 pl-12 text-primary text-sm transition-colors duration-(--duration-base) ease-out placeholder:text-muted focus:border-accent focus:outline-none [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
+				// text-base (16px): iOS Safari auto-zooms the viewport on focus for inputs under 16px.
+				className="h-12 w-full appearance-none rounded-sm border border-divider bg-surface pr-4 pl-12 text-base text-primary transition-colors duration-(--duration-base) ease-out placeholder:text-muted focus:border-accent focus:outline-none [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
 			/>
 		</div>
 	);

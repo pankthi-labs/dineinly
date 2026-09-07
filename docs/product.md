@@ -120,7 +120,7 @@ The Session is a guest's one continuous, QR-scanned presence at the restaurant �
 
 **Item states:** `Placed` (auto, system event) → `Preparing` (Kitchen) → `Ready` (Kitchen) → `Served` (Waiter). `Cancelled` is terminal and reachable only from `Placed`; never after `Preparing`/`Ready`. Kitchen never cancels, only advances status. Dineinly Counter has no Waiter station, so Kitchen also sets `Served` there — self-service pickup, not a delivered plate — and `Placed` → `Preparing` additionally requires that item's own bill (not necessarily the whole session's, if it's ordered a second round — see "A bill paid, then another order" below) to be `settled` **and** the guest to have sent that item to the kitchen (see `core-data-model.md` § Lifecycle invariants).
 
-**Cart vs. Order:** pre-confirm is the cart (any participant edits it). Post-confirm it's an order in `Placed`; only Waiter/Manager/Owner may cancel or modify it, and only while still `Placed`.
+**Cart vs. Order:** pre-confirm is the cart (any participant edits it). Post-confirm it's an order in `Placed`, and the lock point from there splits by experience: Full-Service (One/Guest) fires to kitchen on `Placed` immediately, so the guest is locked out the moment they confirm — from then on only Waiter/Manager/Owner may cancel or modify a line, and only while it's still `Placed` (before Kitchen advances it). Counter never fires anything to kitchen until its bill settles (see Item states above), so nothing is at stake yet — the guest keeps full self-service edit rights on their own placed lines (reduce a quantity, cancel one outright) for as long as that bill is `open`/`requested`; settlement, not confirm, is Counter's lock point. `set_order_item_quantity()` is the guest-side mechanism (`docs/core-data-model.md` § Lifecycle invariants) — same quantity-replaces-outright shape as the Bills tab's Counter-only pill (below), just guest-callable and gated to the caller's own session instead of a staff role.
 
 **Guest-facing status** (derived, never shows internal states): Full-Service (One) shows `Preparing` → `Partially Served` → `Served` — the guest sees `Preparing` immediately on confirm, no distinction between submitted and kitchen-started, since kitchen fires on `Placed` immediately there. Counter shows `Awaiting Payment` → `Ready to Send` → `Preparing` → `Ready for Pickup` instead — `Awaiting Payment` until the bill settles, then each paid item sits `Ready to Send` until the guest taps "Send to Kitchen" on it individually (`release_order_item_to_kitchen()`, `order_items.released_at`); `Preparing` only starts once an item is both released and the bill is `settled` (kitchen is gated on both, see Item states above), so showing it any earlier would be false. `Partially Served`/partial `Ready for Pickup` are derived automatically, never set manually.
 
@@ -137,7 +137,7 @@ All permissions are enforced server-side. Client-side checks are UX-only, never 
 | View Menu | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Add to Cart | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Submit Order | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
-| Cancel / Modify Order (pre-prep only) | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Cancel / Modify Order (pre-prep only) | ❌§ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | View Kitchen Queue | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Update Order Status (`Preparing`/`Ready`) | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Serve Order (set `Served`) | ❌ | ✅ | ❌† | ✅ | ✅ | ✅ |
@@ -153,6 +153,7 @@ All permissions are enforced server-side. Client-side checks are UX-only, never 
 | View Analytics | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Restaurant Settings | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 
+§ Full-Service (One/Guest) only — locked for the guest the instant they confirm. Counter isn't: nothing fires to kitchen pre-settle, so the guest keeps this on their own placed lines until their bill settles (`set_order_item_quantity()`, `docs/core-data-model.md` § Lifecycle invariants) — the one cell in this table that isn't a flat yes/no across experiences.
 \* Managers may create/manage Waiters, Kitchen, and other Managers — never Owners.
 † Dineinly Counter has no Waiter station — Kitchen sets `Served` there instead (self-service pickup).
 ‡ The Waiter column above is a PIN-unlocked station session only. A Waiter's own personal OTP login (`/sign-in`) reaches none of it — it's account-management only (update their own name/PIN, "Pair This Device" to `/station/pair`), same as every other role's login otherwise. Server-enforced in both places: the route layer (`requireNonIndividualWaiterAccess`, `apps/web/lib/auth.ts`) and the tRPC layer (`requireStaffRole`, `apps/web/server/trpc/rbac.ts`). See `docs/architecture.md` § Station Account Provisioning.

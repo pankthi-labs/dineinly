@@ -1051,6 +1051,10 @@ export type Database = {
 					id: string;
 				}[];
 			};
+			set_order_item_quantity: {
+				Args: { p_order_item_id: string; p_quantity: number };
+				Returns: undefined;
+			};
 			set_staff_pin: {
 				Args: { p_pin: string; p_restaurant_id: string };
 				Returns: undefined;

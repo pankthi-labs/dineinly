@@ -2030,6 +2030,98 @@ $$;
 revoke execute on function public.staff_release_order_item_to_kitchen(uuid, uuid) from public;
 grant execute on function public.staff_release_order_item_to_kitchen(uuid, uuid) to authenticated;
 
+-- Counter only: the guest's own self-service correction on a not-yet-fired
+-- line (docs/product.md § Order Lifecycle) — a Counter order sits in
+-- 'placed' and nothing reaches kitchen until its bill settles (Item states
+-- above), so reducing or cancelling a line here touches nothing already in
+-- progress. Locked the moment the bill leaves open/requested, the mirror
+-- image of release_order_item_to_kitchen's gate above (that one only opens
+-- up after settle, this one only stays open before it). Decrease-only —
+-- p_quantity above the item's current quantity is rejected, since raising it
+-- back up belongs to Add to Cart + Confirm, which carries its own
+-- availability check this shortcut would otherwise bypass. Same
+-- quantity-replaces-outright shape as the staff Bills tab's Counter-only
+-- pill (apps/web/server/routers/bills.ts setOrderItemQuantity) — nothing's
+-- reached the kitchen yet, so there's no "originally ordered" figure worth
+-- preserving separately from a correction.
+create or replace function public.set_order_item_quantity(
+	p_order_item_id uuid,
+	p_quantity int
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid;
+	v_session_id uuid;
+	v_order_id uuid;
+	v_quantity int;
+	v_experience public.restaurant_experience;
+	v_bill_status public.bill_status;
+begin
+	select oi.restaurant_id, o.session_id, oi.order_id, oi.quantity
+	into v_restaurant_id, v_session_id, v_order_id, v_quantity
+	from public.order_items oi
+	join public.orders o
+		on o.restaurant_id = oi.restaurant_id and o.id = oi.order_id
+	where oi.id = p_order_item_id;
+
+	-- Same "not found" message whether the item doesn't exist or belongs to
+	-- someone else's session — same reasoning as release_order_item_to_kitchen
+	-- above, no client-supplied restaurant/session id to spoof, only the item
+	-- id.
+	if v_restaurant_id is null
+		or not public.jwt_is_guest_for_session(v_restaurant_id, v_session_id)
+	then
+		raise exception 'Order item not found';
+	end if;
+
+	select experience into v_experience
+	from public.restaurants
+	where id = v_restaurant_id;
+
+	-- Full-Service (guest/one) fires to kitchen on 'placed' immediately, so
+	-- the guest never gets a self-edit window there — only Counter does.
+	if v_experience is distinct from 'counter' then
+		raise exception 'This item can no longer be changed';
+	end if;
+
+	if p_quantity < 0 or p_quantity > v_quantity then
+		raise exception 'Invalid quantity';
+	end if;
+
+	-- This item's own bill, not "the session's bill" — a Counter session can
+	-- carry more than one bill over its life, so the gate has to be the round
+	-- this specific item was ordered in (orders.bill_id).
+	select b.status into v_bill_status
+	from public.orders o
+	join public.bills b on b.id = o.bill_id
+	where o.restaurant_id = v_restaurant_id and o.id = v_order_id;
+
+	if v_bill_status = 'settled' then
+		raise exception 'This item can no longer be changed';
+	end if;
+
+	update public.order_items
+	set
+		quantity = case when p_quantity = 0 then quantity else p_quantity end,
+		cancelled_quantity = case when p_quantity = 0 then quantity else 0 end,
+		waived_quantity = 0,
+		status = case when p_quantity = 0 then 'cancelled' else status end,
+		updated_at = now()
+	where id = p_order_item_id and status = 'placed';
+
+	if not found then
+		raise exception 'This item can no longer be changed';
+	end if;
+end;
+$$;
+
+revoke execute on function public.set_order_item_quantity(uuid, int) from public;
+grant execute on function public.set_order_item_quantity(uuid, int) to authenticated;
+
 -- ============================================================================
 -- 12. Realtime broadcast: publish side (docs/realtime.md)
 -- ============================================================================
