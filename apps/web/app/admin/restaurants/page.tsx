@@ -2,7 +2,9 @@
 
 import { Plus, UtensilsCrossed } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
+import { EXPERIENCE_LABELS } from "@/components/restaurant-fields-fieldset";
 import { SiteFooter } from "@/components/site-footer";
 import type { ToastState } from "@/components/toast";
 import { Toast } from "@/components/toast";
@@ -30,6 +32,11 @@ export default function RestaurantsDirectoryPage() {
 	const [pauseTarget, setPauseTarget] = useState<PauseTarget | null>(null);
 	const [toast, setToast] = useState<ToastState | null>(null);
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	// id and the "from" experience both come from editTarget, still set and
+	// unchanged while this dialog is open (the form sheet stays open behind
+	// it) — only the pending new values need their own state.
+	const [experienceChangeConfirm, setExperienceChangeConfirm] =
+		useState<RestaurantFormValues | null>(null);
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -125,15 +132,29 @@ export default function RestaurantsDirectoryPage() {
 		setSheetMode("edit");
 	}
 
-	async function handleUpdateSubmit(id: string, values: RestaurantFormValues) {
-		setSubmitError(null);
+	async function submitUpdate(id: string, values: RestaurantFormValues) {
 		try {
 			await updateMutation.mutateAsync({ id, ...values });
 			setSheetMode("closed");
+			setExperienceChangeConfirm(null);
 			invalidateAndNotify("Restaurant updated.");
 		} catch {
-			// submitError already set by the failing mutation's onError above.
+			// submitError already set by the failing mutation's onError above —
+			// leave the confirm dialog (if any) open so the admin can retry.
 		}
+	}
+
+	// A Dineinly Experience change force-closes every active guest session on
+	// that restaurant (admin_update_restaurant, supabase/migrations/
+	// 20260730150634_add_auth_fk_and_rls_policies.sql) — surface that before
+	// it happens, same as Pause/Reactivate's confirm step.
+	function handleUpdateSubmit(id: string, values: RestaurantFormValues) {
+		setSubmitError(null);
+		if (editTarget && editTarget.values.experience !== values.experience) {
+			setExperienceChangeConfirm(values);
+			return;
+		}
+		submitUpdate(id, values);
 	}
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -240,6 +261,7 @@ export default function RestaurantsDirectoryPage() {
 									setPauseTarget({
 										id: item.id,
 										name: item.name,
+										experience: item.experience,
 										nextStatus:
 											item.status === "active" ? "archived" : "active",
 									})
@@ -329,6 +351,21 @@ export default function RestaurantsDirectoryPage() {
 							})
 						}
 						isPending={setStatusMutation.isPending}
+					/>
+				) : null}
+
+				{experienceChangeConfirm && editTarget ? (
+					<ConfirmDialog
+						titleId="experience-change-confirm-title"
+						title={`Switch ${experienceChangeConfirm.name} to ${EXPERIENCE_LABELS[experienceChangeConfirm.experience]}?`}
+						body={`Guests currently on ${EXPERIENCE_LABELS[editTarget.values.experience]} will be signed out — any unsettled bills and in-progress orders on this restaurant are discarded. This can't be undone.`}
+						confirmLabel="Switch Experience"
+						pendingLabel="Saving…"
+						onCancel={() => setExperienceChangeConfirm(null)}
+						onConfirm={() =>
+							submitUpdate(editTarget.id, experienceChangeConfirm)
+						}
+						isPending={updateMutation.isPending}
 					/>
 				) : null}
 

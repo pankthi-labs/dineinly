@@ -790,6 +790,21 @@ grant execute on function public.regenerate_qr_token(uuid) to authenticated;
 -- name/email/mobile are immutable through this function — reassigning who
 -- holds the role is the only way to change them; p_owner_* is simply
 -- ignored in that case.
+--
+-- A Dineinly Experience change (docs/product.md § Dineinly Experiences) is a
+-- capability change, not just a label: Kitchen/Floor/Bills/Table Matrix
+-- routes and RBAC read `restaurant.experience` live on every request (see
+-- requireFullServiceExperience/assertFullServiceExperience), so any session
+-- active under the old experience would otherwise be stranded — a table
+-- stuck "occupied", a bill stuck unsettled, an order nobody can reach —
+-- rather than cleanly ended. Same override Force-Terminate Session and
+-- Pause/Reactivate already apply (admin_set_restaurant_status below): void
+-- unsettled bills, clear carts, free tables, close every active session on
+-- this restaurant, in the same transaction as the experience flip. Applies
+-- to every actual change, not just ones that cross a track boundary —
+-- Guest<->One differ enough in staff workflow (manual re-entry vs live
+-- kitchen queue) that a session started under one shouldn't be assumed
+-- valid under the other either.
 create or replace function public.admin_update_restaurant(
 	p_id uuid,
 	p_name text,
@@ -811,12 +826,17 @@ as $$
 declare
 	v_primary_owner_id uuid;
 	v_primary_owner_status public.staff_status;
+	v_current_experience public.restaurant_experience;
 begin
 	if not public.is_dineinly_admin() then
 		raise exception 'Only Dineinly Admin may update restaurants';
 	end if;
 
 	perform public.assert_restaurant_track_unchanged(p_id, p_experience);
+
+	select experience into v_current_experience
+	from public.restaurants
+	where id = p_id;
 
 	select id, status
 	into v_primary_owner_id, v_primary_owner_status
@@ -850,6 +870,13 @@ begin
 
 	if p_experience in ('menu', 'counter') then
 		perform public.ensure_qr_token(p_id);
+	end if;
+
+	if v_current_experience is distinct from p_experience then
+		perform public.close_sessions(array(
+			select id from public.sessions
+			where restaurant_id = p_id and status = 'active'
+		));
 	end if;
 
 	return p_id;
@@ -1083,6 +1110,7 @@ declare
 	v_label text;
 	v_session_id uuid;
 	v_session_status public.session_status;
+	v_restaurant_status public.restaurant_status;
 	v_experience public.restaurant_experience;
 	v_existing_restaurant_id uuid;
 	v_existing_status public.session_status;
@@ -1095,6 +1123,30 @@ begin
 	for update;
 
 	if v_table_id is not null then
+		select r.status, r.experience into v_restaurant_status, v_experience
+		from public.restaurants r
+		where r.id = v_restaurant_id;
+
+		-- A paused restaurant (docs/product.md § Dineinly Experiences: status
+		-- is Dineinly Admin's call) has already had every active session
+		-- force-closed (admin_set_restaurant_status below) — block minting a
+		-- fresh one here too, or the very next scan would silently reopen
+		-- guest access the pause was meant to shut off.
+		if v_restaurant_status <> 'active' then
+			raise exception 'This restaurant is currently paused';
+		end if;
+
+		-- A table QR is only ever minted for a Guest/One restaurant (Menu and
+		-- Counter have zero restaurant_tables rows — see ensure_qr_token's
+		-- comment above). If the restaurant has since moved off that track's
+		-- Table Matrix (admin_update_restaurant, which already force-closes
+		-- every active session on that same change), a leftover printed
+		-- table QR must not still be able to mint or rejoin a session behind
+		-- that change.
+		if v_experience not in ('guest', 'one') then
+			raise exception 'Invalid QR code';
+		end if;
+
 		if v_session_id is not null then
 			select ts.status into v_session_status
 			from public.sessions ts
@@ -1111,10 +1163,6 @@ begin
 			where id = v_table_id;
 		end if;
 
-		select r.experience into v_experience
-		from public.restaurants r
-		where r.id = v_restaurant_id;
-
 		return query select v_restaurant_id, v_session_id, v_label, v_experience;
 		return;
 	end if;
@@ -1129,12 +1177,16 @@ begin
 	-- (view-only Menu vs order-taking Counter) comes from the live
 	-- `experience` value read here, not from a hardcoded branch — the same
 	-- token means whichever the restaurant is currently running as.
-	select r.id, r.experience into v_restaurant_id, v_experience
+	select r.id, r.status, r.experience into v_restaurant_id, v_restaurant_status, v_experience
 	from public.restaurants r
 	where r.qr_token = p_qr_token and r.experience in ('menu', 'counter');
 
 	if v_restaurant_id is null then
 		raise exception 'Invalid QR code';
+	end if;
+
+	if v_restaurant_status <> 'active' then
+		raise exception 'This restaurant is currently paused';
 	end if;
 
 	-- Counter re-scan resume: only when the browser's own existing session
@@ -2653,20 +2705,59 @@ $$;
 revoke execute on function public.close_session(uuid) from public;
 grant execute on function public.close_session(uuid) to authenticated;
 
+-- Shared override used by force_terminate_session, admin_set_restaurant_status
+-- (Pause), and admin_update_restaurant (Dineinly Experience change) below —
+-- every place a session is ended out from under a guest rather than through
+-- its own Close Session gates. orders.bill_id's FK is plain "no action" (not
+-- SET NULL: Postgres would null the composite FK's restaurant_id column too,
+-- violating its NOT NULL constraint) — null it out on bill_id alone before
+-- deleting the bill it points to. Void vs. settle an open bill was TBD in
+-- docs/product.md / core-data-model.md until resolved (2026-08-19): void. An
+-- open or requested bill has nothing settled to preserve, so it's deleted
+-- outright rather than frozen — the session's history then shows no bill at
+-- all, same as one that was never requested (docs/product.md § Billing &
+-- Settlement "Open" state). An already-`settled` bill is left untouched.
+-- p_session_ids is never null in practice (every caller passes the live
+-- result of an `array(select ...)`), but `= any(...)` on a null or empty
+-- array already matches zero rows on its own — no guard needed.
+create or replace function public.close_sessions(p_session_ids uuid[])
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+	update public.orders
+	set bill_id = null
+	where session_id = any(p_session_ids)
+		and bill_id in (
+			select id from public.bills
+			where session_id = any(p_session_ids) and status <> 'settled'
+		);
+
+	delete from public.bills
+	where session_id = any(p_session_ids) and status <> 'settled';
+
+	delete from public.cart_items where session_id = any(p_session_ids);
+
+	update public.restaurant_tables
+	set session_id = null
+	where session_id = any(p_session_ids);
+
+	update public.sessions
+	set status = 'closed', closed_at = now()
+	where id = any(p_session_ids);
+end;
+$$;
+
+revoke execute on function public.close_sessions(uuid[]) from public;
+grant execute on function public.close_sessions(uuid[]) to authenticated;
+
 -- Force-Terminate Session (docs/product.md § Shared Session, RBAC:
 -- Waiter/Manager/Owner) — an abandoned session (walkout), closed as an
 -- override of Close Session's normal gates: no bill-settled requirement, no
 -- check for order items still in progress. It exists precisely because a
 -- walkout will never satisfy those gates.
---
--- Void vs. settle an open bill was TBD in docs/product.md / core-data-model.md
--- until resolved (2026-08-19): void. An open or requested bill has nothing
--- settled to preserve, so it's deleted outright rather than frozen — the
--- session's history then shows no bill at all, same as one that was never
--- requested (docs/product.md § Billing & Settlement "Open" state). An
--- already-`settled` bill is left untouched: it's already frozen and
--- reflects a real, confirmed payment, so force-terminate behaves exactly
--- like a normal close for that bill.
 --
 -- SECURITY DEFINER for the same restaurant_tables reach reason as
 -- close_session above.
@@ -2678,7 +2769,6 @@ set search_path = ''
 as $$
 declare
 	v_restaurant_id uuid;
-	v_updated int;
 begin
 	select restaurant_id into v_restaurant_id
 	from public.sessions
@@ -2695,40 +2785,52 @@ begin
 		raise exception 'Only an active Waiter, Manager, or Owner may force-terminate a session';
 	end if;
 
-	-- orders.bill_id's FK is plain "no action" (not SET NULL: Postgres would
-	-- null the composite FK's restaurant_id column too, violating its NOT
-	-- NULL constraint) — null it out here, on bill_id alone, before deleting
-	-- the bill it points to.
-	update public.orders
-	set bill_id = null
-	where session_id = p_session_id
-		and bill_id in (
-			select id from public.bills
-			where session_id = p_session_id and status <> 'settled'
-		);
-
-	delete from public.bills
-	where session_id = p_session_id and status <> 'settled';
-
-	delete from public.cart_items where session_id = p_session_id;
-
-	update public.restaurant_tables
-	set session_id = null
-	where session_id = p_session_id;
-
-	update public.sessions
-	set status = 'closed', closed_at = now()
-	where id = p_session_id;
-
-	get diagnostics v_updated = row_count;
-	if v_updated = 0 then
-		raise exception 'Session no longer active';
-	end if;
+	perform public.close_sessions(array[p_session_id]);
 end;
 $$;
 
 revoke execute on function public.force_terminate_session(uuid) from public;
 grant execute on function public.force_terminate_session(uuid) to authenticated;
+
+-- Admin Pause/Reactivate Restaurant (Restaurants Directory, docs/product.md
+-- § Dineinly Experiences: restaurant status is Dineinly Admin's call, never
+-- self-serve). Pausing is a platform-wide "stop serving guests here now," so
+-- it runs Force-Terminate Session's own override — void unsettled bills,
+-- clear carts, free tables, close the session — across every active session
+-- on the restaurant in one transaction, instead of leaving staff to
+-- force-terminate tables one at a time. Reactivating is a plain status flip:
+-- Force-Terminate's effects aren't meant to be undone.
+create or replace function public.admin_set_restaurant_status(
+	p_id uuid,
+	p_status public.restaurant_status
+)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+	if not public.is_dineinly_admin() then
+		raise exception 'Only Dineinly Admin may update restaurant status';
+	end if;
+
+	update public.restaurants set status = p_status where id = p_id;
+
+	if p_status = 'archived' then
+		perform public.close_sessions(array(
+			select id from public.sessions
+			where restaurant_id = p_id and status = 'active'
+		));
+	end if;
+end;
+$$;
+
+revoke execute on function public.admin_set_restaurant_status(
+	uuid, public.restaurant_status
+) from public;
+grant execute on function public.admin_set_restaurant_status(
+	uuid, public.restaurant_status
+) to authenticated;
 
 -- Merge Tables (docs/product.md § Shared Session): folds a free
 -- (session-less) table into an already-active session. MVP only supports
@@ -2874,3 +2976,48 @@ select cron.schedule(
 	'*/5 * * * *',
 	$$ select public.close_idle_counter_sessions(30); $$
 );
+
+-- ============================================================================
+-- 16. Dineinly Menu idle self-close: end_own_guest_session
+-- ============================================================================
+-- Dineinly Menu is view-only (docs/product.md § Dineinly Experiences) — a
+-- session nobody is looking at has nothing left to finish, unlike Guest/One/
+-- Counter where a session can be mid-order or mid-bill and only staff may
+-- end it (close_session / force_terminate_session above). The guest's own
+-- browser calls this once its idle timer fires (apps/web/app/guest/menu/
+-- page.tsx) instead of a pg_cron sweep — Menu has no bill/order-item clock
+-- to sample the way close_idle_counter_sessions does, only "is anyone still
+-- looking," which only the tab itself can know. broadcast_session_change
+-- (trigger above) fans the resulting status change out to every other tab
+-- still open on this same session, same as any staff-initiated termination.
+create or replace function public.end_own_guest_session()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+	v_restaurant_id uuid := (auth.jwt() ->> 'restaurant_id')::uuid;
+	v_session_id uuid := (auth.jwt() ->> 'session_id')::uuid;
+	v_experience public.restaurant_experience;
+begin
+	if not public.jwt_is_guest_for_session(v_restaurant_id, v_session_id) then
+		raise exception 'Valid guest session required';
+	end if;
+
+	select experience into v_experience
+	from public.restaurants
+	where id = v_restaurant_id;
+
+	if v_experience <> 'menu' then
+		raise exception 'Only a Dineinly Menu session can end itself';
+	end if;
+
+	update public.sessions
+	set status = 'closed', closed_at = now()
+	where id = v_session_id and status = 'active';
+end;
+$$;
+
+revoke execute on function public.end_own_guest_session() from public;
+grant execute on function public.end_own_guest_session() to authenticated;

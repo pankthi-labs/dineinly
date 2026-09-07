@@ -285,13 +285,19 @@ export const restaurantsRouter = router({
 			return { id: data };
 		}),
 
+	// Pausing (archived) delegates to admin_set_restaurant_status() (supabase/
+	// migrations/20260730150634_add_auth_fk_and_rls_policies.sql § 6) rather
+	// than a plain table update: it also force-terminates every active
+	// session on the restaurant in the same transaction, the same override
+	// Force-Terminate Session applies one table at a time — a paused
+	// restaurant has no active guests left to force out later.
 	setStatus: adminProcedure
 		.input(setRestaurantStatusInput)
 		.mutation(async ({ ctx, input }) => {
-			const { error } = await ctx.auth
-				.from("restaurants")
-				.update({ status: input.status })
-				.eq("id", input.id);
+			const { error } = await ctx.auth.rpc("admin_set_restaurant_status", {
+				p_id: input.id,
+				p_status: input.status,
+			});
 
 			if (error) {
 				throw toTRPCError(error, "Unable to update the restaurant status.");

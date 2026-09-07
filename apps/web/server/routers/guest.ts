@@ -58,6 +58,20 @@ export const guestRouter = router({
 		sessionId: ctx.guest.session_id,
 	})),
 
+	// Dineinly Menu only (docs/product.md § Dineinly Experiences: view-only,
+	// no order/bill to protect) — the browser calls this once its own idle
+	// timer decides nobody's looking anymore (app/guest/menu/page.tsx).
+	// end_own_guest_session() (supabase/migrations/
+	// 20260730150634_add_auth_fk_and_rls_policies.sql § 16) rejects the call
+	// outright for every other experience.
+	endSession: guestProcedure.mutation(async ({ ctx }) => {
+		const { error } = await ctx.supabase.rpc("end_own_guest_session");
+		if (error) {
+			throw dbError("Unable to end the session.", error);
+		}
+		return { ended: true };
+	}),
+
 	menu: guestProcedure.query(async ({ ctx }) => {
 		const [restaurantResult, categoriesResult, itemsResult] = await Promise.all(
 			[

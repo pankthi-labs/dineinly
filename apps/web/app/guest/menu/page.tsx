@@ -51,6 +51,12 @@ type MenuItem = {
 
 const FASTEST_PREP_TIME: (typeof PREP_TIME_OPTIONS)[number] = "5-10 mins";
 
+// Dineinly Menu (view-only, docs/product.md § Dineinly Experiences) has no
+// order/bill to protect, so unlike Guest/One/Counter its session ends the
+// moment nobody's actually looking, rather than riding out the full guest
+// token TTL (lib/guest-token.ts's GUEST_TOKEN_MENU_TTL_SECONDS).
+const MENU_IDLE_MS = 10 * 60 * 1000;
+
 // Restaurant-authored label text is open vocabulary (docs/core-data-model.md
 // — Owner/Manager types it freely from Menu Desk), so this can only cover
 // the common cases with a premium-reading kicker phrase; anything else
@@ -220,6 +226,29 @@ export default function GuestMenuPage() {
 		observer.observe(node);
 		return () => observer.disconnect();
 	}, []);
+
+	const endSession = trpc.guest.endSession.useMutation();
+
+	useEffect(() => {
+		if (orderingEnabled) return;
+		let timer: ReturnType<typeof setTimeout>;
+		function reset() {
+			clearTimeout(timer);
+			timer = setTimeout(() => endSession.mutate(), MENU_IDLE_MS);
+		}
+		// No visibilitychange listener: a backgrounded/hidden tab already stops
+		// producing these events on its own, so it idles out within the same
+		// window instead of needing separate handling.
+		const events = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
+		for (const event of events) {
+			window.addEventListener(event, reset, { passive: true });
+		}
+		reset();
+		return () => {
+			clearTimeout(timer);
+			for (const event of events) window.removeEventListener(event, reset);
+		};
+	}, [orderingEnabled, endSession.mutate]);
 
 	const hasFilters =
 		search.trim() !== "" ||
@@ -550,6 +579,13 @@ function MenuItemCard({
 }) {
 	const soldOut = item.availability === "sold_out";
 	const kicker = item.labels[0] ? labelKicker(item.labels[0]) : null;
+	let priceClassName: string;
+	if (!orderingEnabled && !soldOut) {
+		priceClassName =
+			"row-span-2 self-center justify-self-end whitespace-nowrap text-2xl text-accent";
+	} else {
+		priceClassName = `self-start justify-self-end whitespace-nowrap text-lg ${orderingEnabled ? "text-primary" : "text-accent"}`;
+	}
 	return (
 		<div
 			className={`rounded-xl border border-divider bg-surface p-5 ${soldOut ? "opacity-60" : ""}`}
@@ -582,14 +618,13 @@ function MenuItemCard({
 						{capitalizeFirst(item.description)}
 					</p>
 				</button>
-				{/* No add control on a view-only menu (Dineinly Menu package) — the
-				price is the row's one point of emphasis, so it takes the gold
-				accent instead of sitting flat like every other price row. */}
-				<span
-					className={`self-start justify-self-end whitespace-nowrap text-lg ${orderingEnabled ? "text-primary" : "text-accent"}`}
-				>
-					{formatPrice(item.price)}
-				</span>
+				{/* No add control on a view-only, in-stock menu item (Dineinly Menu
+				package) — the price is the row's one point of emphasis, so it
+				takes the gold accent and grows into the space an add control
+				would otherwise fill, centered across both grid rows instead of
+				pinned to the name's line. Sold-out items keep the compact
+				top-row spot so "Sold out" still has row two to sit in. */}
+				<span className={priceClassName}>{formatPrice(item.price)}</span>
 				{soldOut ? (
 					<span className="self-start justify-self-end text-caps text-muted">
 						Sold out

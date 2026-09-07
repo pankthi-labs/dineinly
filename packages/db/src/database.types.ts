@@ -792,6 +792,13 @@ export type Database = {
 				Args: { p_pin: string; p_staff_id: string };
 				Returns: undefined;
 			};
+			admin_set_restaurant_status: {
+				Args: {
+					p_id: string;
+					p_status: Database["public"]["Enums"]["restaurant_status"];
+				};
+				Returns: undefined;
+			};
 			admin_update_restaurant: {
 				Args: {
 					p_address: string;
@@ -852,7 +859,9 @@ export type Database = {
 				Returns: undefined;
 			};
 			close_session: { Args: { p_session_id: string }; Returns: undefined };
+			close_sessions: { Args: { p_session_ids: string[] }; Returns: undefined };
 			encode_bill_number: { Args: { v_seq: number }; Returns: string };
+			end_own_guest_session: { Args: never; Returns: undefined };
 			ensure_qr_token: {
 				Args: { p_restaurant_id: string };
 				Returns: undefined;
