@@ -8,7 +8,7 @@ export const menuItemInputSchema = z.object({
 	restaurantId: z.string().uuid(),
 	categoryId: z.string().uuid({ message: "Choose a category." }),
 	name: z.string().trim().min(1, "Enter a dish name."),
-	description: z.string().trim().min(1, "Enter a description."),
+	description: z.string().trim().nullable(),
 	price: z.number().finite().nonnegative("Enter a valid non-negative price."),
 	prepTime: z.enum(PREP_TIME_OPTIONS, {
 		message: "Choose a preparation time.",

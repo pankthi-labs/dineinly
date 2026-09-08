@@ -37,7 +37,7 @@ type MenuItem = {
 	id: string;
 	category_id: string;
 	name: string;
-	description: string;
+	description: string | null;
 	price: number;
 	diet: "veg" | "non_veg";
 	availability: "available" | "sold_out";
@@ -444,7 +444,7 @@ export default function GuestMenuPage() {
 							className="pt-8 first:pt-2"
 							style={{ scrollMarginTop: stickyHeight }}
 						>
-							<h2 className="font-semibold text-primary text-sm">
+							<h2 className="text-primary text-xl">
 								{titleCase(category.name)}
 							</h2>
 							<div className="mt-4 flex flex-col gap-4">
@@ -580,11 +580,17 @@ function MenuItemCard({
 	const soldOut = item.availability === "sold_out";
 	const kicker = item.labels[0] ? labelKicker(item.labels[0]) : null;
 	let priceClassName: string;
-	if (!orderingEnabled && !soldOut) {
+	if (!orderingEnabled && !soldOut && item.description) {
+		// Only spans+centers across both rows when there's a description to
+		// center against — with no second row of content, centering here
+		// would float the price off the name's line instead of aligning to it.
 		priceClassName =
 			"row-span-2 self-center justify-self-end whitespace-nowrap text-2xl text-accent";
+	} else if (!orderingEnabled && !soldOut) {
+		priceClassName =
+			"self-start justify-self-end whitespace-nowrap text-2xl text-accent";
 	} else {
-		priceClassName = `self-start justify-self-end whitespace-nowrap text-lg ${orderingEnabled ? "text-primary" : "text-accent"}`;
+		priceClassName = `self-start justify-self-end whitespace-nowrap text-xl ${orderingEnabled ? "text-primary" : "text-accent"}`;
 	}
 	return (
 		<div
@@ -608,15 +614,17 @@ function MenuItemCard({
 				>
 					{/* Diet mark rides the heading's first line as an inline box,
 					so a wrapped name can't drag it to the block's center. */}
-					<h3 className="min-w-0 text-lg text-primary">
+					<h3 className="min-w-0 text-primary text-xl">
 						<span className="mr-2 inline-block align-middle">
 							<DietMark diet={item.diet} />
 						</span>
 						{titleCase(item.name)}
 					</h3>
-					<p className="prose text-secondary text-sm">
-						{capitalizeFirst(item.description)}
-					</p>
+					{item.description ? (
+						<p className="prose text-secondary text-sm">
+							{capitalizeFirst(item.description)}
+						</p>
+					) : null}
 				</button>
 				{/* No add control on a view-only, in-stock menu item (Dineinly Menu
 				package) — the price is the row's one point of emphasis, so it
@@ -758,7 +766,7 @@ function MenuItemDrawer({
 								type="button"
 								onClick={handleAddToOrder}
 								disabled={isSubmitting}
-								className="flex-1 rounded-md bg-accent px-6 py-4 font-medium text-background text-sm disabled:cursor-not-allowed disabled:opacity-60"
+								className="flex-1 rounded-md bg-accent px-6 py-4 font-medium text-background text-base disabled:cursor-not-allowed disabled:opacity-60"
 							>
 								{isSubmitting ? "Adding…" : "Add to Cart"}
 							</button>
@@ -780,9 +788,11 @@ function MenuItemDrawer({
 					</div>
 				</div>
 
-				<p className="prose text-base text-secondary">
-					{capitalizeFirst(item.description)}
-				</p>
+				{item.description ? (
+					<p className="prose text-base text-secondary">
+						{capitalizeFirst(item.description)}
+					</p>
+				) : null}
 
 				<div className="border-divider border-t" aria-hidden="true" />
 

@@ -104,7 +104,7 @@ export function AddDishPanel({
 			restaurantId,
 			categoryId: form.categoryId,
 			name: form.name,
-			description: form.description,
+			description: form.description.trim() || null,
 			price: Number(form.price),
 			prepTime: form.prepTime,
 			servingSize: form.servingSize,
@@ -176,9 +176,8 @@ export function AddDishPanel({
 						/>
 					</Field>
 
-					<Field label="Description" required className="resize-y">
+					<Field label="Description" className="resize-y">
 						<textarea
-							required
 							rows={3}
 							value={form.description}
 							placeholder="Describe the ingredients and preparation."

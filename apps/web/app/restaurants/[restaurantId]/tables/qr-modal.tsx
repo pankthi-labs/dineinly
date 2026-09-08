@@ -32,11 +32,32 @@ export function QrModal({
 
 	async function copyLink() {
 		try {
+			// navigator.clipboard needs a secure context (HTTPS or localhost) —
+			// unavailable when testing over a plain-http LAN address (a phone
+			// hitting the dev server's LAN IP), so this falls back to the
+			// execCommand path below rather than silently doing nothing.
+			if (!navigator.clipboard || !window.isSecureContext) {
+				throw new Error("Clipboard API unavailable");
+			}
 			await navigator.clipboard.writeText(url);
 		} catch {
-			// Clipboard API unavailable (insecure context, denied permission,
-			// unfocused document) — nothing more we can do automatically.
-			return;
+			const textarea = document.createElement("textarea");
+			textarea.value = url;
+			textarea.style.position = "fixed";
+			textarea.style.opacity = "0";
+			document.body.appendChild(textarea);
+			textarea.focus();
+			textarea.select();
+			// execCommand returns false on failure rather than throwing, so a
+			// try/catch alone would miss it and show "Copied!" for nothing.
+			let succeeded = false;
+			try {
+				succeeded = document.execCommand("copy");
+			} catch {
+				succeeded = false;
+			}
+			document.body.removeChild(textarea);
+			if (!succeeded) return;
 		}
 		setIsCopied(true);
 		setTimeout(() => setIsCopied(false), COPIED_RESET_MS);

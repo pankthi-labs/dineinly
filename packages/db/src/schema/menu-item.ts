@@ -38,7 +38,7 @@ export const menuItems = pgTable(
 		// category_id can never name a category from another restaurant.
 		categoryId: uuid("category_id").notNull(),
 		name: text("name").notNull(),
-		description: text("description").notNull(),
+		description: text("description"),
 		price: numeric("price", { precision: 12, scale: 2 }).notNull(),
 		prepTime: menuItemPrepTime("prep_time").notNull(),
 		servingSize: menuItemServingSize("serving_size").notNull(),

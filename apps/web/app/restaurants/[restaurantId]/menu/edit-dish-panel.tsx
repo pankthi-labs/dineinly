@@ -23,7 +23,7 @@ type EditableMenuItem = {
 	id: string;
 	category_id: string;
 	name: string;
-	description: string;
+	description: string | null;
 	price: number;
 	prep_time: (typeof PREP_TIME_OPTIONS)[number];
 	serving_size: (typeof SERVING_SIZE_OPTIONS)[number];
@@ -63,7 +63,7 @@ function toFormState(item: EditableMenuItem): FormState {
 	return {
 		categoryId: item.category_id,
 		name: item.name,
-		description: item.description,
+		description: item.description ?? "",
 		price: String(item.price),
 		prepTime: item.prep_time,
 		servingSize: item.serving_size,
@@ -145,7 +145,7 @@ export function EditDishPanel({
 			restaurantId,
 			categoryId: form.categoryId,
 			name: form.name,
-			description: form.description,
+			description: form.description.trim() || null,
 			price: Number(form.price),
 			prepTime: form.prepTime,
 			servingSize: form.servingSize,
@@ -211,9 +211,8 @@ export function EditDishPanel({
 						/>
 					</Field>
 
-					<Field label="Description" required className="resize-y">
+					<Field label="Description" className="resize-y">
 						<textarea
-							required
 							rows={3}
 							value={form.description}
 							onChange={(event) =>

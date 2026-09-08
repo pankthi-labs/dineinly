@@ -38,7 +38,7 @@ type MenuItem = {
 	id: string;
 	category_id: string;
 	name: string;
-	description: string;
+	description: string | null;
 	price: number;
 	diet: "veg" | "non_veg";
 	availability: "available" | "sold_out";
@@ -473,7 +473,11 @@ function MenuItemCard({
 					<div className="p-5 lg:p-6">
 						<Detail
 							label="Description"
-							value={capitalizeFirst(item.description)}
+							value={
+								item.description
+									? capitalizeFirst(item.description)
+									: "No description"
+							}
 						/>
 						<div className="mt-6 grid gap-6 lg:grid-cols-3">
 							<Detail

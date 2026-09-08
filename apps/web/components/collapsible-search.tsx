@@ -5,10 +5,11 @@ import { useState } from "react";
 
 /**
  * Search affordance that starts as an icon button, expands into a field on
- * click, and collapses again on blur while still empty. `label` is both the
- * placeholder and the accessible name. `onOpenChange` lets a cramped caller
- * (e.g. a mobile header sharing the row with a title) hide its other content
- * while the field is open instead of squeezing it.
+ * click, and collapses again on blur — the typed value is preserved, so
+ * reopening it (still filtering in the background) shows the same query.
+ * `label` is both the placeholder and the accessible name. `onOpenChange`
+ * lets a cramped caller (e.g. a mobile header sharing the row with a title)
+ * hide its other content while the field is open instead of squeezing it.
  */
 export function CollapsibleSearch({
 	value,
@@ -67,9 +68,7 @@ export function CollapsibleSearch({
 				type="search"
 				value={value}
 				onChange={(event) => onChange(event.target.value)}
-				onBlur={() => {
-					if (!value) close();
-				}}
+				onBlur={close}
 				placeholder={label}
 				aria-label={label}
 				// biome-ignore lint/a11y/noAutofocus: triggered by the user's own click on the search button, not on page load — the field they just opened is the obvious next focus target.

@@ -215,7 +215,7 @@ export type Database = {
 					availability: Database["public"]["Enums"]["availability"];
 					category_id: string;
 					created_at: string;
-					description: string;
+					description: string | null;
 					diet: Database["public"]["Enums"]["diet"];
 					id: string;
 					labels: string[];
@@ -234,7 +234,7 @@ export type Database = {
 					availability?: Database["public"]["Enums"]["availability"];
 					category_id: string;
 					created_at?: string;
-					description: string;
+					description?: string | null;
 					diet: Database["public"]["Enums"]["diet"];
 					id?: string;
 					labels?: string[];
@@ -253,7 +253,7 @@ export type Database = {
 					availability?: Database["public"]["Enums"]["availability"];
 					category_id?: string;
 					created_at?: string;
-					description?: string;
+					description?: string | null;
 					diet?: Database["public"]["Enums"]["diet"];
 					id?: string;
 					labels?: string[];
