@@ -203,7 +203,7 @@ Cinematic and restrained. Motion communicates state, not decoration.
 | Card list | Entry | 300ms | ease-out | Stagger 40ms · max 3 items · 120ms total |
 | Skeleton | Shimmer | 1500ms | ease-in-out | Infinite loop |
 | Spinner | Rotate | 700ms | linear | Continuous loop — button/inline loading state |
-| Logomark (`AnimatedBrandLogo`) | Load / Hover | 1500ms | ease-linear | Logomark does a full 360° turn around its vertical axis (rotateY) — identical on mount and on hover of the whole lockup. Linear, not ease-out: constant angular velocity is what keeps the turn reading as one continuous spin instead of "flips out, flips back" (ease-out's deceleration through the second half read as arriving and settling back). Both hover-in and hover-out run via a plain `transition` declared on the resting rule, so leaving mid-turn eases back to rest instead of snapping. Wordmark stays static. Never on `PoweredByDineinly` or the footer lockup. |
+| Wordmark (`BrandWordmark`) | Glint / Hover | 500ms | ease-in-out | The "d" fill lifts `--color-accent-primary` → `--color-accent-hover` with a hairline scale (1→1.05); the two i-dots pulse scale-only (1→1.15), same moment, no color change. No position change. Counts as one synchronized motif, not three independent animations — plays once on mount, again on every hover, reversible via `transition` on hover-out. Never on `PoweredByDineinly` or the footer lockup — those stay on the plain, unanimated `StaticBrandWordmark`. |
 
 **Skeleton shimmer implementation** — built from existing surface tokens, no new color introduced:
 
@@ -272,7 +272,8 @@ Use Dineinly domain terms only. Nothing may imply reservation or payment functio
 
 Deviations require explicit written sign-off — never implement speculatively.
 
-- **Dark-only** in the MVP; no light mode. Wordmark ships as one asset, `apps/web/public/brand/dineinly-logo-dark.svg` — no light-mode variant to maintain.
+- **Dark-only** in the MVP; no light mode. Wordmark ships as one asset, `apps/web/public/brand/dineinly-wordmark.svg` — no light-mode variant to maintain.
+- **The mark and the wordmark are never set together** — the identity's own usage rule (see the SVG's embedded comments). `BrandWordmark` (`apps/web/components/brand-logo.tsx`) covers every header and sign-in screen; its inline SVG glyphs carry the mount/hover glint documented in §05. `PoweredByDineinly`, the only sanctioned pairing of the wordmark with text, renders the plain, unanimated `StaticBrandWordmark` variant instead — never `BrandWordmark` — so the footer lockup never animates. The mark (`apps/web/public/brand/dineinly-mark.svg`) is used exactly once, inlined into `apps/web/app/icon.svg` for the browser-tab favicon — the one placement under the identity's ~64px mark threshold — and never animates.
 - **"Powered by Dineinly" lockup** (`PoweredByDineinly` in `apps/web/components/brand-logo.tsx`) — the only sanctioned pairing of the wordmark with adjacent text. `text-xs` (12px/w500/Inter, §02), `--color-muted`, `--space-1` gap (matches "Powered by"'s own word-space, so the text-to-logo gap reads even with the word gap), logo `height={12}`. Never rebuild this pairing inline at a call site — import the component.
 - **Every page has a header and a footer.** The footer is `SiteFooter` (`apps/web/components/site-footer.tsx`) — never rebuild copyright/legal links inline at a call site. `variant` has no default; every call site must choose:
   - `variant="public"` (Privacy Policy / Terms of Service / Copyright as three separate links) — `apps/web/app/home-content.tsx` only. No other page uses this variant.

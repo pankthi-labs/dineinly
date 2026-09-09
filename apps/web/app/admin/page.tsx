@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { Settings, UserCog, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
-import { AnimatedBrandLogo } from "@/components/brand-logo";
+import { BrandWordmark } from "@/components/brand-logo";
 import { SiteFooter } from "@/components/site-footer";
 import { getViewer } from "@/lib/auth";
 import { getGreeting } from "@/lib/greeting";
@@ -43,7 +43,7 @@ export default async function AdminDashboardPage() {
 		<div className="mx-auto flex min-h-dvh max-w-7xl flex-col px-4 py-8 sm:px-6 md:px-8 md:py-12 lg:px-12 lg:py-16">
 			<header className="mb-10 flex flex-col gap-8 sm:mb-16 sm:gap-12">
 				<div className="flex flex-wrap items-center justify-between gap-4">
-					<AnimatedBrandLogo height={31} priority />
+					<BrandWordmark height={31} />
 
 					<AdminHeaderActions />
 				</div>

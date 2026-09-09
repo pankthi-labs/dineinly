@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4.224 14.464 209.331 59.045" width="209.331" height="59.045" role="img" aria-label="Dineinly">
+  <!--
+    DINEINLY IDENTITY v7.5  ·  THE ATOM SYSTEM
+    Gold D6B36A (accent primary) · White E7EAEE (text primary)
+
+    TWO LAWS, AND NOTHING ELSE.
+
+    LAW 1 - ONE SHAPE.  A rounded square at corner ratio K = 0.28 is the
+    atom. Every OUTER shape is drawn on it: the d's bowl, the e, the n's
+    arch, both dots. Each radius is K x that shape's own width. K is the
+    only free number in the identity. Change K and every outer shape
+    moves together.
+
+      COUNTERS ARE NOT DRAWN ON K, AND CANNOT BE.  A counter's radius is
+      fixed by LAW 3 below as r_outer - S. Its own K therefore falls out
+      as (r-S)/(w-2S), which is smaller than 0.28 and differs per glyph
+      (d 0.147, n 0.119). This is not drift; it is arithmetic. A shape
+      cannot hold a constant radius RATIO and a constant stroke at the
+      same time unless S = 0. The stroke wins - see LAW 3 - so K is a law
+      about outer shapes only, and this file states it that way.
+
+    LAW 2 - ONE ANGLE.  Every non-orthogonal edge is a multiple of 12deg.
+
+      12 deg  EVERY TERMINAL THAT DOES NOT SIT ON THE BASELINE.
+              d ascender, l ascender, BOTH i tops, BOTH y arm tops,
+              y descender, e aperture - and the dots themselves.
+              Baseline terminals stay flat: the baseline is the reading
+              line and is never angled. That is the whole rule; no
+              terminal anywhere is exempt from it.
+
+      24 deg  the y's two arms (2 x 12). Outfit draws them asymmetrically
+              at 23.3 and 24.9. Regularised to exactly 24 on both sides:
+              the letter barely changes and the law holds outright.
+
+      Angles are cut from the EXACT tangent, not a rounded decimal.
+      Every 12deg shear across a 90 stroke is 90 x tan12 = 19.1300.
+
+    LAW 3 - ONE STROKE.  S = 90 and never modulates.
+    A rounded rect offset inward by S is EXACTLY a rounded rect of radius
+    r - S, so bowl and counter are concentric and the stroke is a constant
+    S everywhere, corners included. A square counter inside a CIRCULAR
+    bowl would swell the stroke from S to 1.5S. This cannot.
+
+    The i tops matter more than they look. The dot above each i was
+    already at 12deg; with the stem top left flat the two edges disagreed
+    by a full 12deg across a gap of a few pixels. Cut, the dot and the
+    terminal directly beneath it are parallel.
+
+    WHY K = 0.28
+    0.32 read friendly-consumer-app. Below 0.24 reads blocky. Hard cap:
+    flat run (width - 2Kw) must stay >= S or the flat side reads as a
+    wobble rather than a decision. Tightest here is the d: 475 - 2(133)
+    = 209 >= 90.
+
+    LINEAGE
+    The flat left edge of the bowl descends from the original clipped
+    semicircle. The geometry changed; the cut survived.
+  -->
+  <!-- ══ VIEWBOX ═════════════════════════════════════════════════════
+       TIGHT TO INK, DESCENDER INCLUDED. No padding is baked in. The box
+       is the exact bounding box of the drawn geometry:
+
+         x   4.224   d bowl left edge (flat, tangent)
+         x 213.555   y's right arm, top-outer corner
+         y  14.464   d and l ascender tips (tangent)
+         y  73.509   y descender tip
+
+       THE DESCENDER IS THE BOTTOM OF THE BOX, NOT THE BASELINE. An
+       earlier box ended at 72.964 and sheared 0.545 off the y's tip,
+       replacing its 12deg point with a flat stub. If this box is ever
+       recut, measure to 73.509 or the y breaks again and nothing else
+       in the word will show you that it did. -->
+  <!-- ══ CLEAR SPACE ═════════════════════════════════════════════════
+       Because the box above is tight, clear space is a USAGE rule and is
+       not supplied by the file. It is measured in S, the stroke, so it
+       scales with the wordmark and needs no separate number.
+       S = 90 glyph units = 5.76 units in this box's coordinates.
+
+         MINIMUM    2S on all four sides  (= 11.52 units here)
+         PREFERRED  3S                    (= 17.28 units here)
+
+       Measure to the BOX, not to the baseline - the y already spends
+       13.35 units below the baseline and that is ink, not clearance.
+       Nothing - type, rule, container edge, another logo - enters the
+       minimum. -->
+  <!-- ══ USAGE ═══════════════════════════════════════════════════════
+       The mark and the wordmark are never set together. Side by side they
+       stutter: the mark IS a d, the wordmark opens on a d, and the eye
+       reads the first one as a letter. There is no lockup for this reason.
+
+         MARK / ICON   compact placements - app icon, favicon, avatar,
+                       browser tab, nav bar, anywhere under roughly 64px.
+         WORDMARK      everything with room - site header, deck covers,
+                       menus, packaging, large-format brand presence.
+
+       If both must appear on one surface, separate them by layout - mark
+       top-left, wordmark bottom-right - never by a gap on one line. -->
+  <!-- The d is GOLD here and always: the wordmark never appears alongside
+       the mark, so nothing else competes for the focal point. -->
+
+  <!-- ══ TERMINAL SHEAR ══════════════════════════════════════════════
+       Every terminal is sheared 12deg from SQUARE-TO-ITS-OWN-STROKE, not
+       12deg from horizontal. For the vertical stems (d, l, i) those are the
+       same thing. For the e, whose stroke is horizontal, square is vertical,
+       so its aperture terminal is 12deg off vertical. For the y's two arms,
+       which lean 24deg in OPPOSITE directions, the two cuts are MIRRORS of
+       each other, not parallel - a cut at a fixed absolute angle would shear
+       with one arm and against the other, leaving the left arm 36deg off
+       square with a terminal face 21% longer than every other one.
+
+       Consequence, and the check to run after any edit:
+       EVERY TERMINAL FACE IN THIS WORDMARK IS 92.0106 LONG = 90 / cos12,
+       and every shear offset is 19.1300 = 90 x tan12.
+       Both y arm tops hold the x-height at their INNER corner and drop
+       19.1300 at the outer, mirroring the V's own symmetry. -->
+
+  <!-- CUSTOM d · bowl side 475 (= x-height) · rc 133 (= K x 475)
+       stroke 90 (= Outfit 400's own lowercase stem) · ascender cut 12deg.
+       NO DOT ON THE d. The mark's d carries one because there the dot IS
+       the i - the mark compresses "di" into a single glyph. Here the i is
+       present as its own letter, so a dot on the d would spell "diineinly"
+       and set two dots side by side. -->
+  <g fill="#D6B36A" transform="translate(0 60.16) scale(0.064 -0.064)">
+    <path fill-rule="evenodd" d="M199 0 H408 A133 133 0 0 1 541 133 V342 A133 133 0 0 1 408 475 H199 A133 133 0 0 1 66 342 V133 A133 133 0 0 1 199 0 Z M199 90 H408 A43 43 0 0 1 451 133 V342 A43 43 0 0 1 408 385 H199 A43 43 0 0 1 156 342 V133 A43 43 0 0 1 199 90 Z"/><path d="M451 0 H541 V694.87 L451 714 Z"/>
+  </g>
+
+  <!-- n and e are drawn on the atom. i is a 90-unit rectangle with its
+       x-height terminal sheared; l the same at ascender height; y is two
+       90-unit diagonals at exactly 24deg (= 2 x 12) with all three of its
+       terminals sheared. Nothing in this word ends square except where a
+       stroke meets the baseline.
+       n arch: outer width 426, rc 119.28 = 0.28 x 426, counter rc 29.28. -->
+  <g fill="#E7EAEE" transform="translate(0 60.16)">
+      <g transform="translate(37.9 0) scale(0.064 -0.064)"><path d="M67 0 V475 L157 455.87 V0 Z"/></g>
+      <g transform="translate(51.736 0) scale(0.064 -0.064)"><path fill-rule="evenodd" d="M66 0 V355.72 A119.28 119.28 0 0 0 185.28 475 H372.72 A119.28 119.28 0 0 0 492 355.72 V0 H402 V355.72 A29.28 29.28 0 0 1 372.72 385 H185.28 A29.28 29.28 0 0 1 156 355.72 V0 Z"/></g>
+      <g transform="translate(86.308 0) scale(0.064 -0.064)"><path fill-rule="evenodd" d="M33 342 A133 133 0 0 0 166 475 H375 A133 133 0 0 0 508 342 V192.5 H123 V133 A43 43 0 0 1 166 90 H309.565 L290.435 0 H166 A133 133 0 0 0 33 133 Z M123 282.5 H418 V342 A43 43 0 0 1 375 385 H166 A43 43 0 0 1 123 342 V282.5 Z"/></g>
+      <g transform="translate(120.112 0) scale(0.064 -0.064)"><path d="M67 0 V475 L157 455.87 V0 Z"/></g>
+      <g transform="translate(133.948 0) scale(0.064 -0.064)"><path fill-rule="evenodd" d="M66 0 V355.72 A119.28 119.28 0 0 0 185.28 475 H372.72 A119.28 119.28 0 0 0 492 355.72 V0 H402 V355.72 A29.28 29.28 0 0 1 372.72 385 H185.28 A29.28 29.28 0 0 1 156 355.72 V0 Z"/></g>
+      <g transform="translate(168.52 0) scale(0.064 -0.064)"><path d="M66 0H156V694.87L66 714Z"/></g>
+      <g transform="translate(182.228 0) scale(0.064 -0.064)"><path d="M399.48 475 L489.48 455.87 L193.66 -208.57 L103.66 -189.44 Z M24.52 455.87 L114.52 475 L306.26 44.34 L207.74 44.34 Z"/></g>
+  </g>
+
+  <!-- DOTS · the atom at its smallest, side 6.336 (= 99 glyph units),
+       rc 1.77408 = 0.28 x 6.336 exact, rotated 12deg - parallel to the
+       i terminal directly beneath each one, and centred on its stem. -->
+  <g fill="#E7EAEE">
+    <rect x="41.9" y="18.24" width="6.336" height="6.336" rx="1.77408" transform="rotate(12 45.068 21.408)"/>
+    <rect x="124.112" y="18.24" width="6.336" height="6.336" rx="1.77408" transform="rotate(12 127.28 21.408)"/>
+  </g>
+</svg>

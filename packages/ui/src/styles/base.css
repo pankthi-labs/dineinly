@@ -204,61 +204,58 @@
 	}
 
 	/*
-	 * §05 Logo Load/Hover: only the logomark animates, identically on
-	 * mount and on hover — the wordmark next to it never animates. Both
-	 * are a full 360° turn around its plain VERTICAL axis (rotateY — spins
-	 * horizontally in place, like a revolving door).
+	 * §05 Wordmark Glint: no travel, no bounce — the "d" is the wordmark's
+	 * only gold glyph, so it briefly catches the light in place (fill lifts
+	 * --color-accent-primary → --color-accent-hover, the token this doc
+	 * already reserves for "active gold icon illumination", §01/§06) with a
+	 * hairline scale (1 → 1.05). The two i-dots pulse the same moment, scale
+	 * only — they're --color-text-primary white, not one of the four accent
+	 * tokens, so they don't recolor. Nothing changes position. Same
+	 * synchronized pulse plays once on mount and again on every hover,
+	 * reversible on hover-out through a plain `transition` — no separate
+	 * mount/hover mechanism to keep in sync, one set of end-states covers
+	 * both triggers.
 	 *
-	 * `ease-linear` (not `ease-out`): a full rotateY sweep is inherently
-	 * mirror-symmetric (a flat plane's second half retraces the first
-	 * half's squish → mirror → unsquish pattern left-right-flipped) — that
-	 * alone just means it passes through the mirrored "D" pose once, at
-	 * the exact midpoint, which is expected here. What made it read as
-	 * "flips out, comes back" was `ease-out` decelerating toward the end:
-	 * the second half (180°→360°) visibly slowed down relative to the
-	 * first, which looks like arriving and settling back rather than
-	 * continuing onward. Constant angular velocity removes that asymmetry
-	 * — same motion, same midpoint, but no slow-down to misread as a
-	 * reversal. (A tilted `rotate3d` axis was tried to dodge the mirror
-	 * pass-through entirely; it reads as an off-axis wobble instead of a
-	 * clean spin, so it's out.)
-	 *
-	 * 0deg and 360deg render identically (upright mark), so the
-	 * animation's "to" keyframe already matches the plain `transform`
-	 * below — no `forwards` fill needed to hold it, the handoff is
-	 * invisible either way. That matters because a `forwards`-filled
-	 * animation would keep overriding `transform` forever, blocking the
-	 * :hover rule below from driving it.
-	 *
-	 * Hover drives the identical turn via a plain `transition`, declared on
-	 * the resting rule so it applies in both directions: hovering in
-	 * animates 0deg→360deg, and hovering out — even mid-turn, at whatever
-	 * angle the pointer left at — animates back down over the same
-	 * duration instead of snapping. Both rules use the same `rotateY`
-	 * function, only the angle differing, so the browser interpolates
-	 * that angle directly instead of falling back to matrix decomposition,
-	 * which would see identical start/end matrices (any full turn is the
-	 * same as no turn) and not visibly animate at all.
-	 *
-	 * Duration reuses `--duration-skeleton` (1500ms) — the doc's only
-	 * "slow" tier, otherwise reserved for the infinite shimmer loop; this
-	 * is a one-shot use of the same value, not a new one.
+	 * animation-delay pushes the mount pulse's peak (halfway through, at
+	 * delay + half the duration ≈ 550ms) close to where this wordmark's
+	 * ancestors typically finish their own entrance (e.g. the home hero's
+	 * 600ms header fade), so the glint is still clearly visible once the
+	 * page around it has settled, instead of playing out fully hidden
+	 * underneath that fade.
 	 */
-	.brand-logo-mark-anim {
-		transform: perspective(600px) rotateY(0deg);
-		animation: brand-logo-in var(--duration-skeleton) var(--ease-linear);
-		transition: transform var(--duration-skeleton) var(--ease-linear);
+	.brand-wordmark-d-glint {
+		fill: var(--color-accent-primary);
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: brand-wordmark-d-glint var(--duration-deliberate)
+			var(--ease-in-out) var(--duration-slow);
+		transition:
+			fill var(--duration-base) var(--ease-in-out),
+			transform var(--duration-base) var(--ease-in-out);
+	}
+
+	.brand-wordmark-dot-pulse {
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: brand-wordmark-dot-pulse var(--duration-deliberate)
+			var(--ease-in-out) var(--duration-slow);
+		transition: transform var(--duration-base) var(--ease-in-out);
+	}
+
+	.brand-wordmark:hover .brand-wordmark-d-glint {
+		fill: var(--color-accent-hover);
+		transform: scale(1.05);
+	}
+
+	.brand-wordmark:hover .brand-wordmark-dot-pulse {
+		transform: scale(1.15);
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.brand-logo-mark-anim {
+		.brand-wordmark-d-glint,
+		.brand-wordmark-dot-pulse {
 			animation: none;
-			transition: none;
 		}
-	}
-
-	.brand-logo-group:hover .brand-logo-mark-anim {
-		transform: perspective(600px) rotateY(360deg);
 	}
 }
 
@@ -308,11 +305,24 @@
 	}
 }
 
-@keyframes brand-logo-in {
-	from {
-		transform: perspective(600px) rotateY(0deg);
+@keyframes brand-wordmark-d-glint {
+	0%,
+	100% {
+		fill: var(--color-accent-primary);
+		transform: scale(1);
 	}
-	to {
-		transform: perspective(600px) rotateY(360deg);
+	50% {
+		fill: var(--color-accent-hover);
+		transform: scale(1.05);
+	}
+}
+
+@keyframes brand-wordmark-dot-pulse {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.15);
 	}
 }

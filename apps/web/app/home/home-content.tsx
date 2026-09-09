@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
-import { AnimatedBrandLogo } from "@/components/brand-logo";
+import { BrandWordmark } from "@/components/brand-logo";
 import { SiteFooter } from "@/components/site-footer";
 
 // Scroll-in reveal shared by every section below. `initial: false` under
@@ -352,9 +352,9 @@ export function HomeContent() {
 				initial={reduceMotion ? false : { opacity: 0, y: -16 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.6, ease: "easeOut" }}
-				className="mb-8 flex items-center justify-between"
+				className="mb-12 flex items-end justify-between"
 			>
-				<AnimatedBrandLogo height={40} priority />
+				<BrandWordmark height={64} />
 				<motion.div
 					whileHover={{ y: -2 }}
 					whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}

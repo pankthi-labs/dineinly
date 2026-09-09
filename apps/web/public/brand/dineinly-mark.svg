@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 2.099 107.901 199.901" width="107.901" height="199.901" role="img" aria-label="Dineinly">
+  <!--
+    DINEINLY IDENTITY v7.5  ·  THE ATOM SYSTEM
+    Gold D6B36A (accent primary) · White E7EAEE (text primary)
+
+    TWO LAWS, AND NOTHING ELSE.
+
+    LAW 1 - ONE SHAPE.  A rounded square at corner ratio K = 0.28 is the
+    atom. Every OUTER shape is drawn on it: the bowl, the e, the n's arch,
+    both dots. Each radius is K x that shape's own width. K is the only
+    free number in the identity. Change K and every outer shape moves
+    together.
+
+      COUNTERS ARE NOT DRAWN ON K, AND CANNOT BE.  A counter's radius is
+      fixed by LAW 3 below as r_outer - S. Its own K therefore falls out
+      as (r-S)/(w-2S), which is smaller than 0.28 and differs per glyph
+      (bowl 0.147, n 0.119). This is not drift; it is arithmetic. A shape
+      cannot hold a constant radius RATIO and a constant stroke at the
+      same time unless S = 0. The stroke wins - see LAW 3 - so K is a law
+      about outer shapes only, and this file states it that way.
+
+    LAW 2 - ONE ANGLE.  Every non-orthogonal edge is a multiple of 12deg.
+
+      12 deg  EVERY TERMINAL THAT DOES NOT SIT ON THE BASELINE.
+              d ascender, l ascender, BOTH i tops, BOTH y arm tops,
+              y descender, e aperture - and the dots themselves.
+              Baseline terminals stay flat: the baseline is the reading
+              line and is never angled. That is the whole rule; no
+              terminal anywhere is exempt from it.
+
+      24 deg  the y's two arms (2 x 12). Outfit draws them asymmetrically
+              at 23.3 and 24.9. Regularised to exactly 24 on both sides:
+              the letter barely changes and the law holds outright.
+
+      Angles are cut from the EXACT tangent, not a rounded decimal.
+      The ascender shear here is 20 x tan12 = 4.2511, not 4.25.
+
+    LAW 3 - ONE STROKE.  S never modulates.
+    A rounded rect offset inward by S is EXACTLY a rounded rect of radius
+    r - S, so bowl and counter are concentric and the stroke is a constant
+    S everywhere, corners included. A square counter inside a CIRCULAR
+    bowl would swell the stroke from S to 1.5S. This cannot.
+
+    The i tops matter more than they look. The dot above each i was
+    already at 12deg; with the stem top left flat the two edges disagreed
+    by a full 12deg across a gap of a few pixels. Cut, the dot and the
+    terminal directly beneath it are parallel.
+
+    WHY K = 0.28
+    0.32 read friendly-consumer-app. Below 0.24 reads blocky. Hard cap:
+    flat run (width - 2Kw) must stay >= S or the flat side reads as a
+    wobble rather than a decision. Here: 106 - 2(29.68) = 46.64 >= 20.
+
+    LINEAGE
+    The flat left edge of the bowl descends from the original clipped
+    semicircle. The geometry changed; the cut survived.
+  -->
+  <!-- ══ VIEWBOX ═════════════════════════════════════════════════════
+       TIGHT TO INK. No padding is baked into this file. The box is the
+       exact bounding box of the drawn geometry:
+
+         x  0        bowl left edge (flat, tangent)
+         x  107.901  dot's rotated top-right corner arc
+         y  2.099    dot's rotated top-left corner arc
+         y  202      bowl bottom (flat, tangent)
+
+       The dot's extremes lie on its CORNER ARCS, not its sharp corners.
+       Rotating the sharp rect overstates the box by ~1.15 units and will
+       make this look clipped when it is not. To re-derive: rotate the
+       four corner-arc CENTRES about (96,14), then add r in each axis. -->
+  <!-- ══ CLEAR SPACE ═════════════════════════════════════════════════
+       Because the box above is tight, clear space is a USAGE rule and is
+       not supplied by the file. It is measured in S, the stroke, so it
+       scales with the mark and needs no separate number:
+
+         MINIMUM    2S on all four sides  (= 40 units here)
+         PREFERRED  3S                    (= 60 units here)
+
+       Nothing - type, rule, edge of a container, another logo - enters
+       the minimum. Inside a filled container (app icon, avatar) the
+       container edge is what the clearance is measured to. -->
+  <!-- ══ ONE GEOMETRY, TWO ASSETS ════════════════════════════════════
+       dineinly-mark.svg  the bare glyph, inline beside type. No container.
+       dineinly-icon.svg  THE SAME GLYPH, unchanged, inside a container.
+                          App icon, favicon, avatar, browser tab.
+
+       There is no second drawing and no small-size cut. An earlier version
+       shortened the ascender for the icon to win box space. That was wrong
+       and it is the rule this file now protects:
+
+       ASCENDER CLEARANCE >= 2.5 x STROKE.
+       stem top 43 vs bowl top 96 = 53 = 2.65x stroke.
+       Below 2.5x the stem stops clearing the bowl and the letter reads as
+       an 'a'. At ascender 140 the clearance is 1.7x; at 128, 1.1x. Both
+       were tried, both read as 'a'. Never shorten this ascender. -->
+  <!-- ══ USAGE ═══════════════════════════════════════════════════════
+       The mark and the wordmark are never set together. Side by side they
+       stutter: the mark IS a d, the wordmark opens on a d, and the eye
+       reads the first one as a letter. There is no lockup for this reason.
+
+         MARK / ICON   compact placements - app icon, favicon, avatar,
+                       browser tab, nav bar, anywhere under roughly 64px.
+         WORDMARK      everything with room - site header, deck covers,
+                       menus, packaging, large-format brand presence.
+
+       If both must appear on one surface, separate them by layout - mark
+       top-left, wordmark bottom-right - never by a gap on one line. -->
+  <g fill="#D6B36A">
+    <!-- BOWL + COUNTER  concentric rounded squares.
+         bowl  106 wide  rc 29.68 = 0.28 x 106
+         cntr   66 wide  rc  9.68 = 29.68 - S      flat run 46.64 -->
+    <path fill-rule="evenodd" d="M29.68 96 H76.32 A29.68 29.68 0 0 1 106 125.68 V172.32 A29.68 29.68 0 0 1 76.32 202 H29.68 A29.68 29.68 0 0 1 0 172.32 V125.68 A29.68 29.68 0 0 1 29.68 96 Z M29.68 116 H76.32 A9.68 9.68 0 0 1 86 125.68 V172.32 A9.68 9.68 0 0 1 76.32 182 H29.68 A9.68 9.68 0 0 1 20 172.32 V125.68 A9.68 9.68 0 0 1 29.68 116 Z"/>
+    <!-- STEM  counter right edge == stem left edge (tangent).
+         Ascender cut = exactly 12deg: 20 x tan12 = 4.2511 -->
+    <path d="M86 43 L106 47.2511 V202 H86 Z"/>
+    <!-- DOT  side 22 not 24: a rounded square of side 1.2S carries 27% more
+         area than a round dot of equal width, so it is reduced to match.
+         rc 6.16 = 0.28 x 22, exact. Centred on the stem at x=96. -->
+    <rect x="85" y="3" width="22" height="22" rx="6.16" transform="rotate(12 96 14)"/>
+  </g>
+</svg>
