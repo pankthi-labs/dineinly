@@ -17,6 +17,7 @@ import { DietMark } from "@/components/diet-mark";
 import { PageHeader } from "@/components/page-header";
 import { SiteFooter } from "@/components/site-footer";
 import { capitalizeFirst, formatPrice, titleCase } from "@/lib/format";
+import { formatScheduleLabel } from "@/lib/menu-item-schedule";
 import {
 	type PREP_TIME_OPTIONS,
 	SERVING_SIZE_LABELS,
@@ -42,6 +43,9 @@ type MenuItem = {
 	price: number;
 	diet: "veg" | "non_veg";
 	availability: "available" | "sold_out";
+	schedule_days: number[] | null;
+	schedule_start_time: string | null;
+	schedule_end_time: string | null;
 	status: "active" | "archived";
 	labels: string[];
 	prep_time: (typeof PREP_TIME_OPTIONS)[number];
@@ -471,14 +475,20 @@ function MenuItemCard({
 			{isExpanded ? (
 				<div className="border-divider border-t bg-background">
 					<div className="p-5 lg:p-6">
-						<Detail
-							label="Description"
-							value={
-								item.description
-									? capitalizeFirst(item.description)
-									: "No description"
-							}
-						/>
+						<div className="grid gap-6 sm:grid-cols-2">
+							<Detail
+								label="Description"
+								value={
+									item.description
+										? capitalizeFirst(item.description)
+										: "No description"
+								}
+							/>
+							<Detail
+								label="Scheduled availability"
+								value={formatScheduleLabel(item) ?? "All day, every day"}
+							/>
+						</div>
 						<div className="mt-6 grid gap-6 lg:grid-cols-3">
 							<Detail
 								label="Preparation time"

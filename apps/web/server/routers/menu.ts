@@ -81,6 +81,9 @@ function menuItemColumns(input: z.infer<typeof menuItemInputSchema>) {
 		serving_size: input.servingSize,
 		diet: input.diet,
 		availability: input.availability,
+		schedule_days: input.scheduleDays,
+		schedule_start_time: input.scheduleStartTime,
+		schedule_end_time: input.scheduleEndTime,
 		labels: [...new Set(input.labels)],
 		offers_spice: input.offersSpice,
 		offers_salt: input.offersSalt,
@@ -150,7 +153,7 @@ export const menuRouter = router({
 					ctx.auth
 						.from("menu_items")
 						.select(
-							"id, category_id, name, description, price, prep_time, serving_size, diet, availability, labels, offers_spice, offers_salt, offers_ice, status",
+							"id, category_id, name, description, price, prep_time, serving_size, diet, availability, schedule_days, schedule_start_time, schedule_end_time, labels, offers_spice, offers_salt, offers_ice, status",
 						)
 						.eq("restaurant_id", input.restaurantId)
 						// status/availability declared active-before-archived and

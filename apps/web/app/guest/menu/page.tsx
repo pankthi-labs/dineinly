@@ -20,6 +20,7 @@ import {
 	counterOrderStatus,
 } from "@/lib/counter-order-status";
 import { capitalizeFirst, formatPrice, titleCase } from "@/lib/format";
+import { formatScheduleLabel } from "@/lib/menu-item-schedule";
 import {
 	ICE_LABELS,
 	ICE_OPTIONS,
@@ -41,6 +42,10 @@ type MenuItem = {
 	price: number;
 	diet: "veg" | "non_veg";
 	availability: "available" | "sold_out";
+	schedule_days: number[] | null;
+	schedule_start_time: string | null;
+	schedule_end_time: string | null;
+	scheduleActive: boolean;
 	labels: string[];
 	prep_time: (typeof PREP_TIME_OPTIONS)[number];
 	serving_size: (typeof SERVING_SIZE_OPTIONS)[number];
@@ -48,6 +53,27 @@ type MenuItem = {
 	offers_salt: boolean;
 	offers_ice: boolean;
 };
+
+// Sold-out and out-of-schedule both mean "can't order this right now" — same
+// dimmed-card, badge-instead-of-price treatment, and both sink to the end of
+// their category below (visibleCategories) rather than sitting mixed in
+// alphabetically among items the guest can actually order.
+function isMenuItemUnavailable(item: MenuItem): boolean {
+	return item.availability === "sold_out" || !item.scheduleActive;
+}
+
+/** "Sold out" for the manual toggle, else the schedule window — always
+ * present when scheduleActive is false, since a schedule is the only other
+ * way to reach this state. */
+function unavailableLabel(item: MenuItem): string {
+	return item.availability === "sold_out"
+		? "Sold out"
+		: (formatScheduleLabel({
+				schedule_days: item.schedule_days,
+				schedule_start_time: item.schedule_start_time,
+				schedule_end_time: item.schedule_end_time,
+			}) ?? "Currently unavailable");
+}
 
 const FASTEST_PREP_TIME: (typeof PREP_TIME_OPTIONS)[number] = "5-10 mins";
 
@@ -262,14 +288,24 @@ export default function GuestMenuPage() {
 		return menu.data.categories
 			.map((category) => ({
 				...category,
-				items: category.items.filter((item) => {
-					if (query && !item.name.toLowerCase().includes(query)) return false;
-					if (activeDiets.length > 0 && !activeDiets.includes(item.diet))
-						return false;
-					if (expressOnly && item.prep_time !== FASTEST_PREP_TIME) return false;
-					if (sharingOnly && item.serving_size === "serves 1") return false;
-					return true;
-				}),
+				// Stable sort (spec-guaranteed) — keeps the server's alphabetical
+				// order within the available group and within the unavailable
+				// group, just moving unavailable items as a block to the end.
+				items: category.items
+					.filter((item) => {
+						if (query && !item.name.toLowerCase().includes(query)) return false;
+						if (activeDiets.length > 0 && !activeDiets.includes(item.diet))
+							return false;
+						if (expressOnly && item.prep_time !== FASTEST_PREP_TIME)
+							return false;
+						if (sharingOnly && item.serving_size === "serves 1") return false;
+						return true;
+					})
+					.sort(
+						(a, b) =>
+							Number(isMenuItemUnavailable(a)) -
+							Number(isMenuItemUnavailable(b)),
+					),
 			}))
 			.filter((category) => category.items.length > 0);
 	}, [menu.data, search, activeDiets, expressOnly, sharingOnly]);
@@ -577,16 +613,16 @@ function MenuItemCard({
 	onAdd: () => void;
 	onDecrement: () => void;
 }) {
-	const soldOut = item.availability === "sold_out";
+	const unavailable = isMenuItemUnavailable(item);
 	const kicker = item.labels[0] ? labelKicker(item.labels[0]) : null;
 	let priceClassName: string;
-	if (!orderingEnabled && !soldOut && item.description) {
+	if (!orderingEnabled && !unavailable && item.description) {
 		// Only spans+centers across both rows when there's a description to
 		// center against — with no second row of content, centering here
 		// would float the price off the name's line instead of aligning to it.
 		priceClassName =
 			"row-span-2 self-center justify-self-end whitespace-nowrap text-2xl text-accent";
-	} else if (!orderingEnabled && !soldOut) {
+	} else if (!orderingEnabled && !unavailable) {
 		priceClassName =
 			"self-start justify-self-end whitespace-nowrap text-2xl text-accent";
 	} else {
@@ -594,7 +630,7 @@ function MenuItemCard({
 	}
 	return (
 		<div
-			className={`rounded-xl border border-divider bg-surface p-5 ${soldOut ? "opacity-60" : ""}`}
+			className={`rounded-xl border border-divider bg-surface p-5 ${unavailable ? "opacity-60" : ""}`}
 		>
 			{kicker ? (
 				<p className="text-accent-secondary text-caps">{kicker}</p>
@@ -633,9 +669,9 @@ function MenuItemCard({
 				pinned to the name's line. Sold-out items keep the compact
 				top-row spot so "Sold out" still has row two to sit in. */}
 				<span className={priceClassName}>{formatPrice(item.price)}</span>
-				{soldOut ? (
-					<span className="self-start justify-self-end text-caps text-muted">
-						Sold out
+				{unavailable ? (
+					<span className="self-start justify-self-end text-right text-caps text-muted">
+						{unavailableLabel(item)}
 					</span>
 				) : orderingEnabled ? (
 					// One control for both states — at quantity 0 it renders
@@ -705,7 +741,7 @@ function MenuItemDrawer({
 		ice?: (typeof ICE_OPTIONS)[number];
 	}) => Promise<unknown>;
 }) {
-	const soldOut = item.availability === "sold_out";
+	const unavailable = isMenuItemUnavailable(item);
 	const kicker = item.labels[0] ? labelKicker(item.labels[0]) : null;
 	const [quantity, setQuantity] = useState(1);
 	const [spice, setSpice] = useState<(typeof SPICE_OPTIONS)[number]>("regular");
@@ -744,9 +780,9 @@ function MenuItemDrawer({
 			hideHeader
 			isSubmitting={isSubmitting}
 			footer={
-				soldOut ? (
+				unavailable ? (
 					<p className="text-center text-caps text-muted">
-						Currently unavailable
+						{unavailableLabel(item)}
 					</p>
 				) : !orderingEnabled ? undefined : (
 					<div className="flex flex-col gap-3">

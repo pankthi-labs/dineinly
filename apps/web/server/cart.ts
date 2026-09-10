@@ -1,4 +1,5 @@
 import type { Database } from "@workspace/db";
+import { isScheduleActive } from "@/lib/menu-item-schedule";
 import type { Context } from "./trpc/context";
 import { dbError } from "./trpc/errors";
 
@@ -36,7 +37,9 @@ export async function listCartItems(
 			? { data: [], error: null }
 			: await client
 					.from("menu_items")
-					.select("id, name, price, availability, status")
+					.select(
+						"id, name, price, availability, status, schedule_days, schedule_start_time, schedule_end_time",
+					)
 					.eq("restaurant_id", restaurantId)
 					.in("id", menuItemIds);
 
@@ -60,7 +63,9 @@ export async function listCartItems(
 			name: menuItem?.name ?? "",
 			price: menuItem?.price ?? 0,
 			available:
-				menuItem?.availability === "available" && menuItem?.status === "active",
+				menuItem?.availability === "available" &&
+				menuItem?.status === "active" &&
+				(menuItem ? isScheduleActive(menuItem) : false),
 		};
 	});
 }

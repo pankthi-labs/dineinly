@@ -1047,6 +1047,46 @@ $$;
 revoke execute on function public.set_menu_item_availability(uuid, uuid, public.availability) from public;
 grant execute on function public.set_menu_item_availability(uuid, uuid, public.availability) to authenticated;
 
+-- Scheduled availability (docs/core-data-model.md, menu_items.schedule_days/
+-- schedule_start_time/schedule_end_time) — a separate axis from the manual
+-- sold-out toggle above. Null/empty p_days means every day; a null time pair
+-- means no time restriction. p_start > p_end wraps past midnight (e.g.
+-- 22:00-02:00). No per-restaurant timezone setting (see bills.ts
+-- dateRangeFor), so every schedule is evaluated in Asia/Kolkata, same as
+-- daily_token's "today". `stable`, not `immutable` — depends on now().
+-- Called fresh on every guest menu read and at order submission
+-- (submit_order/staff_submit_order below) — never by a background job.
+create or replace function public.is_menu_item_schedule_active(
+	p_days smallint[],
+	p_start_time time,
+	p_end_time time
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+	select
+		(
+			p_days is null or array_length(p_days, 1) is null
+			or extract(dow from (now() at time zone 'Asia/Kolkata'))::smallint = any(p_days)
+		)
+		and (
+			p_start_time is null or p_end_time is null
+			or case
+				when p_start_time <= p_end_time then
+					(now() at time zone 'Asia/Kolkata')::time >= p_start_time
+					and (now() at time zone 'Asia/Kolkata')::time < p_end_time
+				else
+					(now() at time zone 'Asia/Kolkata')::time >= p_start_time
+					or (now() at time zone 'Asia/Kolkata')::time < p_end_time
+			end
+		);
+$$;
+
+revoke execute on function public.is_menu_item_schedule_active(smallint[], time, time) from public;
+grant execute on function public.is_menu_item_schedule_active(smallint[], time, time) to authenticated;
+
 -- ============================================================================
 -- 8. Guest onboarding: resolve_qr_token
 -- ============================================================================
@@ -1331,7 +1371,13 @@ begin
 			on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id
 		where ci.restaurant_id = v_restaurant_id
 			and ci.session_id = v_session_id
-			and (mi.availability = 'sold_out' or mi.status <> 'active')
+			and (
+				mi.availability = 'sold_out'
+				or mi.status <> 'active'
+				or not public.is_menu_item_schedule_active(
+					mi.schedule_days, mi.schedule_start_time, mi.schedule_end_time
+				)
+			)
 	) then
 		raise exception 'One or more items in your cart are no longer available';
 	end if;
@@ -1527,7 +1573,13 @@ begin
 			on mi.restaurant_id = ci.restaurant_id and mi.id = ci.menu_item_id
 		where ci.restaurant_id = p_restaurant_id
 			and ci.session_id = p_session_id
-			and (mi.availability = 'sold_out' or mi.status <> 'active')
+			and (
+				mi.availability = 'sold_out'
+				or mi.status <> 'active'
+				or not public.is_menu_item_schedule_active(
+					mi.schedule_days, mi.schedule_start_time, mi.schedule_end_time
+				)
+			)
 	) then
 		raise exception 'One or more items in this cart are no longer available';
 	end if;

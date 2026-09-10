@@ -126,6 +126,9 @@ CREATE TABLE "menu_items" (
 	"serving_size" "menu_item_serving_size" NOT NULL,
 	"diet" "diet" NOT NULL,
 	"availability" "availability" DEFAULT 'available' NOT NULL,
+	"schedule_days" smallint[],
+	"schedule_start_time" time,
+	"schedule_end_time" time,
 	"labels" text[] DEFAULT '{}' NOT NULL,
 	"offers_spice" boolean DEFAULT false NOT NULL,
 	"offers_salt" boolean DEFAULT false NOT NULL,
@@ -134,7 +137,8 @@ CREATE TABLE "menu_items" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "menu_items_restaurant_id_id_key" UNIQUE("restaurant_id","id"),
-	CONSTRAINT "menu_items_price_check" CHECK ("menu_items"."price" >= 0)
+	CONSTRAINT "menu_items_price_check" CHECK ("menu_items"."price" >= 0),
+	CONSTRAINT "menu_items_schedule_time_check" CHECK (("menu_items"."schedule_start_time" is null) = ("menu_items"."schedule_end_time" is null))
 );
 --> statement-breakpoint
 CREATE TABLE "menu_labels" (

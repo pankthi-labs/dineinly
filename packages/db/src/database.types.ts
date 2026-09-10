@@ -226,6 +226,9 @@ export type Database = {
 					prep_time: Database["public"]["Enums"]["menu_item_prep_time"];
 					price: number;
 					restaurant_id: string;
+					schedule_days: number[] | null;
+					schedule_end_time: string | null;
+					schedule_start_time: string | null;
 					serving_size: Database["public"]["Enums"]["menu_item_serving_size"];
 					status: Database["public"]["Enums"]["menu_item_status"];
 					updated_at: string;
@@ -245,6 +248,9 @@ export type Database = {
 					prep_time: Database["public"]["Enums"]["menu_item_prep_time"];
 					price: number;
 					restaurant_id: string;
+					schedule_days?: number[] | null;
+					schedule_end_time?: string | null;
+					schedule_start_time?: string | null;
 					serving_size: Database["public"]["Enums"]["menu_item_serving_size"];
 					status?: Database["public"]["Enums"]["menu_item_status"];
 					updated_at?: string;
@@ -264,6 +270,9 @@ export type Database = {
 					prep_time?: Database["public"]["Enums"]["menu_item_prep_time"];
 					price?: number;
 					restaurant_id?: string;
+					schedule_days?: number[] | null;
+					schedule_end_time?: string | null;
+					schedule_start_time?: string | null;
 					serving_size?: Database["public"]["Enums"]["menu_item_serving_size"];
 					status?: Database["public"]["Enums"]["menu_item_status"];
 					updated_at?: string;
@@ -911,6 +920,10 @@ export type Database = {
 				Returns: boolean;
 			};
 			is_dineinly_admin: { Args: never; Returns: boolean };
+			is_menu_item_schedule_active: {
+				Args: { p_days: number[]; p_end_time: string; p_start_time: string };
+				Returns: boolean;
+			};
 			is_staff_manager_for_restaurant: {
 				Args: { p_restaurant_id: string };
 				Returns: boolean;

@@ -9,6 +9,7 @@ import {
 	FormSheet,
 	LabelFields,
 	PreferenceFields,
+	ScheduleFields,
 } from "@/components/form-sheet";
 import { titleCase } from "@/lib/format";
 import { firstFormError, menuItemInputSchema } from "@/lib/menu-item-schema";
@@ -29,6 +30,9 @@ type EditableMenuItem = {
 	serving_size: (typeof SERVING_SIZE_OPTIONS)[number];
 	diet: "veg" | "non_veg";
 	availability: "available" | "sold_out";
+	schedule_days: number[] | null;
+	schedule_start_time: string | null;
+	schedule_end_time: string | null;
 	labels: string[];
 	offers_spice: boolean;
 	offers_salt: boolean;
@@ -52,6 +56,9 @@ type FormState = {
 	servingSize: EditableMenuItem["serving_size"];
 	diet: EditableMenuItem["diet"];
 	availability: EditableMenuItem["availability"];
+	scheduleDays: number[];
+	scheduleStartTime: string;
+	scheduleEndTime: string;
 	labels: string[];
 	offersSpice: EditableMenuItem["offers_spice"];
 	offersSalt: EditableMenuItem["offers_salt"];
@@ -69,6 +76,10 @@ function toFormState(item: EditableMenuItem): FormState {
 		servingSize: item.serving_size,
 		diet: item.diet,
 		availability: item.availability,
+		scheduleDays: item.schedule_days ?? [],
+		// Postgres returns "HH:MM:SS" — TIME_OPTIONS values are "HH:MM".
+		scheduleStartTime: item.schedule_start_time?.slice(0, 5) ?? "",
+		scheduleEndTime: item.schedule_end_time?.slice(0, 5) ?? "",
 		labels: item.labels,
 		offersSpice: item.offers_spice,
 		offersSalt: item.offers_salt,
@@ -152,6 +163,9 @@ export function EditDishPanel({
 			diet: form.diet,
 			availability: form.availability,
 			status: form.status,
+			scheduleDays: form.scheduleDays.length > 0 ? form.scheduleDays : null,
+			scheduleStartTime: form.scheduleStartTime || null,
+			scheduleEndTime: form.scheduleEndTime || null,
 			labels: form.labels,
 			offersSpice: form.offersSpice,
 			offersSalt: form.offersSalt,
@@ -296,6 +310,16 @@ export function EditDishPanel({
 						</select>
 					</Field>
 
+					<ScheduleFields
+						days={form.scheduleDays}
+						startTime={form.scheduleStartTime}
+						endTime={form.scheduleEndTime}
+						onDaysChange={(value) => updateForm("scheduleDays", value)}
+						onStartTimeChange={(value) =>
+							updateForm("scheduleStartTime", value)
+						}
+						onEndTimeChange={(value) => updateForm("scheduleEndTime", value)}
+					/>
 					<LabelFields
 						labels={labels}
 						selected={form.labels}

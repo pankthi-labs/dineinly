@@ -540,6 +540,24 @@
           "notNull": true,
           "default": "'available'"
         },
+        "schedule_days": {
+          "name": "schedule_days",
+          "type": "smallint[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "schedule_start_time": {
+          "name": "schedule_start_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "schedule_end_time": {
+          "name": "schedule_end_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
         "labels": {
           "name": "labels",
           "type": "text[]",
@@ -660,6 +678,10 @@
         "menu_items_price_check": {
           "name": "menu_items_price_check",
           "value": "\"menu_items\".\"price\" >= 0"
+        },
+        "menu_items_schedule_time_check": {
+          "name": "menu_items_schedule_time_check",
+          "value": "(\"menu_items\".\"schedule_start_time\" is null) = (\"menu_items\".\"schedule_end_time\" is null)"
         }
       },
       "isRLSEnabled": false

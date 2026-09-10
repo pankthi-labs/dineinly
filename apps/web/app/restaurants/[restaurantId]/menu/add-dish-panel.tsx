@@ -9,6 +9,7 @@ import {
 	FormSheet,
 	LabelFields,
 	PreferenceFields,
+	ScheduleFields,
 } from "@/components/form-sheet";
 import { titleCase } from "@/lib/format";
 import { firstFormError, menuItemInputSchema } from "@/lib/menu-item-schema";
@@ -37,6 +38,9 @@ type FormState = {
 	servingSize: "" | (typeof SERVING_SIZE_OPTIONS)[number];
 	diet: "" | "veg" | "non_veg";
 	displayStatus: DisplayStatus;
+	scheduleDays: number[];
+	scheduleStartTime: string;
+	scheduleEndTime: string;
 	labels: string[];
 	offersSpice: boolean;
 	offersSalt: boolean;
@@ -68,6 +72,9 @@ export function AddDishPanel({
 		servingSize: "",
 		diet: "",
 		displayStatus: "",
+		scheduleDays: [],
+		scheduleStartTime: "",
+		scheduleEndTime: "",
 		labels: [],
 		offersSpice: false,
 		offersSalt: false,
@@ -112,6 +119,9 @@ export function AddDishPanel({
 			availability:
 				form.displayStatus === "sold_out" ? "sold_out" : "available",
 			status: form.displayStatus === "hidden" ? "archived" : "active",
+			scheduleDays: form.scheduleDays.length > 0 ? form.scheduleDays : null,
+			scheduleStartTime: form.scheduleStartTime || null,
+			scheduleEndTime: form.scheduleEndTime || null,
 			labels: form.labels,
 			offersSpice: form.offersSpice,
 			offersSalt: form.offersSalt,
@@ -279,6 +289,16 @@ export function AddDishPanel({
 						</select>
 					</Field>
 
+					<ScheduleFields
+						days={form.scheduleDays}
+						startTime={form.scheduleStartTime}
+						endTime={form.scheduleEndTime}
+						onDaysChange={(value) => updateForm("scheduleDays", value)}
+						onStartTimeChange={(value) =>
+							updateForm("scheduleStartTime", value)
+						}
+						onEndTimeChange={(value) => updateForm("scheduleEndTime", value)}
+					/>
 					<LabelFields
 						labels={labels}
 						selected={form.labels}

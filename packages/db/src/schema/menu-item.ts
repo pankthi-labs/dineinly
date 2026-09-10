@@ -6,7 +6,9 @@ import {
 	index,
 	numeric,
 	pgTable,
+	smallint,
 	text,
+	time,
 	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
@@ -44,6 +46,23 @@ export const menuItems = pgTable(
 		servingSize: menuItemServingSize("serving_size").notNull(),
 		diet: diet("diet").notNull(),
 		availability: availability("availability").notNull().default("available"),
+		// Scheduled availability — a separate axis from the manual sold-out
+		// toggle above. Null/empty scheduleDays means every day; scheduleDays
+		// holds 0 (Sunday) through 6 (Saturday), matching Postgres EXTRACT(DOW).
+		// Start/end are always both null or both set (check constraint below);
+		// a start after end wraps past midnight (e.g. 22:00-02:00) rather than
+		// being rejected — a late-night window is a normal thing to want. The
+		// wrap stays within the same calendar day as far as scheduleDays is
+		// concerned: a Sat 22:00-02:00 window with scheduleDays [6] (Sat only)
+		// does not cover Sunday 01:00 — day and time-of-day are independent
+		// checks (both must pass), not one continuous span across days. Days
+		// and time combine with AND: set both to mean "only Fri-Sun, 5-7 PM".
+		// Evaluated fresh on every read (guest menu, cart, submit_order), never
+		// by a background job — see is_menu_item_schedule_active() in
+		// supabase/migrations/20260730150634_add_auth_fk_and_rls_policies.sql.
+		scheduleDays: smallint("schedule_days").array(),
+		scheduleStartTime: time("schedule_start_time"),
+		scheduleEndTime: time("schedule_end_time"),
 		labels: text("labels").array().notNull().default([]),
 		offersSpice: boolean("offers_spice").notNull().default(false),
 		offersSalt: boolean("offers_salt").notNull().default(false),
@@ -68,5 +87,9 @@ export const menuItems = pgTable(
 			name: "menu_items_restaurant_id_category_id_fkey",
 		}),
 		check("menu_items_price_check", sql`${table.price} >= 0`),
+		check(
+			"menu_items_schedule_time_check",
+			sql`(${table.scheduleStartTime} is null) = (${table.scheduleEndTime} is null)`,
+		),
 	],
 );

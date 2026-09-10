@@ -97,7 +97,9 @@ Organized into restaurant-defined categories; every item belongs to exactly one.
 
 Spice, Salt, Ice are the only guest-selectable option groups in the MVP. At item creation the Owner/Manager only toggles whether each applies to the dish — the values themselves (Spice: Mild / Regular / Extra Spice; Salt: Less Salt / Regular; Ice: No Ice / Less Ice / Regular) are fixed per preference and chosen by the guest at order time, never during dish creation. Preferences never change price.
 
-**Availability:** `Available` or `Sold Out (86'd)`. Manual only — set by Waiter, Kitchen, or Manager. Changes affect future orders only, never existing ones.
+**Availability:** `Available` or `Sold Out (86'd)`, set by Waiter, Kitchen, or Manager. Changes affect future orders only, never existing ones.
+
+**Scheduled availability (optional):** an independent automated axis alongside the manual toggle above — days of the week, a time-of-day window, or both. No days selected means every day; no time window means no time limit; both combine with AND (e.g. Fri–Sun, 5–7 PM only). Outside its window an item is treated exactly like `Sold Out` everywhere a guest sees it (dimmed, badge instead of price, sorted to the end of its category) and is rejected at order submission the same way. Evaluated fresh on every read and at order time — no per-restaurant timezone setting, so schedules read in Asia/Kolkata.
 
 ---
 

@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { billableQuantity, computeBill } from "@/lib/bill-math";
+import { isScheduleActive } from "@/lib/menu-item-schedule";
 import { ICE_OPTIONS, SALT_OPTIONS, SPICE_OPTIONS } from "@/lib/menu-options";
 import { listCartItems, upsertCartItem } from "../cart";
 import { dbError } from "../trpc/errors";
@@ -42,9 +43,10 @@ function requireBillEnabled(experience: string): void {
 // Guest-facing reads only. RLS (guest_select_own_restaurant,
 // guest_select_active_menu_categories/items — supabase/migrations/
 // 20260730150634_..._policies.sql § 3) already scopes every query below to
-// this guest's own restaurant and to active-status rows; sold-out items
-// still return (docs/product.md: sold-out must still show, just marked
-// unavailable), so no availability filter here either.
+// this guest's own restaurant and to active-status rows; sold-out and
+// out-of-schedule items still return (docs/product.md: sold-out must still
+// show, just marked unavailable — scheduled items follow the same rule), so
+// no availability filter here either.
 export const guestRouter = router({
 	// Realtime bootstrap: the guest JWT lives in an httpOnly cookie (never
 	// reaches client JS directly), so the browser calls this once to get the
@@ -88,7 +90,7 @@ export const guestRouter = router({
 				ctx.supabase
 					.from("menu_items")
 					.select(
-						"id, category_id, name, description, price, diet, availability, labels, prep_time, serving_size, offers_spice, offers_salt, offers_ice",
+						"id, category_id, name, description, price, diet, availability, schedule_days, schedule_start_time, schedule_end_time, labels, prep_time, serving_size, offers_spice, offers_salt, offers_ice",
 					)
 					.eq("restaurant_id", ctx.guest.restaurant_id)
 					.order("name", { ascending: true }),
@@ -105,7 +107,13 @@ export const guestRouter = router({
 			return null;
 		}
 
-		const items = itemsResult.data ?? [];
+		// scheduleActive is evaluated fresh on every request (never cached, no
+		// background job) — see is_menu_item_schedule_active(), the same check
+		// submit_order() runs server-side at order time.
+		const items = (itemsResult.data ?? []).map((item) => ({
+			...item,
+			scheduleActive: isScheduleActive(item),
+		}));
 
 		return {
 			restaurant: restaurantResult.data,

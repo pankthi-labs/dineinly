@@ -11,6 +11,7 @@ import {
 	useState,
 } from "react";
 import { titleCase } from "@/lib/format";
+import { formatClockTime, TIME_OPTIONS } from "@/lib/menu-item-schedule";
 import { useDismissableOverlay } from "./use-dismissable-overlay";
 
 const OPEN_MOTION = "duration-(--duration-deliberate) ease-emphasized";
@@ -238,6 +239,129 @@ export function PreferenceFields({
 				/>
 			</div>
 		</div>
+	);
+}
+
+const WEEKDAY_TOGGLES = [
+	{ value: 0, label: "Sun" },
+	{ value: 1, label: "Mon" },
+	{ value: 2, label: "Tue" },
+	{ value: 3, label: "Wed" },
+	{ value: 4, label: "Thu" },
+	{ value: 5, label: "Fri" },
+	{ value: 6, label: "Sat" },
+] as const;
+
+/** The Scheduled Availability section shared by AddDishPanel and
+ * EditDishPanel — days and a time window are independent axes (Postgres
+ * EXTRACT(DOW) numbering, 0=Sunday): no days selected means every day, no
+ * time set means no time limit. Combined with AND — pick Fri/Sat/Sun and a
+ * 5-7 PM window to mean only those days, only that window. Evaluated fresh
+ * on every guest menu read and at order time (submit_order), never by a
+ * background job — see apps/web/lib/menu-item-schedule.ts. */
+export function ScheduleFields({
+	days,
+	startTime,
+	endTime,
+	onDaysChange,
+	onStartTimeChange,
+	onEndTimeChange,
+}: {
+	days: number[];
+	startTime: string;
+	endTime: string;
+	onDaysChange: (days: number[]) => void;
+	onStartTimeChange: (value: string) => void;
+	onEndTimeChange: (value: string) => void;
+}) {
+	// A separate mode toggle, not just "days.length > 0" — "Specific days"
+	// with nothing picked yet is a real, distinct in-progress state the form
+	// should hold onto rather than collapsing back to "All days" the instant
+	// the last pill is unchecked.
+	const [daysMode, setDaysMode] = useState<"all" | "specific">(
+		days.length > 0 ? "specific" : "all",
+	);
+
+	function handleModeChange(mode: "all" | "specific") {
+		setDaysMode(mode);
+		if (mode === "all") onDaysChange([]);
+	}
+
+	function toggleDay(value: number) {
+		onDaysChange(
+			days.includes(value)
+				? days.filter((day) => day !== value)
+				: [...days, value].sort((a, b) => a - b),
+		);
+	}
+
+	return (
+		<>
+			<p className="px-5 pt-4 text-secondary text-sm">Scheduled availability</p>
+			<Field label="Available on">
+				<select
+					value={daysMode}
+					onChange={(event) =>
+						handleModeChange(event.target.value as "all" | "specific")
+					}
+				>
+					<option value="all">All days</option>
+					<option value="specific">Specific days</option>
+				</select>
+			</Field>
+			{daysMode === "specific" ? (
+				<div className="px-5 py-4">
+					<div className="flex flex-wrap gap-2">
+						{WEEKDAY_TOGGLES.map((day) => (
+							<button
+								key={day.value}
+								type="button"
+								aria-pressed={days.includes(day.value)}
+								onClick={() => toggleDay(day.value)}
+								className={`rounded-pill border px-4 py-2 font-medium text-sm transition-colors duration-(--duration-base) ease-out ${
+									days.includes(day.value)
+										? "border-accent text-primary"
+										: "border-divider text-muted hover:text-secondary"
+								}`}
+							>
+								{day.label}
+							</button>
+						))}
+					</div>
+				</div>
+			) : null}
+			<FieldRow>
+				<Field
+					label="Available from"
+					hint="Leave as No limit for no time limit"
+				>
+					<select
+						value={startTime}
+						onChange={(event) => onStartTimeChange(event.target.value)}
+					>
+						<option value="">No limit</option>
+						{TIME_OPTIONS.map((time) => (
+							<option key={time} value={time}>
+								{formatClockTime(time)}
+							</option>
+						))}
+					</select>
+				</Field>
+				<Field label="Available until">
+					<select
+						value={endTime}
+						onChange={(event) => onEndTimeChange(event.target.value)}
+					>
+						<option value="">No limit</option>
+						{TIME_OPTIONS.map((time) => (
+							<option key={time} value={time}>
+								{formatClockTime(time)}
+							</option>
+						))}
+					</select>
+				</Field>
+			</FieldRow>
+		</>
 	);
 }
 
