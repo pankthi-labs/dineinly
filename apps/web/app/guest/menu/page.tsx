@@ -77,6 +77,8 @@ function unavailableLabel(item: MenuItem): string {
 
 const FASTEST_PREP_TIME: (typeof PREP_TIME_OPTIONS)[number] = "5-10 mins";
 
+const HALF_HOUR_MS = 30 * 60 * 1000;
+
 // Dineinly Menu (view-only, docs/product.md § Dineinly Experiences) has no
 // order/bill to protect, so unlike Guest/One/Counter its session ends the
 // moment nobody's actually looking, rather than riding out the full guest
@@ -254,6 +256,29 @@ export default function GuestMenuPage() {
 	}, []);
 
 	const endSession = trpc.guest.endSession.useMutation();
+
+	// Scheduled items flip availability only at a schedule boundary, and every
+	// boundary a schedule can define sits on a half hour (TIME_OPTIONS in
+	// menu-item-schedule.ts) — so re-checking on that same cadence is exact,
+	// not a heuristic poll. A recursive setTimeout (not setInterval) recomputes
+	// the delay to the next boundary from the actual current time on every
+	// firing, so a throttled/backgrounded tab self-corrects to the real
+	// boundary on its next wake instead of drifting. Invalidating (not
+	// refetching directly) re-uses the same query-client path the realtime
+	// broadcast handlers below already use, so an in-flight request never
+	// gets clobbered by a redundant one.
+	useEffect(() => {
+		let timer: ReturnType<typeof setTimeout>;
+		function scheduleNextTick() {
+			const delay = HALF_HOUR_MS - (Date.now() % HALF_HOUR_MS);
+			timer = setTimeout(() => {
+				utils.guest.menu.invalidate();
+				scheduleNextTick();
+			}, delay);
+		}
+		scheduleNextTick();
+		return () => clearTimeout(timer);
+	}, [utils.guest.menu.invalidate]);
 
 	useEffect(() => {
 		if (orderingEnabled) return;
