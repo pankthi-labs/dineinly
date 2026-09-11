@@ -94,7 +94,7 @@ function formatDays(days: number[]): string {
 	return sorted.map((day) => DAY_LABELS[day]).join(", ");
 }
 
-/** e.g. "Available 5–7 PM" / "Available Sat, Sun" / "Available Fri, Sat, Sun · 5–7 PM". Null when the item has no schedule. */
+/** e.g. "Available 5:00 PM–7:00 PM" / "Available Sat, Sun" / "Available Fri, Sat, Sun · 5:00 PM–7:00 PM". Null when the item has no schedule. */
 export function formatScheduleLabel(schedule: MenuItemSchedule): string | null {
 	const days = schedule.schedule_days;
 	const hasDays = days !== null && days.length > 0;

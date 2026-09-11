@@ -134,7 +134,7 @@ describe("formatScheduleLabel", () => {
 				schedule_start_time: "17:00",
 				schedule_end_time: "19:00",
 			}),
-		).toBe("Available 5 PM–7 PM");
+		).toBe("Available 5:00 PM–7:00 PM");
 	});
 
 	it("formats a days-only schedule", () => {
@@ -150,6 +150,6 @@ describe("formatScheduleLabel", () => {
 				schedule_start_time: "17:00",
 				schedule_end_time: "19:00",
 			}),
-		).toBe("Available Sat · 5 PM–7 PM");
+		).toBe("Available Sat · 5:00 PM–7:00 PM");
 	});
 });
