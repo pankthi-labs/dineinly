@@ -453,7 +453,9 @@ function MenuItemCard({
 					<p className={`text-caps ${stateColor}`}>{stateLabel}</p>
 					<div className="mt-3 flex flex-wrap items-center gap-3">
 						<DietMark diet={item.diet} />
-						<h3 className="text-primary text-xl">{titleCase(item.name)}</h3>
+						<h3 className="min-w-0 text-primary text-xl">
+							{titleCase(item.name)}
+						</h3>
 						{item.labels.map((label) => (
 							<span key={label} className="text-accent-secondary text-caps">
 								{titleCase(label)}

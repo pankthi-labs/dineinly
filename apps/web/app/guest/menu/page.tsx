@@ -497,6 +497,7 @@ export default function GuestMenuPage() {
 										<MenuItemCard
 											key={item.id}
 											item={item}
+											showDietMark={dietIsMixed}
 											onOpen={() => setOpenItem(item)}
 											orderingEnabled={orderingEnabled}
 											cartQuantity={cartQuantity + alreadyOrdered}
@@ -598,6 +599,7 @@ export default function GuestMenuPage() {
 
 function MenuItemCard({
 	item,
+	showDietMark,
 	onOpen,
 	orderingEnabled,
 	cartQuantity,
@@ -606,6 +608,7 @@ function MenuItemCard({
 	onDecrement,
 }: {
 	item: MenuItem;
+	showDietMark: boolean;
 	onOpen: () => void;
 	orderingEnabled: boolean;
 	cartQuantity: number;
@@ -651,9 +654,11 @@ function MenuItemCard({
 					{/* Diet mark rides the heading's first line as an inline box,
 					so a wrapped name can't drag it to the block's center. */}
 					<h3 className="min-w-0 text-primary text-xl">
-						<span className="mr-2 inline-block align-middle">
-							<DietMark diet={item.diet} />
-						</span>
+						{showDietMark ? (
+							<span className="mr-2 inline-block align-middle">
+								<DietMark diet={item.diet} />
+							</span>
+						) : null}
 						{titleCase(item.name)}
 					</h3>
 					{item.description ? (
@@ -817,7 +822,9 @@ function MenuItemDrawer({
 						<p className="text-accent-secondary text-caps">{kicker}</p>
 					) : null}
 					<div className="mt-2 flex items-start justify-between gap-4">
-						<h2 className="text-3xl text-primary">{titleCase(item.name)}</h2>
+						<h2 className="min-w-0 text-3xl text-primary">
+							{titleCase(item.name)}
+						</h2>
 						<span className="shrink-0 text-2xl text-accent">
 							{formatPrice(item.price)}
 						</span>

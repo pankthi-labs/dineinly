@@ -35,11 +35,12 @@ export function CollapsibleSearch({
 	}
 
 	if (!isOpen) {
+		const isFiltering = value.trim() !== "";
 		return (
 			<button
 				type="button"
 				onClick={open}
-				aria-label={label}
+				aria-label={isFiltering ? `${label} (filtering: ${value})` : label}
 				// A centered 44px hit box (§11's minimum tap target) around a
 				// 16px glyph would leave a 14px gap before the page margin.
 				// This button is also the trailing item in PageHeader's
@@ -50,9 +51,15 @@ export function CollapsibleSearch({
 				// the shared `icon-tap-target` class and its `justify-center`)
 				// keeps the box's own edge flush with the container's — no
 				// margin/transform trick needed, so no overflow to produce.
-				className="inline-flex min-h-(--icon-tap-target) min-w-(--icon-tap-target) shrink-0 items-center justify-end text-secondary transition-colors duration-(--duration-base) ease-out hover:text-primary"
+				className={`relative inline-flex min-h-(--icon-tap-target) min-w-(--icon-tap-target) shrink-0 items-center justify-end transition-colors duration-(--duration-base) ease-out hover:text-primary ${isFiltering ? "text-accent" : "text-secondary"}`}
 			>
 				<Search className="icon-sm" strokeWidth={1.5} aria-hidden="true" />
+				{isFiltering ? (
+					<span
+						aria-hidden="true"
+						className="absolute top-2 right-2 size-1.5 rounded-full bg-accent"
+					/>
+				) : null}
 			</button>
 		);
 	}

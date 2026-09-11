@@ -86,9 +86,7 @@ export function formatClockTime(time: string): string {
 	const [hour = 0, minute = 0] = time.split(":").map(Number);
 	const period = hour >= 12 ? "PM" : "AM";
 	const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-	return minute === 0
-		? `${displayHour} ${period}`
-		: `${displayHour}:${String(minute).padStart(2, "0")} ${period}`;
+	return `${displayHour}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
 function formatDays(days: number[]): string {
