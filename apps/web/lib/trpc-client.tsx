@@ -14,19 +14,26 @@ import type { AppRouter } from "@/server/routers/_app";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-// Mobile browsers restore a backgrounded tab from bfcache (e.g. switching
-// back to an already-open guest tab instead of a fresh QR scan) via a
-// `pageshow` event with `persisted: true` — not the `visibilitychange`/
-// `focus` events react-query's default focus manager listens for. Without
-// this, a restored tab keeps rendering whatever menu data it fetched before
-// being backgrounded, while any freshly-opened tab/browser always refetches
-// on mount and looks correct — the exact mobile-vs-new-tab split reported.
+// Mobile browsers restore a backgrounded tab from bfcache (e.g. scanning a
+// second QR — same restaurant's updated menu, or a different restaurant's
+// table entirely — while a guest tab is already open) via a `pageshow`
+// event with `persisted: true` — not the `visibilitychange`/`focus` events
+// react-query's default focus manager listens for. A soft refetch isn't
+// enough here: the restored tab's whole React tree, not just its query
+// cache, is frozen mid-render for whichever restaurant it last showed, so a
+// hard reload is what actually re-runs the app from scratch against the
+// cookie the new scan just set — the same as any freshly-opened tab/browser
+// already does on mount.
 if (typeof window !== "undefined") {
 	focusManager.setEventListener((handleFocus) => {
 		const onVisibility = () =>
 			handleFocus(document.visibilityState === "visible");
 		const onPageShow = (event: PageTransitionEvent) => {
-			if (event.persisted) handleFocus(true);
+			if (event.persisted) {
+				window.location.reload();
+				return;
+			}
+			handleFocus(true);
 		};
 		window.addEventListener("visibilitychange", onVisibility);
 		window.addEventListener("focus", onVisibility);

@@ -1238,9 +1238,13 @@ begin
 	-- (short capped TTL is the point there — docs/guest-token.ts) — this
 	-- reuse only ever applies to Counter.
 	if v_experience = 'counter' and p_existing_session_id is not null then
-		select restaurant_id, status into v_existing_restaurant_id, v_existing_status
-		from public.sessions
-		where id = p_existing_session_id;
+		-- Table-qualified: `restaurant_id` bare is ambiguous against this
+		-- function's own `returns table (restaurant_id uuid, ...)` OUT
+		-- parameter of the same name, not just against public.sessions'
+		-- column (Postgres error 42702).
+		select s.restaurant_id, s.status into v_existing_restaurant_id, v_existing_status
+		from public.sessions s
+		where s.id = p_existing_session_id;
 
 		if v_existing_restaurant_id = v_restaurant_id and v_existing_status = 'active' then
 			v_session_id := p_existing_session_id;

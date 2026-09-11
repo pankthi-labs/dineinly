@@ -59,9 +59,17 @@ export async function GET(
 	// Invalid or rotated QR: land on the menu with no cookie set. Per
 	// architecture.md, a missing guest cookie on app/guest/... is never an
 	// error/redirect condition — it's just "no data" — so this reuses that
-	// same neutral empty state instead of a dedicated invalid-QR page.
+	// same neutral empty state instead of a dedicated invalid-QR page. Must
+	// actively clear any cookie already on the request, not just skip
+	// setting a new one — otherwise a failed resolution (this QR's table
+	// gone inactive, an RPC error) leaves a still-valid cookie from
+	// whichever restaurant was scanned before this one in charge of the
+	// response, showing its menu instead of the neutral empty state.
 	if (error || !data) {
-		return NextResponse.redirect(new URL("/guest/menu", origin));
+		const response = NextResponse.redirect(new URL("/guest/menu", origin), 302);
+		response.headers.set("Cache-Control", "no-store");
+		response.cookies.delete(GUEST_TOKEN_COOKIE);
+		return response;
 	}
 
 	const ttlSeconds =
@@ -79,7 +87,19 @@ export async function GET(
 		ttlSeconds,
 	);
 
-	const response = NextResponse.redirect(new URL("/guest/menu", origin));
+	// Explicit 302, not NextResponse.redirect()'s 307 default: mobile Safari
+	// has had documented Set-Cookie reliability issues on 307/308 redirects
+	// for the first cross-navigation to a fresh origin (works on a retry,
+	// once some interaction/cache exists) — 302 is the long-battle-tested
+	// status for "set a cookie, then redirect."
+	const response = NextResponse.redirect(new URL("/guest/menu", origin), 302);
+	// This same qr_token can resolve to a different table/session on a later
+	// scan (a table freed and re-seated, a rotated token) — with no
+	// Cache-Control, the browser is free to serve this redirect (and skip
+	// the request entirely, cookie included) straight out of its own HTTP
+	// cache on a later scan of the same URL, which is indistinguishable from
+	// the session just never having been minted at all.
+	response.headers.set("Cache-Control", "no-store");
 	response.cookies.set(GUEST_TOKEN_COOKIE, token, {
 		httpOnly: true,
 		secure: origin.startsWith("https:"),

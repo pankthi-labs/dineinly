@@ -516,17 +516,23 @@ export const guestRouter = router({
 			const status: "open" | "requested" | "settled" = bill?.status ?? "open";
 
 			// Counter only, pre-settle: the raw per-line rows behind the
-			// aggregated `lines` below, so the guest can reduce/cancel one
-			// specific line (guest.orders.setQuantity) — every experience uses
-			// `lines` for display, but only Counter pre-settle needs individual
-			// order_item ids to edit against, so this stays empty everywhere
-			// else rather than shipping ids nothing on the client will ever use.
+			// aggregated `lines` below, so the guest menu's stepper can
+			// reduce/cancel one specific line (guest.orders.setQuantity) once
+			// its own cart is empty — every experience uses `lines` for
+			// display, but only Counter pre-settle needs individual
+			// order_item ids (grouped by menuItemId) to edit against, so this
+			// stays empty everywhere else rather than shipping ids nothing on
+			// the client will ever use.
 			const editableItems =
 				ctx.experience === "counter" && status !== "settled"
 					? (itemsResult.data ?? [])
-							.filter((row) => row.quantity - row.cancelled_quantity > 0)
+							.filter(
+								(row) =>
+									row.menu_item_id && row.quantity - row.cancelled_quantity > 0,
+							)
 							.map((row) => ({
 								id: row.id,
+								menuItemId: row.menu_item_id as string,
 								name: row.item_name,
 								quantity: row.quantity - row.cancelled_quantity,
 								spice: row.spice,

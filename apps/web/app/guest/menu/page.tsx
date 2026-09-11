@@ -128,6 +128,14 @@ export default function GuestMenuPage() {
 	const setQuantity = trpc.guest.cart.setQuantity.useMutation({
 		onSuccess: () => utils.guest.cart.list.invalidate(),
 	});
+	// Already-confirmed lines from this round's still-open bill — the cart
+	// stepper's decrement falls through to this once its own cart is empty,
+	// so a guest can walk an already-ordered dish back down (or off) without
+	// a round trip through the bill page (guest.orders.setQuantity, same
+	// decrease-only RPC the old bill-page editor used).
+	const setOrderItemQuantity = trpc.guest.orders.setQuantity.useMutation({
+		onSuccess: () => utils.guest.bill.get.invalidate(),
+	});
 	const orders = trpc.guest.orders.list.useQuery(undefined, {
 		enabled: menu.isSuccess && orderingEnabled,
 	});
@@ -231,6 +239,21 @@ export default function GuestMenuPage() {
 		}
 		return map;
 	}, [isCounter, bill.data]);
+
+	// The raw order_item rows behind alreadyOrderedByMenuItem's counts, so the
+	// stepper's decrement has an id to call guest.orders.setQuantity on.
+	const editableItemsByMenuItem = useMemo(() => {
+		const map = new Map<
+			string,
+			NonNullable<typeof bill.data>["editableItems"]
+		>();
+		for (const row of bill.data?.editableItems ?? []) {
+			const list = map.get(row.menuItemId) ?? [];
+			list.push(row);
+			map.set(row.menuItemId, list);
+		}
+		return map;
+	}, [bill.data]);
 
 	const [search, setSearch] = useState("");
 	const [activeDiets, setActiveDiets] = useState<Array<"veg" | "non_veg">>([]);
@@ -519,6 +542,9 @@ export default function GuestMenuPage() {
 									const lastRow = rows[rows.length - 1];
 									const alreadyOrdered =
 										alreadyOrderedByMenuItem.get(item.id) ?? 0;
+									const editableRows =
+										editableItemsByMenuItem.get(item.id) ?? [];
+									const lastEditableRow = editableRows[editableRows.length - 1];
 									return (
 										<MenuItemCard
 											key={item.id}
@@ -527,7 +553,7 @@ export default function GuestMenuPage() {
 											onOpen={() => setOpenItem(item)}
 											orderingEnabled={orderingEnabled}
 											cartQuantity={cartQuantity + alreadyOrdered}
-											disableDecrement={cartQuantity === 0}
+											disableDecrement={cartQuantity === 0 && !lastEditableRow}
 											onAdd={() =>
 												addItem.mutate({
 													menuItemId: item.id,
@@ -547,10 +573,17 @@ export default function GuestMenuPage() {
 												})
 											}
 											onDecrement={() => {
-												if (!lastRow) return;
-												setQuantity.mutate({
-													cartItemId: lastRow.id,
-													quantity: lastRow.quantity - 1,
+												if (lastRow) {
+													setQuantity.mutate({
+														cartItemId: lastRow.id,
+														quantity: lastRow.quantity - 1,
+													});
+													return;
+												}
+												if (!lastEditableRow) return;
+												setOrderItemQuantity.mutate({
+													orderItemId: lastEditableRow.id,
+													quantity: lastEditableRow.quantity - 1,
 												});
 											}}
 										/>
