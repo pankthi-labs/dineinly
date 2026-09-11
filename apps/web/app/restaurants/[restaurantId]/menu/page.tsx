@@ -17,10 +17,13 @@ import { DietMark } from "@/components/diet-mark";
 import { PageHeader } from "@/components/page-header";
 import { SiteFooter } from "@/components/site-footer";
 import { capitalizeFirst, formatPrice, titleCase } from "@/lib/format";
-import { formatScheduleLabel } from "@/lib/menu-item-schedule";
 import {
+	formatDaysAvailability,
+	formatTimeAvailability,
+} from "@/lib/menu-item-schedule";
+import {
+	formatServingSize,
 	type PREP_TIME_OPTIONS,
-	SERVING_SIZE_LABELS,
 	type SERVING_SIZE_OPTIONS,
 } from "@/lib/menu-options";
 import { moveId, moveIdTo } from "@/lib/reorder";
@@ -478,29 +481,33 @@ function MenuItemCard({
 				<div className="border-divider border-t bg-background">
 					<div className="p-5 lg:p-6">
 						<div className="grid gap-6 sm:grid-cols-2">
+							<div className="sm:col-span-2">
+								<Detail
+									label="Description"
+									value={
+										item.description
+											? capitalizeFirst(item.description)
+											: "No description"
+									}
+								/>
+							</div>
 							<Detail
-								label="Description"
-								value={
-									item.description
-										? capitalizeFirst(item.description)
-										: "No description"
-								}
+								label="Days availability"
+								value={formatDaysAvailability(item)}
 							/>
 							<Detail
-								label="Scheduled availability"
-								value={formatScheduleLabel(item) ?? "All day, every day"}
+								label="Time availability"
+								value={formatTimeAvailability(item)}
 							/>
-						</div>
-						<div className="mt-6 grid gap-6 lg:grid-cols-3">
 							<Detail
 								label="Preparation time"
 								value={titleCase(item.prep_time)}
 							/>
 							<Detail
 								label="Serving size"
-								value={SERVING_SIZE_LABELS[item.serving_size]}
+								value={formatServingSize(item.serving_size)}
 							/>
-							<div>
+							<div className="sm:col-span-2">
 								<p className="text-caps text-muted">Guest preferences</p>
 								<div className="mt-3 flex flex-wrap gap-3 text-secondary text-sm">
 									<Preference label="Spice" offered={item.offers_spice} />

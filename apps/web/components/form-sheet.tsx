@@ -252,13 +252,17 @@ const WEEKDAY_TOGGLES = [
 	{ value: 6, label: "Sat" },
 ] as const;
 
-/** The Scheduled Availability section shared by AddDishPanel and
- * EditDishPanel — days and a time window are independent axes (Postgres
- * EXTRACT(DOW) numbering, 0=Sunday): no days selected means every day, no
- * time set means no time limit. Combined with AND — pick Fri/Sat/Sun and a
- * 5-7 PM window to mean only those days, only that window. Evaluated fresh
- * on every guest menu read and at order time (submit_order), never by a
- * background job — see apps/web/lib/menu-item-schedule.ts. */
+/** The Days/Time availability sections shared by AddDishPanel and
+ * EditDishPanel — independent axes (Postgres EXTRACT(DOW) numbering,
+ * 0=Sunday): no days selected means every day, no time set means no time
+ * limit. Combined with AND — pick Fri/Sat/Sun and a 5-7 PM window to mean
+ * only those days, only that window. Each axis gets its own mode toggle
+ * (All days/Specific days, No time limit/Specific time window) so a
+ * half-filled time window can't be reached in the UI at all — the from/until
+ * selects only exist, and only become `required`, once "Specific time
+ * window" is chosen. Evaluated fresh on every guest menu read and at order
+ * time (submit_order), never by a background job — see
+ * apps/web/lib/menu-item-schedule.ts. */
 export function ScheduleFields({
 	days,
 	startTime,
@@ -281,10 +285,23 @@ export function ScheduleFields({
 	const [daysMode, setDaysMode] = useState<"all" | "specific">(
 		days.length > 0 ? "specific" : "all",
 	);
+	// Same reasoning as daysMode: "Specific time window" with nothing picked
+	// yet is a real in-progress state, not "no time limit".
+	const [timeMode, setTimeMode] = useState<"none" | "window">(
+		startTime !== "" || endTime !== "" ? "window" : "none",
+	);
 
-	function handleModeChange(mode: "all" | "specific") {
+	function handleDaysModeChange(mode: "all" | "specific") {
 		setDaysMode(mode);
 		if (mode === "all") onDaysChange([]);
+	}
+
+	function handleTimeModeChange(mode: "none" | "window") {
+		setTimeMode(mode);
+		if (mode === "none") {
+			onStartTimeChange("");
+			onEndTimeChange("");
+		}
 	}
 
 	function toggleDay(value: number) {
@@ -297,16 +314,16 @@ export function ScheduleFields({
 
 	return (
 		<>
-			<p className="px-5 pt-4 text-secondary text-sm">Scheduled availability</p>
-			<Field label="Available on">
+			<p className="px-5 pt-4 text-secondary text-sm">Days availability</p>
+			<Field label="Available on" hideLabel>
 				<select
 					value={daysMode}
 					onChange={(event) =>
-						handleModeChange(event.target.value as "all" | "specific")
+						handleDaysModeChange(event.target.value as "all" | "specific")
 					}
 				>
-					<option value="all">All days</option>
-					<option value="specific">Specific days</option>
+					<option value="all">Available all days</option>
+					<option value="specific">Available specific days</option>
 				</select>
 			</Field>
 			{daysMode === "specific" ? (
@@ -330,37 +347,54 @@ export function ScheduleFields({
 					</div>
 				</div>
 			) : null}
-			<FieldRow>
-				<Field
-					label="Available from"
-					hint="Leave as No limit for no time limit"
+			<p className="px-5 pt-4 text-secondary text-sm">Time availability</p>
+			<Field label="Available" hideLabel>
+				<select
+					value={timeMode}
+					onChange={(event) =>
+						handleTimeModeChange(event.target.value as "none" | "window")
+					}
 				>
-					<select
-						value={startTime}
-						onChange={(event) => onStartTimeChange(event.target.value)}
-					>
-						<option value="">No limit</option>
-						{TIME_OPTIONS.map((time) => (
-							<option key={time} value={time}>
-								{formatClockTime(time)}
+					<option value="none">Available all time</option>
+					<option value="window">Available at specific time window</option>
+				</select>
+			</Field>
+			{timeMode === "window" ? (
+				<FieldRow>
+					<Field label="Available from">
+						<select
+							required
+							value={startTime}
+							onChange={(event) => onStartTimeChange(event.target.value)}
+						>
+							<option value="" disabled>
+								Select a time
 							</option>
-						))}
-					</select>
-				</Field>
-				<Field label="Available until">
-					<select
-						value={endTime}
-						onChange={(event) => onEndTimeChange(event.target.value)}
-					>
-						<option value="">No limit</option>
-						{TIME_OPTIONS.map((time) => (
-							<option key={time} value={time}>
-								{formatClockTime(time)}
+							{TIME_OPTIONS.map((time) => (
+								<option key={time} value={time}>
+									{formatClockTime(time)}
+								</option>
+							))}
+						</select>
+					</Field>
+					<Field label="Available until">
+						<select
+							required
+							value={endTime}
+							onChange={(event) => onEndTimeChange(event.target.value)}
+						>
+							<option value="" disabled>
+								Select a time
 							</option>
-						))}
-					</select>
-				</Field>
-			</FieldRow>
+							{TIME_OPTIONS.map((time) => (
+								<option key={time} value={time}>
+									{formatClockTime(time)}
+								</option>
+							))}
+						</select>
+					</Field>
+				</FieldRow>
+			) : null}
 		</>
 	);
 }
@@ -414,6 +448,7 @@ const FIELD_VALUE_CLASS =
  */
 export function Field({
 	label,
+	hideLabel,
 	required,
 	error,
 	hint,
@@ -421,6 +456,10 @@ export function Field({
 	children,
 }: {
 	label: string;
+	/** Keeps `label` as the control's accessible name but drops it from view —
+	 * for a select whose own option text already says what the field is
+	 * (e.g. "Available all days"), so a visible caption would just repeat it. */
+	hideLabel?: boolean;
 	required?: boolean;
 	error?: string;
 	hint?: string;
@@ -438,15 +477,22 @@ export function Field({
 
 	return (
 		<div className="group relative px-5 py-4">
+			{/* :user-invalid (not :invalid) so a required field only turns red
+			after the browser's own native validation has flagged it — never on
+			pristine load — covering every form through this one shared
+			component instead of each caller wiring its own error state. */}
 			<span
 				aria-hidden="true"
 				className={`absolute inset-y-0 left-0 w-(--space-0_5) transition-transform duration-(--duration-base) ease-out ${
 					error
 						? "scale-y-100 bg-error"
-						: "scale-y-0 bg-accent group-focus-within:scale-y-100"
+						: "scale-y-0 bg-accent group-focus-within:scale-y-100 group-has-user-invalid:scale-y-100 group-has-user-invalid:bg-error"
 				}`}
 			/>
-			<label htmlFor={id} className="text-secondary text-sm">
+			<label
+				htmlFor={id}
+				className={hideLabel ? "sr-only" : "text-secondary text-sm"}
+			>
 				{label}
 				{required ? (
 					<span className="ml-1 text-accent-secondary">*</span>
@@ -454,7 +500,9 @@ export function Field({
 			</label>
 			<div
 				className={`relative mt-2 border-b pb-2 transition-colors duration-(--duration-base) ease-out ${
-					error ? "border-error" : "border-secondary focus-within:border-accent"
+					error
+						? "border-error"
+						: "border-secondary focus-within:border-accent has-user-invalid:border-error has-user-invalid:focus-within:border-error"
 				}`}
 			>
 				{cloneElement(children, {

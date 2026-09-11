@@ -113,3 +113,22 @@ export function formatScheduleLabel(schedule: MenuItemSchedule): string | null {
 	}
 	return `Available ${parts.join(" · ")}`;
 }
+
+/** Days axis alone, for callers (Menu Desk) that show days and time as two
+ * separate lines rather than formatScheduleLabel's combined one. Always
+ * returns a string — "Available all days" is a real state, not a missing
+ * one. */
+export function formatDaysAvailability(schedule: MenuItemSchedule): string {
+	const days = schedule.schedule_days;
+	if (days === null || days.length === 0) return "Available all days";
+	return `Available ${formatDays(days)}`;
+}
+
+/** Time axis alone — see formatDaysAvailability. */
+export function formatTimeAvailability(schedule: MenuItemSchedule): string {
+	const { schedule_start_time, schedule_end_time } = schedule;
+	if (schedule_start_time === null || schedule_end_time === null) {
+		return "Available all time";
+	}
+	return `Available ${formatClockTime(schedule_start_time)}–${formatClockTime(schedule_end_time)}`;
+}

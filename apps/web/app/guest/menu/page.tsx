@@ -26,6 +26,7 @@ import {
 	ICE_OPTIONS,
 	type PREP_TIME_OPTIONS,
 	SALT_OPTIONS,
+	SERVING_SIZE_COUNTS,
 	SERVING_SIZE_LABELS,
 	type SERVING_SIZE_OPTIONS,
 	SPICE_OPTIONS,
@@ -866,9 +867,12 @@ function MenuItemDrawer({
 
 				<div className="grid grid-cols-3 gap-4">
 					<Detail label="Ready in" value={titleCase(item.prep_time)} />
+					{/* This column is narrow (grid-cols-3) — the name and person-count
+					are two separate lines here, unlike the single-line reading used
+					in a dropdown or a wider row elsewhere. */}
 					<Detail
 						label="Serving size"
-						value={SERVING_SIZE_LABELS[item.serving_size]}
+						value={`${SERVING_SIZE_LABELS[item.serving_size]}\n(${SERVING_SIZE_COUNTS[item.serving_size]})`}
 					/>
 					<Detail
 						label="Diet"

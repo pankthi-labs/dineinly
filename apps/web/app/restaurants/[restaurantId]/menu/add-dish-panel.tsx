@@ -14,8 +14,8 @@ import {
 import { titleCase } from "@/lib/format";
 import { firstFormError, menuItemInputSchema } from "@/lib/menu-item-schema";
 import {
+	formatServingSize,
 	PREP_TIME_OPTIONS,
-	SERVING_SIZE_LABELS,
 	SERVING_SIZE_OPTIONS,
 } from "@/lib/menu-options";
 import { trpc } from "@/lib/trpc-client";
@@ -283,7 +283,7 @@ export function AddDishPanel({
 							</option>
 							{SERVING_SIZE_OPTIONS.map((option) => (
 								<option key={option} value={option}>
-									{SERVING_SIZE_LABELS[option]}
+									{formatServingSize(option)}
 								</option>
 							))}
 						</select>
