@@ -10,7 +10,11 @@
 				"NEXT_PUBLIC_SUPABASE_ANON_KEY",
 				"VERCEL_URL"
 			],
-			"passThroughEnv": ["GUEST_JWT_SIGNING_KEY"],
+			"passThroughEnv": [
+				"GUEST_JWT_SIGNING_KEY",
+				"SUPABASE_SERVICE_ROLE_KEY",
+				"STATION_PIN_SECRET"
+			],
 			"outputs": [".next/**", "!.next/cache/**"]
 		},
 		"//#lint": {},
